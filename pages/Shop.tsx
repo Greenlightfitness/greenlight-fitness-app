@@ -78,7 +78,44 @@ const Shop: React.FC = () => {
     }
   };
 
-  const handlePurchase = async (product: Product) => {
+  // Stripe Checkout starten
+  const startStripeCheckout = async (product: Product) => {
+    if (!user) return;
+    setPurchasing(product.id);
+    
+    try {
+      const response = await fetch('/api/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productId: product.id,
+          productTitle: product.title,
+          price: product.price,
+          currency: product.currency || 'eur',
+          interval: product.interval,
+          customerEmail: user.email,
+          successUrl: `${window.location.origin}/shop?success=true&product=${product.id}`,
+          cancelUrl: `${window.location.origin}/shop?canceled=true`,
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (data.url) {
+        // Redirect zu Stripe Checkout
+        window.location.href = data.url;
+      } else {
+        throw new Error(data.error || 'Checkout failed');
+      }
+    } catch (error) {
+      console.error("Stripe checkout failed:", error);
+      alert("Zahlung konnte nicht gestartet werden. Bitte versuche es erneut.");
+      setPurchasing(null);
+    }
+  };
+
+  // Nach erfolgreicher Zahlung: Plan zuweisen
+  const handlePurchaseSuccess = async (product: Product) => {
     if (!user) return;
     setPurchasing(product.id);
     
@@ -119,17 +156,45 @@ const Shop: React.FC = () => {
             structure: { weeks: weeksData }
         });
 
-        alert("Purchase successful! Go to your Hub to set up your schedule.");
+        alert("Kauf erfolgreich! Gehe zu deinem Hub, um deinen Trainingsplan einzurichten.");
         setSelectedProduct(null);
         fetchOwnedPlans();
         
     } catch (error) {
-        console.error("Purchase failed:", error);
-        alert("Purchase failed. Please try again.");
+        console.error("Plan assignment failed:", error);
+        alert("Fehler beim Zuweisen des Plans. Bitte kontaktiere den Support.");
     } finally {
         setPurchasing(null);
     }
   };
+
+  // Legacy: Direkter Kauf ohne Stripe (für Tests)
+  const handlePurchase = async (product: Product) => {
+    // Nutze Stripe Checkout
+    await startStripeCheckout(product);
+  };
+
+  // Check for success/cancel URL params
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const success = params.get('success');
+    const productId = params.get('product');
+    
+    if (success === 'true' && productId) {
+      // Finde das Produkt und weise den Plan zu
+      const product = products.find(p => p.id === productId);
+      if (product && !ownedPlanIds.has(product.planId)) {
+        handlePurchaseSuccess(product);
+      }
+      // URL bereinigen
+      window.history.replaceState({}, '', '/shop');
+    }
+    
+    if (params.get('canceled') === 'true') {
+      alert("Zahlung abgebrochen.");
+      window.history.replaceState({}, '', '/shop');
+    }
+  }, [products, ownedPlanIds]);
 
   const handleBookAppointment = async () => {
       if(!user || !selectedProduct || !selectedDate || !selectedTime) return;
