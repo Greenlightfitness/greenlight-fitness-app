@@ -97,7 +97,73 @@ export interface TrainingPlan {
   coachId: string;
   name: string;
   description?: string;
+  isSystemPlan?: boolean;
   createdAt: any;
+}
+
+// --- PLAN VERSIONING ---
+
+export interface PlanVersion {
+  id: string;
+  planId: string;
+  versionNumber: string;        // "1.0", "1.1", "2.0"
+  versionNotes?: string;
+  isPublished: boolean;
+  isCurrent: boolean;
+  structureSnapshot?: any;      // Full plan structure at publish time
+  createdAt: any;
+  publishedAt?: any;
+}
+
+// --- REUSABLE TEMPLATES ---
+
+export interface BlockTemplate {
+  id: string;
+  coachId: string;
+  name: string;
+  description?: string;
+  blockType: BlockType;
+  blockData: WorkoutBlock;
+  tags?: string[];
+  isSystemTemplate: boolean;
+  createdAt: any;
+}
+
+export interface SessionTemplate {
+  id: string;
+  coachId: string;
+  name: string;
+  description?: string;
+  estimatedDurationMin?: number;
+  sessionData: WorkoutBlock[];
+  tags?: string[];
+  isSystemTemplate: boolean;
+  createdAt: any;
+}
+
+export interface WeekTemplate {
+  id: string;
+  coachId: string;
+  name: string;
+  description?: string;
+  focus?: string;
+  sessionsPerWeek: number;
+  weekData: any;                // Sessions array
+  tags?: string[];
+  isSystemTemplate: boolean;
+  createdAt: any;
+}
+
+// --- PRODUCT MODULES ---
+
+export interface ProductModule {
+  id: string;
+  productId: string;
+  planId: string;
+  moduleOrder: number;
+  moduleName?: string;
+  isEntryPoint: boolean;
+  prerequisites?: string[];
 }
 
 export interface TrainingWeek {
@@ -192,7 +258,21 @@ export interface TrainingSession {
 // --- ASSIGNED PLAN SNAPSHOT TYPES ---
 
 export type AssignmentType = 'ONE_TO_ONE' | 'GROUP_FLEX';
+export type CoachingType = 'ONE_TO_ONE' | 'GROUP_SYNC' | 'GROUP_ASYNC';
 export type ScheduleStatus = 'PENDING' | 'ACTIVE' | 'COMPLETED';
+
+// --- ATHLETE SCHEDULING ---
+
+export interface AthleteSchedulePreferences {
+  id: string;
+  athleteId: string;
+  assignedPlanId: string;
+  availableDays: number[];       // [0,1,2,3,4] = Mo-Fr
+  preferredTimeOfDay?: 'morning' | 'afternoon' | 'evening';
+  maxSessionsPerWeek: number;
+  minRestDays: number;
+  autoSchedule: boolean;
+}
 
 export interface AssignedSession extends Omit<TrainingSession, 'weekId'> {
     // WeekId is implicit in the nested structure
@@ -212,12 +292,24 @@ export interface AssignedPlan {
     planName: string;
     description?: string;
     assignmentType: AssignmentType;
-    scheduleStatus: ScheduleStatus; // NEW: Controls the onboarding flow
-    // NEW: Manual schedule overrides for FLEX mode. Key = "YYYY-MM-DD", Value = sessionId
+    scheduleStatus: ScheduleStatus; // Controls the onboarding flow
+    // Manual schedule overrides for FLEX mode. Key = "YYYY-MM-DD", Value = sessionId
     schedule?: Record<string, string>; 
     structure: {
         weeks: AssignedWeek[];
     };
+    
+    // --- NEW: Extended fields for modules & async coaching ---
+    productId?: string;              // If assigned via product purchase
+    currentModuleOrder?: number;     // Current module in multi-module product
+    planVersionId?: string;          // Specific version of the plan
+    coachingType?: CoachingType;     // ONE_TO_ONE, GROUP_SYNC, GROUP_ASYNC
+    sessionsPerWeek?: number;        // For flexible scheduling
+    restDaysBetween?: number;        // Min rest days between sessions
+    preferredDays?: number[];        // [0,2,4] = Mo, Mi, Fr
+    completedSessions?: number;      // Progress tracking
+    totalSessions?: number;
+    progressPercentage?: number;
 }
 
 // Initial seed data for the request
