@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase, getProducts, getAssignedPlans, getWeeksByPlan, getSessionsByWeek, createAssignedPlan, createAppointment } from '../services/supabase';
+import { supabase, getProducts, getAssignedPlans, getWeeksByPlan, getSessionsByWeek, createAssignedPlan, createAppointment, getUserPurchases } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Product, AssignedPlan, TrainingWeek, TrainingSession, TrainingPlan, ProductCategory, ProductType, Appointment } from '../types';
@@ -23,6 +23,7 @@ const Shop: React.FC = () => {
   const [purchasing, setPurchasing] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<ProductCategory | 'ALL'>('ALL');
   const [ownedPlanIds, setOwnedPlanIds] = useState<Set<string>>(new Set());
+  const [purchasedProductIds, setPurchasedProductIds] = useState<Set<string>>(new Set());
   
   // Detail Modal State
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -34,8 +35,23 @@ const Shop: React.FC = () => {
     if(user) {
         fetchProducts();
         fetchOwnedPlans();
+        fetchPurchases();
     }
   }, [user]);
+
+  const fetchPurchases = async () => {
+    if (!user) return;
+    try {
+      const purchases = await getUserPurchases(user.id);
+      const purchased = new Set<string>();
+      purchases.forEach((p: any) => {
+        if (p.product_id) purchased.add(p.product_id);
+      });
+      setPurchasedProductIds(purchased);
+    } catch (error) {
+      console.error("Error fetching purchases", error);
+    }
+  };
 
   const fetchOwnedPlans = async () => {
       if(!user) return;
@@ -259,7 +275,7 @@ const Shop: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
            {filteredProducts.map(product => {
-             const isOwned = ownedPlanIds.has(product.planId);
+             const isOwned = ownedPlanIds.has(product.planId) || purchasedProductIds.has(product.id);
              const isCoaching = product.type === 'COACHING_1ON1';
 
              return (

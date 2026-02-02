@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useNavigate, Link } from 'react-router-dom';
-import { signOut, requestDataDeletion, requestDataExport, exportUserData, createAuditLog } from '../services/supabase';
-import { User, Settings, LogOut, Globe, Calculator, UserCog, Mail, Shield, Download, Trash2, FileText, AlertTriangle, RefreshCw } from 'lucide-react';
+import { signOut, requestDataDeletion, requestDataExport, exportUserData, createAuditLog, getUserPurchases, getUserSubscriptions, getStripeCustomerId } from '../services/supabase';
+import { User, Settings, LogOut, Globe, Calculator, UserCog, Mail, Shield, Download, Trash2, FileText, AlertTriangle, RefreshCw, CreditCard, Receipt, ExternalLink } from 'lucide-react';
 import { UserRole } from '../types';
 import Button from '../components/Button';
 import CalculatorsModal from '../components/CalculatorsModal';
@@ -20,6 +20,55 @@ const Profile: React.FC = () => {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteReason, setDeleteReason] = useState('');
+  const [subscriptions, setSubscriptions] = useState<any[]>([]);
+  const [purchases, setPurchases] = useState<any[]>([]);
+  const [portalLoading, setPortalLoading] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      loadSubscriptionData();
+    }
+  }, [user]);
+
+  const loadSubscriptionData = async () => {
+    if (!user) return;
+    try {
+      const [subs, purch] = await Promise.all([
+        getUserSubscriptions(user.id),
+        getUserPurchases(user.id),
+      ]);
+      setSubscriptions(subs);
+      setPurchases(purch);
+    } catch (error) {
+      console.error('Error loading subscription data:', error);
+    }
+  };
+
+  const openCustomerPortal = async () => {
+    if (!user?.email) return;
+    setPortalLoading(true);
+    try {
+      const response = await fetch('/api/create-portal-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerEmail: user.email,
+          returnUrl: window.location.href,
+        }),
+      });
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error(data.error || 'Portal session failed');
+      }
+    } catch (error) {
+      console.error('Portal error:', error);
+      alert('Konnte das Kundenportal nicht öffnen. Bitte versuche es erneut.');
+    } finally {
+      setPortalLoading(false);
+    }
+  };
 
   const handleExportData = async () => {
     if (!user) return;
@@ -194,6 +243,78 @@ const Profile: React.FC = () => {
               </div>
               <p className="text-zinc-600 text-xs mt-3">Wechsle zwischen Athlet- und Coach-Ansicht</p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Membership & Subscriptions */}
+      {(subscriptions.length > 0 || purchases.length > 0) && (
+        <div className="space-y-4 pt-4">
+          <h3 className="text-zinc-500 text-xs font-bold uppercase tracking-widest px-2">Mitgliedschaft & Käufe</h3>
+          
+          <div className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl overflow-hidden">
+            {/* Active Subscriptions */}
+            {subscriptions.length > 0 && (
+              <div className="p-4 border-b border-zinc-800">
+                <div className="flex items-center gap-3 mb-3">
+                  <CreditCard size={18} className="text-[#00FF00]" />
+                  <span className="text-white font-medium">Aktive Abonnements</span>
+                </div>
+                <div className="space-y-2">
+                  {subscriptions.map((sub: any) => (
+                    <div key={sub.id} className="flex items-center justify-between bg-zinc-900 rounded-xl p-3">
+                      <div>
+                        <p className="text-white text-sm font-medium">
+                          {sub.status === 'active' ? '✅ Aktiv' : sub.status === 'trialing' ? '🎁 Testphase' : '⚠️ Zahlung ausstehend'}
+                        </p>
+                        {sub.current_period_end && (
+                          <p className="text-zinc-500 text-xs">
+                            {sub.cancel_at_period_end ? 'Endet am' : 'Verlängert am'}: {new Date(sub.current_period_end).toLocaleDateString('de-DE')}
+                          </p>
+                        )}
+                      </div>
+                      {sub.cancel_at_period_end && (
+                        <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-1 rounded-lg">Gekündigt</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Purchases */}
+            {purchases.length > 0 && (
+              <div className="p-4 border-b border-zinc-800">
+                <div className="flex items-center gap-3 mb-3">
+                  <Receipt size={18} className="text-blue-400" />
+                  <span className="text-white font-medium">Gekaufte Produkte ({purchases.length})</span>
+                </div>
+                <div className="space-y-2 max-h-32 overflow-y-auto">
+                  {purchases.slice(0, 5).map((p: any) => (
+                    <div key={p.id} className="flex items-center justify-between text-sm">
+                      <span className="text-zinc-300">{p.products?.title || 'Produkt'}</span>
+                      <span className="text-zinc-500">{p.amount} {p.currency?.toUpperCase()}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Manage Subscription Button */}
+            <button 
+              onClick={openCustomerPortal} 
+              disabled={portalLoading}
+              className="w-full flex items-center justify-between p-4 hover:bg-zinc-900 transition-colors disabled:opacity-50"
+            >
+              <div className="flex items-center gap-3">
+                <ExternalLink size={18} className="text-[#00FF00]" />
+                <div className="text-left">
+                  <span className="text-white font-medium block">Abonnement verwalten</span>
+                  <span className="text-zinc-500 text-xs">Zahlungsmethode, Rechnungen, Kündigung</span>
+                </div>
+              </div>
+              {portalLoading ? <span className="text-zinc-500 text-sm">Lädt...</span> : <span className="text-zinc-600">→</span>}
+            </button>
           </div>
         </div>
       )}

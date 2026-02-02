@@ -937,3 +937,58 @@ export const advanceToNextModule = async (assignedPlanId: string, nextModuleOrde
   if (error) throw error;
   return data;
 };
+
+// ============ PURCHASES & SUBSCRIPTIONS (Stripe) ============
+
+export const getUserPurchases = async (userId: string) => {
+  const { data, error } = await supabase
+    .from('purchases')
+    .select('*, products(*)')
+    .eq('user_id', userId)
+    .eq('status', 'completed')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+};
+
+export const getUserSubscriptions = async (userId: string) => {
+  const { data, error } = await supabase
+    .from('subscriptions')
+    .select('*')
+    .eq('user_id', userId)
+    .in('status', ['active', 'trialing', 'past_due'])
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+};
+
+export const getActiveSubscription = async (userId: string) => {
+  const { data, error } = await supabase
+    .from('subscriptions')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .single();
+  if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows
+  return data;
+};
+
+export const getUserInvoices = async (userId: string) => {
+  const { data, error } = await supabase
+    .from('invoices')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+};
+
+export const getStripeCustomerId = async (userId: string) => {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('stripe_customer_id')
+    .eq('id', userId)
+    .single();
+  if (error) throw error;
+  return data?.stripe_customer_id;
+};
