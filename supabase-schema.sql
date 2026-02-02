@@ -1,0 +1,328 @@
+-- ============================================
+-- GREENLIGHT FITNESS - SUPABASE SCHEMA
+-- ============================================
+-- Führe dieses SQL im Supabase Dashboard aus:
+-- SQL Editor > New Query > Paste > Run
+-- ============================================
+
+-- 1. PROFILES (extends auth.users)
+CREATE TABLE IF NOT EXISTS public.profiles (
+  id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
+  email TEXT,
+  role TEXT CHECK (role IN ('ATHLETE', 'COACH', 'ADMIN')) DEFAULT 'ATHLETE',
+  display_name TEXT,
+  first_name TEXT,
+  last_name TEXT,
+  nickname TEXT,
+  gender TEXT CHECK (gender IN ('male', 'female')),
+  birth_date DATE,
+  height NUMERIC,
+  weight NUMERIC,
+  waist_circumference NUMERIC,
+  body_fat NUMERIC,
+  resting_heart_rate INTEGER,
+  max_heart_rate INTEGER,
+  onboarding_completed BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 2. EXERCISES
+CREATE TABLE IF NOT EXISTS public.exercises (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  author_id UUID REFERENCES public.profiles(id),
+  name TEXT NOT NULL,
+  description TEXT,
+  category TEXT,
+  difficulty TEXT CHECK (difficulty IN ('Beginner', 'Intermediate', 'Advanced')) DEFAULT 'Beginner',
+  video_url TEXT,
+  thumbnail_url TEXT,
+  sequence_url TEXT,
+  default_sets JSONB,
+  default_visible_metrics TEXT[],
+  is_archived BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 3. PLANS
+CREATE TABLE IF NOT EXISTS public.plans (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  coach_id UUID REFERENCES public.profiles(id) NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 4. WEEKS
+CREATE TABLE IF NOT EXISTS public.weeks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  plan_id UUID REFERENCES public.plans(id) ON DELETE CASCADE NOT NULL,
+  "order" INTEGER NOT NULL,
+  focus TEXT
+);
+
+-- 5. SESSIONS
+CREATE TABLE IF NOT EXISTS public.sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  week_id UUID REFERENCES public.weeks(id) ON DELETE CASCADE NOT NULL,
+  day_of_week INTEGER,
+  title TEXT NOT NULL,
+  description TEXT,
+  "order" INTEGER,
+  workout_data JSONB
+);
+
+-- 6. ASSIGNED PLANS
+CREATE TABLE IF NOT EXISTS public.assigned_plans (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  athlete_id UUID REFERENCES public.profiles(id) NOT NULL,
+  coach_id UUID REFERENCES public.profiles(id) NOT NULL,
+  original_plan_id UUID REFERENCES public.plans(id),
+  assigned_at TIMESTAMPTZ DEFAULT NOW(),
+  start_date DATE,
+  plan_name TEXT,
+  description TEXT,
+  assignment_type TEXT CHECK (assignment_type IN ('ONE_TO_ONE', 'GROUP_FLEX')) DEFAULT 'ONE_TO_ONE',
+  schedule_status TEXT CHECK (schedule_status IN ('PENDING', 'ACTIVE', 'COMPLETED')) DEFAULT 'PENDING',
+  schedule JSONB DEFAULT '{}',
+  structure JSONB
+);
+
+-- 7. PRODUCTS
+CREATE TABLE IF NOT EXISTS public.products (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  coach_id UUID REFERENCES public.profiles(id) NOT NULL,
+  plan_id UUID REFERENCES public.plans(id),
+  title TEXT NOT NULL,
+  description TEXT,
+  long_description TEXT,
+  features TEXT[],
+  category TEXT CHECK (category IN ('POLICE', 'FIRE', 'MILITARY', 'GENERAL', 'RECOVERY')),
+  type TEXT CHECK (type IN ('PLAN', 'COACHING_1ON1', 'ADDON')),
+  price NUMERIC DEFAULT 0,
+  currency TEXT DEFAULT 'EUR',
+  interval TEXT CHECK (interval IN ('onetime', 'month', 'year')) DEFAULT 'onetime',
+  thumbnail_url TEXT,
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 8. ATTENTIONS
+CREATE TABLE IF NOT EXISTS public.attentions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  athlete_id UUID REFERENCES public.profiles(id) NOT NULL,
+  athlete_name TEXT,
+  coach_id UUID REFERENCES public.profiles(id),
+  type TEXT CHECK (type IN ('INJURY', 'MISSED_SESSION', 'FEEDBACK', 'OTHER')),
+  severity TEXT CHECK (severity IN ('LOW', 'MEDIUM', 'HIGH')) DEFAULT 'MEDIUM',
+  message TEXT,
+  status TEXT CHECK (status IN ('OPEN', 'RESOLVED', 'ARCHIVED')) DEFAULT 'OPEN',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 9. ACTIVITIES
+CREATE TABLE IF NOT EXISTS public.activities (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  athlete_id UUID REFERENCES public.profiles(id) NOT NULL,
+  athlete_name TEXT,
+  type TEXT CHECK (type IN ('WORKOUT_COMPLETE', 'PR_HIT', 'CHECK_IN', 'NOTE')),
+  title TEXT,
+  subtitle TEXT,
+  metadata JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 10. APPOINTMENTS
+CREATE TABLE IF NOT EXISTS public.appointments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  athlete_id UUID REFERENCES public.profiles(id) NOT NULL,
+  athlete_name TEXT,
+  coach_id UUID REFERENCES public.profiles(id) NOT NULL,
+  date DATE NOT NULL,
+  time TEXT,
+  status TEXT CHECK (status IN ('PENDING', 'CONFIRMED', 'COMPLETED')) DEFAULT 'PENDING',
+  type TEXT CHECK (type IN ('CONSULTATION', 'CHECKIN')),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================
+-- ROW LEVEL SECURITY (RLS) POLICIES
+-- ============================================
+
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.exercises ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.plans ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.weeks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.assigned_plans ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.attentions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.activities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.appointments ENABLE ROW LEVEL SECURITY;
+
+-- PROFILES: Users can read all, update own
+CREATE POLICY "Profiles are viewable by everyone" ON public.profiles FOR SELECT USING (true);
+CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
+CREATE POLICY "Users can insert own profile" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
+
+-- EXERCISES: Everyone can read, authors can modify
+CREATE POLICY "Exercises are viewable by everyone" ON public.exercises FOR SELECT USING (true);
+CREATE POLICY "Coaches can create exercises" ON public.exercises FOR INSERT WITH CHECK (auth.uid() = author_id);
+CREATE POLICY "Authors can update exercises" ON public.exercises FOR UPDATE USING (auth.uid() = author_id);
+CREATE POLICY "Authors can delete exercises" ON public.exercises FOR DELETE USING (auth.uid() = author_id);
+
+-- PLANS: Coach owns, everyone can read for now
+CREATE POLICY "Plans are viewable by everyone" ON public.plans FOR SELECT USING (true);
+CREATE POLICY "Coaches can create plans" ON public.plans FOR INSERT WITH CHECK (auth.uid() = coach_id);
+CREATE POLICY "Coaches can update own plans" ON public.plans FOR UPDATE USING (auth.uid() = coach_id);
+CREATE POLICY "Coaches can delete own plans" ON public.plans FOR DELETE USING (auth.uid() = coach_id);
+
+-- WEEKS: Based on plan ownership
+CREATE POLICY "Weeks are viewable by everyone" ON public.weeks FOR SELECT USING (true);
+CREATE POLICY "Coaches can manage weeks" ON public.weeks FOR ALL USING (
+  EXISTS (SELECT 1 FROM public.plans WHERE plans.id = weeks.plan_id AND plans.coach_id = auth.uid())
+);
+
+-- SESSIONS: Based on plan ownership
+CREATE POLICY "Sessions are viewable by everyone" ON public.sessions FOR SELECT USING (true);
+CREATE POLICY "Coaches can manage sessions" ON public.sessions FOR ALL USING (
+  EXISTS (
+    SELECT 1 FROM public.weeks 
+    JOIN public.plans ON plans.id = weeks.plan_id 
+    WHERE weeks.id = sessions.week_id AND plans.coach_id = auth.uid()
+  )
+);
+
+-- ASSIGNED PLANS: Athlete or Coach can view
+CREATE POLICY "Users can view own assigned plans" ON public.assigned_plans FOR SELECT USING (
+  auth.uid() = athlete_id OR auth.uid() = coach_id
+);
+CREATE POLICY "Coaches can create assignments" ON public.assigned_plans FOR INSERT WITH CHECK (auth.uid() = coach_id);
+CREATE POLICY "Coaches can update assignments" ON public.assigned_plans FOR UPDATE USING (auth.uid() = coach_id);
+CREATE POLICY "Athletes can update own schedule" ON public.assigned_plans FOR UPDATE USING (auth.uid() = athlete_id);
+
+-- PRODUCTS: Public read, coach modify
+CREATE POLICY "Products are viewable by everyone" ON public.products FOR SELECT USING (true);
+CREATE POLICY "Coaches can manage products" ON public.products FOR ALL USING (auth.uid() = coach_id);
+
+-- ATTENTIONS: Athletes and Coaches
+CREATE POLICY "Users can view relevant attentions" ON public.attentions FOR SELECT USING (
+  auth.uid() = athlete_id OR auth.uid() = coach_id OR coach_id IS NULL
+);
+CREATE POLICY "Athletes can create attentions" ON public.attentions FOR INSERT WITH CHECK (auth.uid() = athlete_id);
+CREATE POLICY "Coaches can update attentions" ON public.attentions FOR UPDATE USING (auth.uid() = coach_id);
+
+-- ACTIVITIES: Athletes and Coaches
+CREATE POLICY "Users can view activities" ON public.activities FOR SELECT USING (true);
+CREATE POLICY "Athletes can create activities" ON public.activities FOR INSERT WITH CHECK (auth.uid() = athlete_id);
+
+-- APPOINTMENTS: Athletes and Coaches
+CREATE POLICY "Users can view own appointments" ON public.appointments FOR SELECT USING (
+  auth.uid() = athlete_id OR auth.uid() = coach_id
+);
+CREATE POLICY "Coaches can manage appointments" ON public.appointments FOR ALL USING (auth.uid() = coach_id);
+
+-- ============================================
+-- TRIGGER: Auto-create profile on signup
+-- ============================================
+
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.profiles (id, email, role)
+  VALUES (NEW.id, NEW.email, 'ATHLETE');
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- ============================================
+-- 11. CONSENT LOGS (DSGVO Art. 7 - Nachweis)
+-- ============================================
+CREATE TABLE IF NOT EXISTS public.consent_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  consent_type TEXT CHECK (consent_type IN ('TERMS', 'PRIVACY', 'MARKETING', 'ANALYTICS')) NOT NULL,
+  consent_given BOOLEAN NOT NULL,
+  ip_address TEXT,
+  user_agent TEXT,
+  consent_version TEXT DEFAULT '1.0',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 12. AUDIT LOGS (DSGVO Art. 30 - Verarbeitungsverzeichnis)
+CREATE TABLE IF NOT EXISTS public.audit_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  action TEXT NOT NULL,
+  table_name TEXT,
+  record_id TEXT,
+  old_data JSONB,
+  new_data JSONB,
+  ip_address TEXT,
+  user_agent TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 13. DATA DELETION REQUESTS (DSGVO Art. 17 - Recht auf Löschung)
+CREATE TABLE IF NOT EXISTS public.data_deletion_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL NOT NULL,
+  user_email TEXT NOT NULL,
+  reason TEXT,
+  status TEXT CHECK (status IN ('PENDING', 'PROCESSING', 'COMPLETED', 'REJECTED')) DEFAULT 'PENDING',
+  requested_at TIMESTAMPTZ DEFAULT NOW(),
+  processed_at TIMESTAMPTZ,
+  processed_by UUID REFERENCES public.profiles(id)
+);
+
+-- 14. DATA EXPORT REQUESTS (DSGVO Art. 20 - Datenportabilität)
+CREATE TABLE IF NOT EXISTS public.data_export_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL NOT NULL,
+  user_email TEXT NOT NULL,
+  status TEXT CHECK (status IN ('PENDING', 'PROCESSING', 'READY', 'DOWNLOADED', 'EXPIRED')) DEFAULT 'PENDING',
+  export_url TEXT,
+  requested_at TIMESTAMPTZ DEFAULT NOW(),
+  completed_at TIMESTAMPTZ,
+  expires_at TIMESTAMPTZ
+);
+
+-- RLS for GDPR tables
+ALTER TABLE public.consent_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.data_deletion_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.data_export_requests ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own consents" ON public.consent_logs FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own consents" ON public.consent_logs FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can view own audit logs" ON public.audit_logs FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "System can insert audit logs" ON public.audit_logs FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Users can view own deletion requests" ON public.data_deletion_requests FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can create deletion requests" ON public.data_deletion_requests FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can view own export requests" ON public.data_export_requests FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can create export requests" ON public.data_export_requests FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- ============================================
+-- INDEXES for Performance
+-- ============================================
+
+CREATE INDEX IF NOT EXISTS idx_exercises_author ON public.exercises(author_id);
+CREATE INDEX IF NOT EXISTS idx_plans_coach ON public.plans(coach_id);
+CREATE INDEX IF NOT EXISTS idx_weeks_plan ON public.weeks(plan_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_week ON public.sessions(week_id);
+CREATE INDEX IF NOT EXISTS idx_assigned_plans_athlete ON public.assigned_plans(athlete_id);
+CREATE INDEX IF NOT EXISTS idx_assigned_plans_coach ON public.assigned_plans(coach_id);
+CREATE INDEX IF NOT EXISTS idx_products_coach ON public.products(coach_id);
+CREATE INDEX IF NOT EXISTS idx_attentions_athlete ON public.attentions(athlete_id);
+CREATE INDEX IF NOT EXISTS idx_activities_athlete ON public.activities(athlete_id);
+
+-- ============================================
+-- DONE! Schema ready for Greenlight Fitness
+-- ============================================

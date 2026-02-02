@@ -1,0 +1,5 @@
+{
+  "name": "Greenlight Fitness",
+  "description": "Professional fitness coaching PWA with dark mode aesthetic. Features role-based access for Coaches and Athletes, exercise management, and workout planning.",
+  "requestFramePermissions": []
+}
