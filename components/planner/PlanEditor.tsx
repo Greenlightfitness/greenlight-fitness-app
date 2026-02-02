@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { supabase, getWeeksByPlan, getSessionsByWeek, createWeek, createSession, deleteWeek, deleteSession, updateWeek, updateSession, updatePlan } from '../../services/supabase';
+import { getWeeksByPlan, getSessionsByWeek, createWeek, createSession, deleteWeek, deleteSession, updateWeek, updateSession, updatePlan } from '../../services/supabase';
 import { TrainingPlan, TrainingWeek, TrainingSession } from '../../types';
 import Button from '../Button';
 import Input from '../Input';
 import ConfirmationModal from '../ConfirmationModal';
 import SessionBuilder from './SessionBuilder';
-import LibrarySelector, { LibraryMode } from './LibrarySelector';
+import LibrarySelectorV2, { LibraryMode } from './LibrarySelectorV2';
 import { useLanguage } from '../../context/LanguageContext';
-import { ChevronLeft, Plus, Trash2, X, Save, Pencil, GripVertical, Copy, ClipboardList, Calendar } from 'lucide-react';
+import { ChevronLeft, Plus, Trash2, X, Save, Pencil, GripVertical, Copy, ClipboardList, Calendar, Lock, AlertTriangle } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 interface PlanEditorProps {
   plan: TrainingPlan;
@@ -18,7 +19,13 @@ const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 const PlanEditor: React.FC<PlanEditorProps> = ({ plan: initialPlan, onBack }) => {
   const { t } = useLanguage();
+  const { user } = useAuth();
   const [currentPlan, setCurrentPlan] = useState<TrainingPlan>(initialPlan);
+  
+  // Check if this is a system plan (read-only for non-owners)
+  const isSystemPlan = (currentPlan as any).is_system_plan || (currentPlan as any).isSystemPlan;
+  const isOwner = user?.id === (currentPlan as any).coach_id || user?.id === currentPlan.coachId;
+  const isReadOnly = isSystemPlan && !isOwner;
   const [weeks, setWeeks] = useState<TrainingWeek[]>([]);
   const [activeWeek, setActiveWeek] = useState<TrainingWeek | null>(null);
   const [sessions, setSessions] = useState<TrainingSession[]>([]);
@@ -139,29 +146,32 @@ const PlanEditor: React.FC<PlanEditorProps> = ({ plan: initialPlan, onBack }) =>
   };
 
   const handleImportWeek = async (weekData: any) => {
+      if (isReadOnly) return;
       const nextOrder = weeks.length + 1;
       try {
-          const newWeekData = {
-              planId: currentPlan.id,
+          // Create new week via Supabase
+          const newWeekData = await createWeek({
+              plan_id: currentPlan.id,
               order: nextOrder,
-              focus: `${weekData.focus} (Copy)`
-          };
-          const newWeekRef = await addDoc(collection(db, 'plans', currentPlan.id, 'weeks'), newWeekData);
+              focus: `${weekData.focus || 'Week'} (Copy)`
+          });
 
-          if (weekData.planId) {
-             const sessionsQ = query(collection(db, 'plans', weekData.planId, 'weeks', weekData.id, 'sessions'));
-             const sessionsSnap = await getDocs(sessionsQ);
-             const sessionPromises = sessionsSnap.docs.map(sDoc => {
-                 const sData = sDoc.data();
-                 return addDoc(collection(db, 'plans', currentPlan.id, 'weeks', newWeekRef.id, 'sessions'), {
-                     ...sData,
-                     weekId: newWeekRef.id
+          // If importing from existing week with sessions, copy them too
+          if (weekData.planId && weekData.id) {
+             const existingSessions = await getSessionsByWeek(weekData.id);
+             for (const sData of existingSessions) {
+                 await createSession({
+                     week_id: newWeekData.id,
+                     day_of_week: sData.day_of_week,
+                     title: sData.title,
+                     description: sData.description,
+                     order: sData.order,
+                     workout_data: sData.workout_data
                  });
-             });
-             await Promise.all(sessionPromises);
+             }
           }
 
-          const newWeek = { id: newWeekRef.id, ...newWeekData };
+          const newWeek = { id: newWeekData.id, planId: currentPlan.id, order: nextOrder, focus: newWeekData.focus };
           setWeeks([...weeks, newWeek]);
           setActiveWeek(newWeek);
           setLibrarySelector({ isOpen: false, mode: 'week' });
@@ -176,9 +186,9 @@ const PlanEditor: React.FC<PlanEditorProps> = ({ plan: initialPlan, onBack }) =>
   };
 
   const confirmDeleteWeek = async () => {
-    if (!activeWeek || !confirmModal.id) return;
+    if (!activeWeek || !confirmModal.id || isReadOnly) return;
     try {
-      await deleteDoc(doc(db, 'plans', currentPlan.id, 'weeks', activeWeek.id));
+      await deleteWeek(activeWeek.id);
       const updatedWeeks = weeks.filter(w => w.id !== activeWeek.id);
       setWeeks(updatedWeeks);
       setActiveWeek(updatedWeeks.length > 0 ? updatedWeeks[0] : null);
@@ -195,10 +205,10 @@ const PlanEditor: React.FC<PlanEditorProps> = ({ plan: initialPlan, onBack }) =>
   };
 
   const handleUpdateWeekFocus = async (newFocus: string) => {
-    if(!activeWeek) return;
+    if(!activeWeek || isReadOnly) return;
     if(newFocus !== activeWeek.focus) {
         try {
-            await updateDoc(doc(db, 'plans', currentPlan.id, 'weeks', activeWeek.id), { focus: newFocus });
+            await updateWeek(activeWeek.id, { focus: newFocus });
             setWeeks(weeks.map(w => w.id === activeWeek.id ? {...w, focus: newFocus} : w));
             setActiveWeek({...activeWeek, focus: newFocus});
         } catch(error) {
@@ -229,9 +239,10 @@ const PlanEditor: React.FC<PlanEditorProps> = ({ plan: initialPlan, onBack }) =>
       const updatedWeeks = newWeeks.map((w, index) => ({ ...w, order: index + 1 }));
       setWeeks(updatedWeeks);
       setDraggedWeekId(null);
+      if (isReadOnly) return;
       try {
           const promises = updatedWeeks.map(w => 
-              updateDoc(doc(db, 'plans', currentPlan.id, 'weeks', w.id), { order: w.order })
+              updateWeek(w.id, { order: w.order })
           );
           await Promise.all(promises);
       } catch (error) {
@@ -246,14 +257,23 @@ const PlanEditor: React.FC<PlanEditorProps> = ({ plan: initialPlan, onBack }) =>
   };
 
   const handleCreateNewSession = async () => {
-    if (!activeWeek || typeof librarySelector.dayIndex !== 'number') return;
+    if (!activeWeek || typeof librarySelector.dayIndex !== 'number' || isReadOnly) return;
     const dayIndex = librarySelector.dayIndex;
     const daySessions = sessions.filter(s => s.dayOfWeek === dayIndex);
     const maxOrder = daySessions.length > 0 ? Math.max(...daySessions.map(s => s.order)) : 0;
     const title = t('planner.newSession'); 
 
     try {
-      const newSessionData = {
+      const newSessionData = await createSession({
+        week_id: activeWeek.id,
+        day_of_week: dayIndex,
+        title: title,
+        order: maxOrder + 1,
+        description: '',
+        workout_data: []
+      });
+      const createdSession = { 
+        id: newSessionData.id, 
         weekId: activeWeek.id,
         dayOfWeek: dayIndex,
         title: title,
@@ -261,11 +281,6 @@ const PlanEditor: React.FC<PlanEditorProps> = ({ plan: initialPlan, onBack }) =>
         description: '',
         workoutData: []
       };
-      const docRef = await addDoc(
-        collection(db, 'plans', currentPlan.id, 'weeks', activeWeek.id, 'sessions'), 
-        newSessionData
-      );
-      const createdSession = { id: docRef.id, ...newSessionData };
       setSessions([...sessions, createdSession]);
       setEditingSession(createdSession); 
       setLibrarySelector({ isOpen: false, mode: 'session' });
@@ -275,24 +290,28 @@ const PlanEditor: React.FC<PlanEditorProps> = ({ plan: initialPlan, onBack }) =>
   };
 
   const handleImportSession = async (sessionData: any) => {
-      if (!activeWeek || typeof librarySelector.dayIndex !== 'number') return;
+      if (!activeWeek || typeof librarySelector.dayIndex !== 'number' || isReadOnly) return;
       const dayIndex = librarySelector.dayIndex;
       const daySessions = sessions.filter(s => s.dayOfWeek === dayIndex);
       const maxOrder = daySessions.length > 0 ? Math.max(...daySessions.map(s => s.order)) : 0;
       try {
-          const newSessionData = {
-              ...sessionData,
-              id: undefined, 
+          const created = await createSession({
+              week_id: activeWeek.id,
+              day_of_week: dayIndex,
+              title: sessionData.title || 'Session',
+              description: sessionData.description || '',
+              order: maxOrder + 1,
+              workout_data: sessionData.workoutData || sessionData.workout_data || []
+          });
+          const newSession = { 
+              id: created.id, 
               weekId: activeWeek.id,
               dayOfWeek: dayIndex,
-              title: `${sessionData.title}`,
-              order: maxOrder + 1
+              title: sessionData.title || 'Session',
+              description: sessionData.description || '',
+              order: maxOrder + 1,
+              workoutData: sessionData.workoutData || sessionData.workout_data || []
           };
-          const docRef = await addDoc(
-              collection(db, 'plans', currentPlan.id, 'weeks', activeWeek.id, 'sessions'), 
-              newSessionData
-          );
-          const newSession = { id: docRef.id, ...newSessionData };
           setSessions([...sessions, newSession]);
           setLibrarySelector({ isOpen: false, mode: 'session' });
       } catch (error) {
@@ -303,12 +322,16 @@ const PlanEditor: React.FC<PlanEditorProps> = ({ plan: initialPlan, onBack }) =>
   const handleSessionSaveComplete = async () => {
      if (!activeWeek) return;
       try {
-        const q = query(
-          collection(db, 'plans', currentPlan.id, 'weeks', activeWeek.id, 'sessions'), 
-          orderBy('dayOfWeek')
-        );
-        const snapshot = await getDocs(q);
-        const fetchedSessions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TrainingSession));
+        const data = await getSessionsByWeek(activeWeek.id);
+        const fetchedSessions = data.map((d: any) => ({
+          id: d.id, 
+          weekId: d.week_id, 
+          dayOfWeek: d.day_of_week, 
+          title: d.title,
+          description: d.description, 
+          order: d.order, 
+          workoutData: d.workout_data
+        } as TrainingSession));
         fetchedSessions.sort((a, b) => {
           if (a.dayOfWeek !== b.dayOfWeek) return a.dayOfWeek - b.dayOfWeek;
           return a.order - b.order;
@@ -324,10 +347,10 @@ const PlanEditor: React.FC<PlanEditorProps> = ({ plan: initialPlan, onBack }) =>
   };
 
   const confirmDeleteSession = async () => {
-    if (!activeWeek || !confirmModal.id) return;
+    if (!activeWeek || !confirmModal.id || isReadOnly) return;
     const sessionId = confirmModal.id;
     try {
-      await deleteDoc(doc(db, 'plans', currentPlan.id, 'weeks', activeWeek.id, 'sessions', sessionId));
+      await deleteSession(sessionId);
       setSessions(sessions.filter(s => s.id !== sessionId));
       if (editingSession?.id === sessionId) setEditingSession(null);
     } catch (error) {
@@ -338,23 +361,27 @@ const PlanEditor: React.FC<PlanEditorProps> = ({ plan: initialPlan, onBack }) =>
   };
 
   const handleDuplicateSession = async (session: TrainingSession) => {
-      if(!activeWeek) return;
+      if(!activeWeek || isReadOnly) return;
       const daySessions = sessions.filter(s => s.dayOfWeek === session.dayOfWeek);
       const maxOrder = daySessions.length > 0 ? Math.max(...daySessions.map(s => s.order)) : 0;
       try {
-          const newSessionData = {
-              ...session,
-              id: undefined,
+          const created = await createSession({
+              week_id: activeWeek.id,
+              day_of_week: session.dayOfWeek,
+              title: `${session.title} (Copy)`,
+              description: session.description || '',
+              order: maxOrder + 1,
+              workout_data: session.workoutData || []
+          });
+          const newSession = { 
+              id: created.id, 
               weekId: activeWeek.id,
               dayOfWeek: session.dayOfWeek,
               title: `${session.title} (Copy)`,
-              order: maxOrder + 1
-          };
-          const docRef = await addDoc(
-            collection(db, 'plans', currentPlan.id, 'weeks', activeWeek.id, 'sessions'), 
-            newSessionData
-          );
-          const newSession = { id: docRef.id, ...newSessionData } as TrainingSession;
+              description: session.description || '',
+              order: maxOrder + 1,
+              workoutData: session.workoutData || []
+          } as TrainingSession;
           setSessions([...sessions, newSession]);
       } catch (error) {
           console.error("Error duplicating session", error);
@@ -390,9 +417,10 @@ const PlanEditor: React.FC<PlanEditorProps> = ({ plan: initialPlan, onBack }) =>
         });
         setSessions(updatedSessions);
         setDraggedSessionId(null);
+        if (isReadOnly) return;
         try {
-             await updateDoc(doc(db, 'plans', currentPlan.id, 'weeks', activeWeek.id, 'sessions', sessionId), {
-                 dayOfWeek: targetDayIndex,
+             await updateSession(sessionId, {
+                 day_of_week: targetDayIndex,
                  order: newOrder
              });
         } catch(err) {
@@ -423,9 +451,10 @@ const PlanEditor: React.FC<PlanEditorProps> = ({ plan: initialPlan, onBack }) =>
       });
       setSessions(updatedSessions);
       setDraggedSessionId(null);
+      if (isReadOnly) return;
       try {
-          const p1 = updateDoc(doc(db, 'plans', currentPlan.id, 'weeks', activeWeek.id, 'sessions', draggedId), draggedNewData);
-          const p2 = updateDoc(doc(db, 'plans', currentPlan.id, 'weeks', activeWeek.id, 'sessions', targetSession.id), targetNewData);
+          const p1 = updateSession(draggedId, { day_of_week: draggedNewData.dayOfWeek, order: draggedNewData.order });
+          const p2 = updateSession(targetSession.id, { day_of_week: targetNewData.dayOfWeek, order: targetNewData.order });
           await Promise.all([p1, p2]);
       } catch(err) {
           console.error("Failed to swap sessions", err);
@@ -451,13 +480,30 @@ const PlanEditor: React.FC<PlanEditorProps> = ({ plan: initialPlan, onBack }) =>
         onCancel={() => setConfirmModal({ isOpen: false, type: null, id: null })}
       />
 
-      <LibrarySelector 
+      <LibrarySelectorV2 
           mode={librarySelector.mode}
           isOpen={librarySelector.isOpen}
           onClose={() => setLibrarySelector({ ...librarySelector, isOpen: false })}
           onCreateNew={librarySelector.mode === 'week' ? handleCreateNewWeek : handleCreateNewSession}
           onSelect={librarySelector.mode === 'week' ? handleImportWeek : handleImportSession}
       />
+
+      {/* Read-Only Banner */}
+      {isReadOnly && (
+        <div className="flex items-center gap-3 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-400">
+          <Lock size={20} />
+          <div>
+            <p className="font-semibold">Nur-Lesen-Modus</p>
+            <p className="text-sm opacity-80">Dies ist ein System-Plan und kann nicht bearbeitet werden. Du kannst ihn duplizieren, um eine eigene Version zu erstellen.</p>
+          </div>
+          <button 
+            onClick={handleDuplicateWeek}
+            className="ml-auto px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 rounded-lg text-sm font-medium transition-colors"
+          >
+            Plan duplizieren
+          </button>
+        </div>
+      )}
 
       {/* Header */}
       <div className="flex flex-col md:flex-row items-start md:items-center gap-4 border-b border-zinc-800 pb-6 justify-between shrink-0">
@@ -466,15 +512,24 @@ const PlanEditor: React.FC<PlanEditorProps> = ({ plan: initialPlan, onBack }) =>
               <ChevronLeft size={24} />
             </button>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-3 group cursor-pointer" onClick={() => setEditingPlanMeta(true)}>
-                  <h2 className="text-2xl md:text-3xl font-extrabold text-white group-hover:text-[#00FF00] transition-colors tracking-tight truncate">{currentPlan.name}</h2>
-                  <Pencil size={18} className="text-zinc-600 group-hover:text-[#00FF00] opacity-0 group-hover:opacity-100 transition-all shrink-0" />
+              <div className={`flex items-center gap-3 group ${isReadOnly ? '' : 'cursor-pointer'}`} onClick={() => !isReadOnly && setEditingPlanMeta(true)}>
+                  <h2 className="text-2xl md:text-3xl font-extrabold text-white group-hover:text-[#00FF00] transition-colors tracking-tight truncate">
+                    {currentPlan.name}
+                  </h2>
+                  {isSystemPlan && (
+                    <span className="px-2 py-1 bg-purple-500/20 text-purple-400 text-[10px] font-bold rounded uppercase">
+                      System
+                    </span>
+                  )}
+                  {!isReadOnly && <Pencil size={18} className="text-zinc-600 group-hover:text-[#00FF00] opacity-0 group-hover:opacity-100 transition-all shrink-0" />}
               </div>
               <p className="text-sm text-zinc-500 line-clamp-1 mt-1">{currentPlan.description || "No description provided."}</p>
             </div>
         </div>
         <div className="hidden md:block px-4 py-2 bg-[#1C1C1E] rounded-full border border-zinc-800">
-             <span className="text-[10px] text-[#00FF00] font-bold uppercase tracking-widest">{t('planner.planningMode')}</span>
+             <span className={`text-[10px] font-bold uppercase tracking-widest ${isReadOnly ? 'text-amber-400' : 'text-[#00FF00]'}`}>
+               {isReadOnly ? 'Nur Lesen' : t('planner.planningMode')}
+             </span>
         </div>
       </div>
 
