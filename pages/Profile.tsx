@@ -3,13 +3,14 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { signOut, requestDataDeletion, requestDataExport, exportUserData, createAuditLog } from '../services/supabase';
-import { User, Settings, LogOut, Globe, Calculator, UserCog, Mail, Shield, Download, Trash2, FileText, AlertTriangle } from 'lucide-react';
+import { User, Settings, LogOut, Globe, Calculator, UserCog, Mail, Shield, Download, Trash2, FileText, AlertTriangle, RefreshCw } from 'lucide-react';
+import { UserRole } from '../types';
 import Button from '../components/Button';
 import CalculatorsModal from '../components/CalculatorsModal';
 import ProfileSetupWizard from '../components/ProfileSetupWizard';
 
 const Profile: React.FC = () => {
-  const { userProfile, user } = useAuth();
+  const { userProfile, user, activeRole, setActiveRole, canSwitchRole } = useAuth();
   const { t, language, setLanguage } = useLanguage();
   const navigate = useNavigate();
   const [showTools, setShowTools] = useState(false);
@@ -157,6 +158,45 @@ const Profile: React.FC = () => {
               </div>
           </button>
       </div>
+
+      {/* Role Switcher (for dual-role users) */}
+      {canSwitchRole && (
+        <div className="space-y-4 pt-4">
+          <h3 className="text-zinc-500 text-xs font-bold uppercase tracking-widest px-2">Ansicht wechseln</h3>
+          
+          <div className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl overflow-hidden">
+            <div className="p-4">
+              <div className="flex items-center gap-3 mb-3">
+                <RefreshCw size={18} className="text-[#00FF00]" />
+                <span className="text-white font-medium">Aktive Rolle</span>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setActiveRole(UserRole.ATHLETE)}
+                  className={`flex-1 py-3 px-4 rounded-xl font-semibold transition-all ${
+                    activeRole === UserRole.ATHLETE
+                      ? 'bg-[#00FF00] text-black'
+                      : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                  }`}
+                >
+                  Athlet
+                </button>
+                <button
+                  onClick={() => setActiveRole(UserRole.COACH)}
+                  className={`flex-1 py-3 px-4 rounded-xl font-semibold transition-all ${
+                    activeRole === UserRole.COACH
+                      ? 'bg-[#00FF00] text-black'
+                      : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                  }`}
+                >
+                  Coach
+                </button>
+              </div>
+              <p className="text-zinc-600 text-xs mt-3">Wechsle zwischen Athlet- und Coach-Ansicht</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Settings Section */}
       <div className="space-y-4 pt-4">

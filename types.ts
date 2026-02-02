@@ -10,6 +10,9 @@ export interface UserProfile {
   uid: string;
   email: string;
   role: UserRole;
+  // Secondary role for dual-role users (e.g., Coach who is also an Athlete)
+  // TODO: Langfristig sollen nur Admins Coaches einladen können (aktuell Testphase)
+  secondaryRole?: UserRole;
   displayName?: string;
   createdAt: any; // Firestore Timestamp
   // Biometrics & Profile (New fields for formulas)

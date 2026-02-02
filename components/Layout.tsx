@@ -7,7 +7,7 @@ import { LayoutDashboard, Dumbbell, Calendar, LogOut, Menu, X, Globe, ShoppingBa
 import { signOut } from '../services/supabase';
 
 const Layout: React.FC = () => {
-  const { userProfile } = useAuth();
+  const { userProfile, activeRole } = useAuth();
   const { t, language, setLanguage } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
@@ -26,8 +26,10 @@ const Layout: React.FC = () => {
     setLanguage(language === 'en' ? 'de' : 'en');
   };
 
-  const isAthlete = userProfile?.role === UserRole.ATHLETE;
-  const isAdmin = userProfile?.role === UserRole.ADMIN;
+  // Use activeRole for view switching (falls back to primary role)
+  const effectiveRole = activeRole || userProfile?.role;
+  const isAthlete = effectiveRole === UserRole.ATHLETE;
+  const isAdmin = effectiveRole === UserRole.ADMIN;
 
   // --- COACH / ADMIN NAVIGATION ---
   const desktopNavItems = [
