@@ -233,7 +233,7 @@ const CustomSessionSelector = ({ isOpen, onClose, onSelect }: { isOpen: boolean,
 };
 
 const Dashboard: React.FC = () => {
-  const { user, userProfile } = useAuth();
+  const { user, userProfile, refreshProfile } = useAuth();
   const { t, language } = useLanguage();
   const location = useLocation();
   
@@ -784,7 +784,10 @@ const Dashboard: React.FC = () => {
 
   // --- ATHLETE VIEWS BELOW ---
 
-  if (showProfileWizard) return <ProfileSetupWizard onComplete={() => setShowProfileWizard(false)} />;
+  if (showProfileWizard) return <ProfileSetupWizard onComplete={async () => {
+    await refreshProfile(); // Reload profile to get updated onboardingCompleted
+    setShowProfileWizard(false);
+  }} />;
 
   // --- SETUP WIZARD (Athlete) ---
   if (activePlan && activePlan.assignmentType === 'GROUP_FLEX' && activePlan.scheduleStatus === 'PENDING') {
