@@ -88,12 +88,12 @@ const Layout: React.FC = () => {
                             <Activity size={24} strokeWidth={!isShopActive && !isProfileActive && !isChatActive && !isPlannerActive && currentView === 'training' ? 2.5 : 2} />
                         </button>
 
-                        {/* Self-Planning / Planner */}
+                        {/* Athlete Calendar */}
                         <NavLink 
-                            to="/planner"
+                            to="/calendar"
                             className={({ isActive }) => `flex flex-col items-center gap-1 transition-all duration-300 ${isActive ? 'text-[#00FF00] scale-110' : 'text-zinc-500 hover:text-zinc-300'}`}
                         >
-                            <Calendar size={24} strokeWidth={isPlannerActive ? 2.5 : 2} />
+                            <Calendar size={24} strokeWidth={location.pathname === '/calendar' ? 2.5 : 2} />
                         </NavLink>
 
                         <NavLink 

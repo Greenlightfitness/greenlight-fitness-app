@@ -24,6 +24,8 @@ const Shop: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState<ProductCategory | 'ALL'>('ALL');
   const [ownedPlanIds, setOwnedPlanIds] = useState<Set<string>>(new Set());
   const [purchasedProductIds, setPurchasedProductIds] = useState<Set<string>>(new Set());
+  const [activeSubscriptionIds, setActiveSubscriptionIds] = useState<Set<string>>(new Set());
+  const [stripeDataLoaded, setStripeDataLoaded] = useState(false);
   
   // Detail Modal State
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -40,16 +42,34 @@ const Shop: React.FC = () => {
   }, [user]);
 
   const fetchPurchases = async () => {
-    if (!user) return;
+    if (!user?.email) return;
     try {
-      const purchases = await getUserPurchases(user.id);
-      const purchased = new Set<string>();
-      purchases.forEach((p: any) => {
-        if (p.product_id) purchased.add(p.product_id);
+      // Fetch directly from Stripe API for accurate data
+      const response = await fetch('/api/get-customer-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerEmail: user.email }),
       });
-      setPurchasedProductIds(purchased);
+      
+      if (response.ok) {
+        const data = await response.json();
+        const purchased = new Set<string>();
+        const activeSubs = new Set<string>();
+        
+        // Track active subscriptions by product name
+        (data.subscriptions || []).forEach((sub: any) => {
+          if (sub.status === 'active' || sub.status === 'trialing') {
+            activeSubs.add(sub.productName);
+          }
+        });
+        
+        setPurchasedProductIds(purchased);
+        setActiveSubscriptionIds(activeSubs);
+      }
+      setStripeDataLoaded(true);
     } catch (error) {
       console.error("Error fetching purchases", error);
+      setStripeDataLoaded(true);
     }
   };
 
@@ -275,7 +295,7 @@ const Shop: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
            {filteredProducts.map(product => {
-             const isOwned = ownedPlanIds.has(product.planId) || purchasedProductIds.has(product.id);
+             const isOwned = ownedPlanIds.has(product.planId) || purchasedProductIds.has(product.id) || activeSubscriptionIds.has(product.title);
              const isCoaching = product.type === 'COACHING_1ON1';
 
              return (
@@ -429,9 +449,9 @@ const Shop: React.FC = () => {
                               </Button>
                           )}
                           
-                          {ownedPlanIds.has(selectedProduct.planId) ? (
-                              <Button disabled fullWidth className="opacity-50 cursor-not-allowed">
-                                  Already Owned
+                          {(ownedPlanIds.has(selectedProduct.planId) || purchasedProductIds.has(selectedProduct.id) || activeSubscriptionIds.has(selectedProduct.title)) ? (
+                              <Button disabled fullWidth className="opacity-50 cursor-not-allowed bg-[#00FF00]/20 border-[#00FF00]/30">
+                                  <Check size={18} className="mr-2" /> Bereits gekauft
                               </Button>
                           ) : (
                               <Button 

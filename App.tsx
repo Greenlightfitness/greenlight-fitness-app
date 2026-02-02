@@ -7,6 +7,7 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Exercises from './pages/Exercises';
 import Planner from './pages/Planner';
+import AthleteCalendar from './pages/AthleteCalendar';
 import AdminProducts from './pages/AdminProducts';
 import AdminUsers from './pages/AdminUsers';
 import Shop from './pages/Shop';
@@ -70,6 +71,7 @@ const App: React.FC = () => {
                  <Route path="/shop" element={<Shop />} />
                  <Route path="/chat" element={<Chat />} />
                  <Route path="/profile" element={<Profile />} />
+                 <Route path="/calendar" element={<AthleteCalendar />} />
               </Route>
               
               {/* Shared Routes (Coach, Admin AND Athlete now for self-planning) */}
