@@ -181,10 +181,7 @@ const AdminProducts: React.FC = () => {
       setError("Bitte gib einen Produktnamen ein.");
       return;
     }
-    if (!formData.planId) {
-      setError("Bitte wähle einen verknüpften Plan aus.");
-      return;
-    }
+    // plan_id is optional now
     if (!formData.price || formData.price <= 0) {
       setError("Bitte gib einen gültigen Preis ein.");
       return;
@@ -196,7 +193,7 @@ const AdminProducts: React.FC = () => {
     try {
       const payload = {
         coach_id: user.id,
-        plan_id: formData.planId,
+        plan_id: formData.planId || null,
         title: formData.title?.trim(),
         description: formData.description?.trim() || '',
         long_description: formData.longDescription?.trim() || '',
