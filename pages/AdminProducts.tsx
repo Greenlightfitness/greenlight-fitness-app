@@ -1,11 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { supabase, getProducts, getPlans, createProduct, updateProduct, deleteProduct, uploadFile, getPublicUrl } from '../services/supabase';
+import { getProducts, getPlans, createProduct, updateProduct, deleteProduct, uploadFile, getPublicUrl } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Product, TrainingPlan, ProductCategory, ProductType } from '../types';
 import Button from '../components/Button';
 import Input from '../components/Input';
-import { Package, Plus, Trash2, Edit, X, Image as ImageIcon, Upload, Loader2 } from 'lucide-react';
+import { 
+  Package, Plus, Trash2, Edit, X, Image as ImageIcon, Upload, Loader2,
+  ChevronLeft, DollarSign, Tag, FileText, Layers, CheckCircle, 
+  AlertCircle, Eye, EyeOff, Link2, Sparkles, Save, Info
+} from 'lucide-react';
+
+type ViewMode = 'list' | 'create' | 'edit';
 
 const AdminProducts: React.FC = () => {
   const { user } = useAuth();
@@ -13,19 +19,19 @@ const AdminProducts: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [plans, setPlans] = useState<TrainingPlan[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-
-  // Upload State
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
 
-  // Form State
   const [formData, setFormData] = useState<Partial<Product>>({
     title: '',
     description: '',
     longDescription: '',
     price: 0,
-    currency: 'USD',
+    currency: 'EUR',
     interval: 'month',
     planId: '',
     thumbnailUrl: '',
@@ -38,16 +44,23 @@ const AdminProducts: React.FC = () => {
   const [currentFeature, setCurrentFeature] = useState('');
 
   useEffect(() => {
-    if (user) {
-      fetchData();
-    }
+    if (user) fetchData();
   }, [user]);
+
+  useEffect(() => {
+    if (error || success) {
+      const timer = setTimeout(() => {
+        setError(null);
+        setSuccess(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error, success]);
 
   const fetchData = async () => {
     if (!user) return;
     setLoading(true);
     try {
-      // ADMIN VIEW: Fetch ALL products
       const prodData = await getProducts();
       setProducts(prodData.map((d: any) => ({
         id: d.id,
@@ -66,7 +79,6 @@ const AdminProducts: React.FC = () => {
         isActive: d.is_active,
       } as Product)));
 
-      // Fetch all plans to link
       const planData = await getPlans();
       setPlans(planData.map((d: any) => ({
         id: d.id,
@@ -75,330 +87,613 @@ const AdminProducts: React.FC = () => {
         description: d.description,
         createdAt: d.created_at,
       } as TrainingPlan)));
-    } catch (error) {
-      console.error("Error fetching admin data:", error);
+    } catch (err) {
+      console.error("Error fetching admin data:", err);
+      setError("Fehler beim Laden der Daten");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleOpenModal = (product?: Product) => {
-    if (product) {
-      setEditingProduct(product);
-      setFormData(product);
-    } else {
-      setEditingProduct(null);
-      setFormData({
-        title: '',
-        description: '',
-        longDescription: '',
-        price: 0,
-        currency: 'USD',
-        interval: 'month',
-        planId: '',
-        thumbnailUrl: '',
-        category: 'GENERAL',
-        type: 'PLAN',
-        features: [],
-        isActive: true
-      });
-    }
-    setIsModalOpen(true);
+  const resetForm = () => {
+    setFormData({
+      title: '',
+      description: '',
+      longDescription: '',
+      price: 0,
+      currency: 'EUR',
+      interval: 'month',
+      planId: '',
+      thumbnailUrl: '',
+      category: 'GENERAL',
+      type: 'PLAN',
+      features: [],
+      isActive: true
+    });
+    setCurrentFeature('');
+    setEditingProduct(null);
+  };
+
+  const handleCreate = () => {
+    resetForm();
+    setViewMode('create');
+  };
+
+  const handleEdit = (product: Product) => {
+    setEditingProduct(product);
+    setFormData(product);
+    setViewMode('edit');
+  };
+
+  const handleBack = () => {
+    resetForm();
+    setViewMode('list');
   };
 
   const handleAddFeature = () => {
-      if(currentFeature.trim()) {
-          setFormData({ ...formData, features: [...(formData.features || []), currentFeature] });
-          setCurrentFeature('');
-      }
+    if (currentFeature.trim()) {
+      setFormData({ ...formData, features: [...(formData.features || []), currentFeature.trim()] });
+      setCurrentFeature('');
+    }
   };
 
   const handleRemoveFeature = (idx: number) => {
-      setFormData({ ...formData, features: formData.features?.filter((_, i) => i !== idx) });
+    setFormData({ ...formData, features: formData.features?.filter((_, i) => i !== idx) });
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !user) return;
     
     if (!file.type.startsWith('image/')) {
-        alert("Please upload an image file.");
-        return;
-    }
-
-    if (!user) {
-        alert("You must be logged in to upload.");
-        return;
+      setError("Bitte wähle eine Bilddatei aus.");
+      return;
     }
 
     setUploading(true);
     try {
-        console.log("Starting upload...");
-        const safeName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
-        const storagePath = `products/${user.id}/${Date.now()}_${safeName}`;
-        
-        await uploadFile('products', storagePath, file);
-        const downloadUrl = getPublicUrl('products', storagePath);
-        console.log("Download URL:", downloadUrl);
-        
-        setFormData(prev => ({ ...prev, thumbnailUrl: downloadUrl }));
-    } catch (error: any) {
-        console.error("Upload failed detail:", error);
-        alert(`Image upload failed: ${error.message}`);
+      const safeName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
+      const storagePath = `products/${user.id}/${Date.now()}_${safeName}`;
+      
+      await uploadFile('products', storagePath, file);
+      const downloadUrl = getPublicUrl('products', storagePath);
+      
+      setFormData(prev => ({ ...prev, thumbnailUrl: downloadUrl }));
+      setSuccess("Bild erfolgreich hochgeladen!");
+    } catch (err: any) {
+      console.error("Upload failed:", err);
+      setError(`Upload fehlgeschlagen: ${err.message}`);
     } finally {
-        setUploading(false);
-        e.target.value = '';
+      setUploading(false);
+      e.target.value = '';
     }
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user) {
+      setError("Du musst eingeloggt sein.");
+      return;
+    }
+
+    // Validation
+    if (!formData.title?.trim()) {
+      setError("Bitte gib einen Produktnamen ein.");
+      return;
+    }
+    if (!formData.planId) {
+      setError("Bitte wähle einen verknüpften Plan aus.");
+      return;
+    }
+    if (!formData.price || formData.price <= 0) {
+      setError("Bitte gib einen gültigen Preis ein.");
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
     
     try {
       const payload = {
         coach_id: user.id,
         plan_id: formData.planId,
-        title: formData.title,
-        description: formData.description,
-        long_description: formData.longDescription,
-        features: formData.features,
-        category: formData.category,
-        type: formData.type,
-        price: formData.price,
-        currency: formData.currency,
-        interval: formData.interval,
-        thumbnail_url: formData.thumbnailUrl,
-        is_active: formData.isActive,
+        title: formData.title?.trim(),
+        description: formData.description?.trim() || '',
+        long_description: formData.longDescription?.trim() || '',
+        features: formData.features || [],
+        category: formData.category || 'GENERAL',
+        type: formData.type || 'PLAN',
+        price: Number(formData.price),
+        currency: formData.currency || 'EUR',
+        interval: formData.interval || 'month',
+        thumbnail_url: formData.thumbnailUrl || '',
+        is_active: formData.isActive ?? true,
       };
       
+      console.log("Saving product with payload:", payload);
+      
       if (editingProduct) {
-         await updateProduct(editingProduct.id, payload);
+        await updateProduct(editingProduct.id, payload);
+        setSuccess("Produkt erfolgreich aktualisiert!");
       } else {
-         await createProduct(payload);
+        await createProduct(payload);
+        setSuccess("Produkt erfolgreich erstellt!");
       }
-      setIsModalOpen(false);
-      fetchData();
-    } catch (error) {
-      console.error("Error saving product:", error);
+      
+      await fetchData();
+      setTimeout(() => {
+        setViewMode('list');
+        resetForm();
+      }, 1500);
+      
+    } catch (err: any) {
+      console.error("Error saving product:", err);
+      setError(`Fehler beim Speichern: ${err.message || 'Unbekannter Fehler'}`);
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this product?")) return;
+    if (!confirm("Produkt wirklich löschen?")) return;
     try {
       await deleteProduct(id);
       setProducts(products.filter(p => p.id !== id));
-    } catch (error) {
-      console.error("Error deleting product:", error);
+      setSuccess("Produkt gelöscht!");
+    } catch (err: any) {
+      setError(`Fehler beim Löschen: ${err.message}`);
     }
   };
 
-  return (
-    <div className="space-y-8 animate-in fade-in">
-      <div className="flex justify-between items-center">
-        <div>
-           <h1 className="text-3xl font-extrabold text-white flex items-center gap-3">
-             {t('products.title')} <span className="text-xs bg-[#00FF00]/10 text-[#00FF00] px-2 py-1 rounded border border-[#00FF00]/20">Global Admin</span>
-           </h1>
-           <p className="text-zinc-400 mt-2">Manage the global shop inventory.</p>
+  const handleToggleActive = async (product: Product) => {
+    try {
+      await updateProduct(product.id, { is_active: !product.isActive });
+      setProducts(products.map(p => 
+        p.id === product.id ? { ...p, isActive: !p.isActive } : p
+      ));
+      setSuccess(product.isActive ? "Produkt deaktiviert" : "Produkt aktiviert");
+    } catch (err: any) {
+      setError(`Fehler: ${err.message}`);
+    }
+  };
+
+  // ============ RENDER: PRODUCT LIST ============
+  if (viewMode === 'list') {
+    return (
+      <div className="space-y-8 animate-in fade-in pb-20">
+        {/* Notifications */}
+        {(error || success) && (
+          <div className={`fixed top-4 right-4 z-50 p-4 rounded-xl border ${
+            error ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-green-500/10 border-green-500/30 text-green-400'
+          } flex items-center gap-3 animate-in slide-in-from-top`}>
+            {error ? <AlertCircle size={20} /> : <CheckCircle size={20} />}
+            <span className="font-medium">{error || success}</span>
+          </div>
+        )}
+
+        {/* Header */}
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-extrabold text-white flex items-center gap-3">
+              Produkte <span className="text-xs bg-[#00FF00]/10 text-[#00FF00] px-2 py-1 rounded border border-[#00FF00]/20">Admin</span>
+            </h1>
+            <p className="text-zinc-400 mt-2">Verwalte deine Shop-Produkte und Trainingspläne</p>
+          </div>
+          <Button onClick={handleCreate} className="flex items-center gap-2 shadow-lg shadow-[#00FF00]/10">
+            <Plus size={20} /> Neues Produkt
+          </Button>
         </div>
-        <Button onClick={() => handleOpenModal()} className="flex items-center gap-2 shadow-lg shadow-[#00FF00]/10">
-           <Plus size={20} /> {t('products.create')}
-        </Button>
+
+        {/* Product Grid */}
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 size={32} className="animate-spin text-[#00FF00]" />
+          </div>
+        ) : products.length === 0 ? (
+          <div className="bg-[#1C1C1E] border border-zinc-800 rounded-3xl p-16 flex flex-col items-center justify-center text-zinc-500">
+            <Package size={64} className="mb-6 text-zinc-700" />
+            <p className="text-lg font-medium mb-2">Keine Produkte vorhanden</p>
+            <p className="text-sm text-zinc-600 mb-6">Erstelle dein erstes Produkt, um loszulegen</p>
+            <Button onClick={handleCreate} className="flex items-center gap-2">
+              <Plus size={18} /> Produkt erstellen
+            </Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {products.map(product => (
+              <div key={product.id} className={`bg-[#1C1C1E] border rounded-2xl overflow-hidden group transition-all shadow-lg hover:-translate-y-1 ${
+                product.isActive ? 'border-zinc-800 hover:border-[#00FF00]/30' : 'border-zinc-800/50 opacity-60'
+              }`}>
+                <div className="h-40 bg-zinc-900 relative">
+                  {product.thumbnailUrl ? (
+                    <img src={product.thumbnailUrl} alt={product.title} className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-zinc-700">
+                      <ImageIcon size={40} />
+                    </div>
+                  )}
+                  <div className="absolute top-3 left-3 flex gap-2">
+                    <span className="bg-black/80 px-2 py-1 rounded text-[10px] font-bold text-[#00FF00] uppercase">
+                      {product.category}
+                    </span>
+                    {!product.isActive && (
+                      <span className="bg-red-500/20 px-2 py-1 rounded text-[10px] font-bold text-red-400 uppercase">
+                        Inaktiv
+                      </span>
+                    )}
+                  </div>
+                  <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button 
+                      onClick={() => handleToggleActive(product)} 
+                      className="bg-black/80 p-2 rounded-lg text-white hover:text-[#00FF00] transition-colors"
+                      title={product.isActive ? "Deaktivieren" : "Aktivieren"}
+                    >
+                      {product.isActive ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                    <button onClick={() => handleEdit(product)} className="bg-black/80 p-2 rounded-lg text-white hover:text-[#00FF00] transition-colors">
+                      <Edit size={16} />
+                    </button>
+                    <button onClick={() => handleDelete(product.id)} className="bg-black/80 p-2 rounded-lg text-white hover:text-red-500 transition-colors">
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+                <div className="p-5">
+                  <h3 className="text-lg font-bold text-white mb-2 line-clamp-1">{product.title}</h3>
+                  <div className="flex items-center gap-3 mb-3">
+                    <span className="text-[#00FF00] font-bold text-xl">{product.price} {product.currency}</span>
+                    <span className="text-[9px] text-zinc-500 bg-zinc-900 px-2 py-1 rounded uppercase font-bold">
+                      {product.interval === 'onetime' ? 'Einmalig' : `/ ${product.interval}`}
+                    </span>
+                  </div>
+                  <p className="text-zinc-500 text-sm line-clamp-2">{product.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ============ RENDER: CREATE/EDIT FORM ============
+  return (
+    <div className="max-w-4xl mx-auto animate-in fade-in pb-20">
+      {/* Notifications */}
+      {(error || success) && (
+        <div className={`fixed top-4 right-4 z-50 p-4 rounded-xl border ${
+          error ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-green-500/10 border-green-500/30 text-green-400'
+        } flex items-center gap-3 animate-in slide-in-from-top`}>
+          {error ? <AlertCircle size={20} /> : <CheckCircle size={20} />}
+          <span className="font-medium">{error || success}</span>
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="flex items-center gap-4 mb-8">
+        <button 
+          onClick={handleBack} 
+          className="p-3 bg-[#1C1C1E] rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+        >
+          <ChevronLeft size={24} />
+        </button>
+        <div>
+          <h1 className="text-2xl font-bold text-white">
+            {viewMode === 'edit' ? 'Produkt bearbeiten' : 'Neues Produkt erstellen'}
+          </h1>
+          <p className="text-zinc-500 text-sm mt-1">
+            {viewMode === 'edit' ? `Bearbeite "${editingProduct?.title}"` : 'Fülle alle erforderlichen Felder aus'}
+          </p>
+        </div>
       </div>
 
-      {loading ? (
-        <div className="text-zinc-500">{t('common.loading')}</div>
-      ) : products.length === 0 ? (
-        <div className="bg-[#1C1C1E] border border-zinc-800 rounded-3xl p-16 flex flex-col items-center justify-center text-zinc-500">
-           <Package size={64} className="mb-6 text-zinc-800" />
-           <p>{t('products.noProducts')}</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-           {products.map(product => (
-             <div key={product.id} className="bg-[#1C1C1E] border border-zinc-800 rounded-3xl overflow-hidden group hover:border-[#00FF00]/30 transition-all shadow-lg hover:-translate-y-1">
-                <div className="h-40 bg-zinc-800 relative">
-                  {product.thumbnailUrl ? (
-                      <img src={product.thumbnailUrl} alt={product.title} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500" />
-                  ) : (
-                      <div className="w-full h-full flex items-center justify-center text-zinc-700">
-                          <ImageIcon size={32} />
-                      </div>
-                  )}
-                  <div className="absolute top-3 left-3 bg-black/70 px-2 py-1 rounded text-xs font-bold text-[#00FF00]">
-                      {product.category}
-                  </div>
-                  <div className="absolute top-3 right-3 flex gap-2">
-                     <button onClick={() => handleOpenModal(product)} className="bg-black/70 p-2 rounded-lg text-white hover:text-[#00FF00] backdrop-blur-sm transition-colors"><Edit size={16} /></button>
-                     <button onClick={() => handleDelete(product.id)} className="bg-black/70 p-2 rounded-lg text-white hover:text-red-500 backdrop-blur-sm transition-colors"><Trash2 size={16} /></button>
-                  </div>
+      <form onSubmit={handleSave} className="space-y-8">
+        
+        {/* SECTION 1: Basis-Informationen */}
+        <section className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 bg-[#00FF00]/10 rounded-xl flex items-center justify-center">
+              <FileText size={20} className="text-[#00FF00]" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-white">Basis-Informationen</h2>
+              <p className="text-xs text-zinc-500">Name, Typ und Kategorie des Produkts</p>
+            </div>
+          </div>
+
+          <div className="space-y-5">
+            <Input 
+              label="Produktname *" 
+              value={formData.title} 
+              onChange={e => setFormData({...formData, title: e.target.value})} 
+              placeholder="z.B. Iron Protocol - 12 Wochen Programm"
+            />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">Produkttyp *</label>
+                <select 
+                  value={formData.type} 
+                  onChange={e => setFormData({...formData, type: e.target.value as ProductType})}
+                  className="w-full bg-[#121212] border border-zinc-800 text-white rounded-xl px-4 py-3.5 focus:border-[#00FF00] outline-none transition-colors"
+                >
+                  <option value="PLAN">📋 Trainingsplan</option>
+                  <option value="COACHING_1ON1">👤 1:1 Coaching</option>
+                  <option value="ADDON">➕ Add-on</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">Kategorie *</label>
+                <select 
+                  value={formData.category} 
+                  onChange={e => setFormData({...formData, category: e.target.value as ProductCategory})}
+                  className="w-full bg-[#121212] border border-zinc-800 text-white rounded-xl px-4 py-3.5 focus:border-[#00FF00] outline-none transition-colors"
+                >
+                  <option value="GENERAL">🏋️ General Fitness</option>
+                  <option value="POLICE">👮 Polizei</option>
+                  <option value="MILITARY">🎖️ Militär</option>
+                  <option value="FIRE">🚒 Feuerwehr</option>
+                  <option value="RECOVERY">💆 Recovery</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">Verknüpfter Plan *</label>
+              <select 
+                value={formData.planId}
+                onChange={e => setFormData({...formData, planId: e.target.value})}
+                className="w-full bg-[#121212] border border-zinc-800 text-white rounded-xl px-4 py-3.5 focus:border-[#00FF00] outline-none transition-colors"
+              >
+                <option value="">-- Plan auswählen --</option>
+                {plans.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+              {plans.length === 0 && (
+                <p className="text-xs text-amber-400 flex items-center gap-1 mt-1">
+                  <AlertCircle size={12} /> Erstelle zuerst einen Plan im Planner
+                </p>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* SECTION 2: Preis & Abrechnung */}
+        <section className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 bg-[#00FF00]/10 rounded-xl flex items-center justify-center">
+              <DollarSign size={20} className="text-[#00FF00]" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-white">Preis & Abrechnung</h2>
+              <p className="text-xs text-zinc-500">Definiere den Preis und das Abrechnungsintervall</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">Preis *</label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.price}
+                  onChange={e => setFormData({...formData, price: Number(e.target.value)})}
+                  className="w-full bg-[#121212] border border-zinc-800 text-white rounded-xl pl-10 pr-4 py-3.5 focus:border-[#00FF00] outline-none transition-colors"
+                  placeholder="99.00"
+                />
+                <DollarSign size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">Währung</label>
+              <select 
+                value={formData.currency}
+                onChange={e => setFormData({...formData, currency: e.target.value})}
+                className="w-full bg-[#121212] border border-zinc-800 text-white rounded-xl px-4 py-3.5 focus:border-[#00FF00] outline-none transition-colors"
+              >
+                <option value="EUR">EUR (€)</option>
+                <option value="USD">USD ($)</option>
+                <option value="CHF">CHF</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">Intervall</label>
+              <select 
+                value={formData.interval}
+                onChange={e => setFormData({...formData, interval: e.target.value as any})}
+                className="w-full bg-[#121212] border border-zinc-800 text-white rounded-xl px-4 py-3.5 focus:border-[#00FF00] outline-none transition-colors"
+              >
+                <option value="onetime">💎 Einmalzahlung</option>
+                <option value="month">📅 Monatlich</option>
+                <option value="year">📆 Jährlich</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        {/* SECTION 3: Produktbild */}
+        <section className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 bg-[#00FF00]/10 rounded-xl flex items-center justify-center">
+              <ImageIcon size={20} className="text-[#00FF00]" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-white">Produktbild</h2>
+              <p className="text-xs text-zinc-500">Ein ansprechendes Bild erhöht die Conversion</p>
+            </div>
+          </div>
+
+          <div className="border-2 border-dashed border-zinc-700 bg-[#121212] rounded-xl overflow-hidden">
+            {uploading ? (
+              <div className="flex flex-col items-center justify-center py-16 text-[#00FF00]">
+                <Loader2 size={32} className="animate-spin mb-3" />
+                <span className="font-medium">Bild wird hochgeladen...</span>
+              </div>
+            ) : formData.thumbnailUrl ? (
+              <div className="relative">
+                <img src={formData.thumbnailUrl} alt="Preview" className="w-full h-64 object-cover" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                <button 
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, thumbnailUrl: '' }))}
+                  className="absolute bottom-4 right-4 bg-red-500/20 border border-red-500/30 px-4 py-2 rounded-lg text-red-400 hover:bg-red-500/30 transition-colors flex items-center gap-2"
+                >
+                  <Trash2 size={16} /> Entfernen
+                </button>
+              </div>
+            ) : (
+              <label className="flex flex-col items-center justify-center py-16 cursor-pointer hover:bg-zinc-900/50 transition-colors">
+                <div className="w-16 h-16 bg-zinc-800 rounded-2xl flex items-center justify-center mb-4">
+                  <Upload size={28} className="text-zinc-500" />
                 </div>
-                <div className="p-6">
-                   <h3 className="text-xl font-bold text-white mb-2">{product.title}</h3>
-                   <div className="flex items-center gap-3 mb-4">
-                      <span className="text-[#00FF00] font-bold text-lg">{product.price} {product.currency}</span>
-                      <span className="text-[10px] text-zinc-400 bg-zinc-900 border border-zinc-800 px-2 py-1 rounded-md uppercase font-bold tracking-wider">{product.interval}</span>
-                   </div>
-                   <p className="text-zinc-400 text-sm line-clamp-2 leading-relaxed">{product.description}</p>
-                </div>
-             </div>
-           ))}
+                <span className="text-white font-medium mb-1">Bild hochladen</span>
+                <span className="text-xs text-zinc-500">PNG, JPG bis 5MB</span>
+                <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
+              </label>
+            )}
+          </div>
+        </section>
+
+        {/* SECTION 4: Beschreibungen */}
+        <section className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 bg-[#00FF00]/10 rounded-xl flex items-center justify-center">
+              <Sparkles size={20} className="text-[#00FF00]" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-white">Beschreibungen</h2>
+              <p className="text-xs text-zinc-500">Verkaufstext für den Shop</p>
+            </div>
+          </div>
+
+          <div className="space-y-5">
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">Kurzbeschreibung</label>
+              <textarea 
+                className="w-full bg-[#121212] border border-zinc-800 text-white rounded-xl px-4 py-3 focus:border-[#00FF00] outline-none h-24 resize-none transition-colors"
+                value={formData.description}
+                onChange={e => setFormData({...formData, description: e.target.value})}
+                placeholder="Kurze, knackige Beschreibung für die Produktkarte..."
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">Ausführliche Beschreibung (Sales Copy)</label>
+              <textarea 
+                className="w-full bg-[#121212] border border-zinc-800 text-white rounded-xl px-4 py-3 focus:border-[#00FF00] outline-none h-40 resize-none transition-colors"
+                value={formData.longDescription}
+                onChange={e => setFormData({...formData, longDescription: e.target.value})}
+                placeholder="Detaillierte Beschreibung für die Produktdetailseite..."
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* SECTION 5: Features */}
+        <section className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 bg-[#00FF00]/10 rounded-xl flex items-center justify-center">
+              <CheckCircle size={20} className="text-[#00FF00]" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-white">Features & Vorteile</h2>
+              <p className="text-xs text-zinc-500">Bullet Points für die Verkaufsseite</p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex gap-3">
+              <input 
+                value={currentFeature}
+                onChange={e => setCurrentFeature(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddFeature())}
+                className="flex-1 bg-[#121212] border border-zinc-800 rounded-xl px-4 py-3 text-white focus:border-[#00FF00] outline-none transition-colors"
+                placeholder="z.B. 12 Wochen strukturierter Trainingsplan"
+              />
+              <button 
+                type="button" 
+                onClick={handleAddFeature} 
+                className="px-5 bg-zinc-800 rounded-xl text-white hover:bg-[#00FF00] hover:text-black font-bold transition-colors"
+              >
+                <Plus size={20} />
+              </button>
+            </div>
+
+            {formData.features && formData.features.length > 0 ? (
+              <div className="space-y-2">
+                {formData.features.map((feat, i) => (
+                  <div key={i} className="flex justify-between items-center bg-[#121212] px-4 py-3 rounded-xl border border-zinc-800 group">
+                    <div className="flex items-center gap-3">
+                      <CheckCircle size={16} className="text-[#00FF00]" />
+                      <span className="text-zinc-300">{feat}</span>
+                    </div>
+                    <button 
+                      type="button" 
+                      onClick={() => handleRemoveFeature(i)} 
+                      className="text-zinc-600 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-zinc-600 text-sm text-center py-4">Noch keine Features hinzugefügt</p>
+            )}
+          </div>
+        </section>
+
+        {/* SECTION 6: Status */}
+        <section className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl p-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${formData.isActive ? 'bg-[#00FF00]/10' : 'bg-zinc-800'}`}>
+                {formData.isActive ? <Eye size={20} className="text-[#00FF00]" /> : <EyeOff size={20} className="text-zinc-500" />}
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-white">Sichtbarkeit</h2>
+                <p className="text-xs text-zinc-500">
+                  {formData.isActive ? 'Produkt ist im Shop sichtbar' : 'Produkt ist versteckt'}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setFormData({...formData, isActive: !formData.isActive})}
+              className={`relative w-14 h-8 rounded-full transition-colors ${formData.isActive ? 'bg-[#00FF00]' : 'bg-zinc-700'}`}
+            >
+              <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-transform ${formData.isActive ? 'left-7' : 'left-1'}`} />
+            </button>
+          </div>
+        </section>
+
+        {/* Actions */}
+        <div className="flex items-center justify-between pt-4">
+          <button
+            type="button"
+            onClick={handleBack}
+            className="px-6 py-3 text-zinc-400 hover:text-white transition-colors"
+          >
+            Abbrechen
+          </button>
+          <Button type="submit" disabled={saving} className="flex items-center gap-2 px-8">
+            {saving ? (
+              <>
+                <Loader2 size={18} className="animate-spin" />
+                Speichern...
+              </>
+            ) : (
+              <>
+                <Save size={18} />
+                {viewMode === 'edit' ? 'Änderungen speichern' : 'Produkt erstellen'}
+              </>
+            )}
+          </Button>
         </div>
-      )}
-
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in duration-200 overflow-y-auto">
-           <div className="bg-[#1C1C1E] border border-zinc-800 w-full max-w-lg rounded-3xl shadow-2xl p-8 relative my-8">
-              <button onClick={() => setIsModalOpen(false)} className="absolute top-6 right-6 text-zinc-500 hover:text-white"><X size={24} /></button>
-              <h2 className="text-2xl font-bold text-white mb-8">{editingProduct ? t('common.edit') : t('products.create')}</h2>
-              
-              <form onSubmit={handleSave} className="space-y-6">
-                 {/* Basic Info */}
-                 <Input label={t('products.productName')} value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} required />
-                 
-                 <div className="grid grid-cols-2 gap-4">
-                    <div className="flex flex-col gap-2">
-                        <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest ml-1">Type</label>
-                        <select 
-                           value={formData.type} 
-                           onChange={e => setFormData({...formData, type: e.target.value as ProductType})}
-                           className="bg-[#121212] border border-transparent text-white rounded-xl px-4 py-3.5 focus:border-[#00FF00] outline-none"
-                        >
-                           <option value="PLAN">Plan</option>
-                           <option value="COACHING_1ON1">1:1 Coaching</option>
-                           <option value="ADDON">Add-on</option>
-                        </select>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                        <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest ml-1">Category</label>
-                        <select 
-                           value={formData.category} 
-                           onChange={e => setFormData({...formData, category: e.target.value as ProductCategory})}
-                           className="bg-[#121212] border border-transparent text-white rounded-xl px-4 py-3.5 focus:border-[#00FF00] outline-none"
-                        >
-                           <option value="GENERAL">General</option>
-                           <option value="POLICE">Police</option>
-                           <option value="MILITARY">Military</option>
-                           <option value="FIRE">Fire</option>
-                           <option value="RECOVERY">Recovery</option>
-                        </select>
-                    </div>
-                 </div>
-
-                 <div className="grid grid-cols-2 gap-4">
-                    <Input label={t('products.price')} type="number" value={formData.price} onChange={e => setFormData({...formData, price: Number(e.target.value)})} required />
-                    <div className="flex flex-col gap-2">
-                        <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest ml-1">{t('products.interval')}</label>
-                        <select 
-                           value={formData.interval} 
-                           onChange={e => setFormData({...formData, interval: e.target.value as any})}
-                           className="bg-[#121212] border border-transparent text-white rounded-xl px-4 py-3.5 focus:border-[#00FF00] outline-none"
-                        >
-                           <option value="onetime">{t('products.onetime')}</option>
-                           <option value="month">{t('products.month')}</option>
-                           <option value="year">{t('products.year')}</option>
-                        </select>
-                    </div>
-                 </div>
-
-                 <div className="flex flex-col gap-2">
-                     <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest ml-1">{t('products.linkedPlan')}</label>
-                     <select 
-                        value={formData.planId}
-                        onChange={e => setFormData({...formData, planId: e.target.value})}
-                        required
-                        className="bg-[#121212] border border-transparent text-white rounded-xl px-4 py-3.5 focus:border-[#00FF00] outline-none"
-                     >
-                        <option value="">{t('products.selectPlan')}</option>
-                        {plans.map(p => (
-                           <option key={p.id} value={p.id}>{p.name}</option>
-                        ))}
-                     </select>
-                 </div>
-
-                 {/* Image Upload Section */}
-                 <div className="space-y-2">
-                    <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest ml-1">{t('products.image')}</label>
-                    <div className="border border-dashed border-zinc-700 bg-[#121212] rounded-xl p-4 flex flex-col items-center justify-center relative">
-                        {uploading ? (
-                            <div className="flex items-center gap-2 text-[#00FF00]">
-                                <Loader2 size={20} className="animate-spin" /> Uploading...
-                            </div>
-                        ) : formData.thumbnailUrl ? (
-                            <div className="relative w-full">
-                                <img src={formData.thumbnailUrl} alt="Preview" className="w-full h-48 object-cover rounded-lg" />
-                                <button 
-                                    type="button"
-                                    onClick={() => setFormData(prev => ({ ...prev, thumbnailUrl: '' }))}
-                                    className="absolute top-2 right-2 bg-black/70 p-2 rounded-full text-white hover:text-red-500 transition-colors"
-                                >
-                                    <Trash2 size={16} />
-                                </button>
-                            </div>
-                        ) : (
-                            <label className="flex flex-col items-center gap-2 cursor-pointer w-full h-full py-8 text-zinc-500 hover:text-white transition-colors">
-                                <Upload size={32} />
-                                <span className="text-sm font-medium">Click to upload image</span>
-                                <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
-                            </label>
-                        )}
-                    </div>
-                 </div>
-                 
-                 <div>
-                    <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest ml-1 mb-2 block">Short Description</label>
-                    <textarea 
-                       className="w-full bg-[#121212] border border-transparent text-white rounded-xl px-4 py-3 focus:border-[#00FF00] outline-none h-20 placeholder-zinc-700"
-                       value={formData.description}
-                       onChange={e => setFormData({...formData, description: e.target.value})}
-                    />
-                 </div>
-
-                 {/* Sales Page Details */}
-                 <div className="border-t border-zinc-800 pt-6">
-                     <h4 className="text-white font-bold mb-4">Sales Page Details</h4>
-                     
-                     <div className="mb-4">
-                        <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest ml-1 mb-2 block">Long Description (Sales Copy)</label>
-                        <textarea 
-                           className="w-full bg-[#121212] border border-transparent text-white rounded-xl px-4 py-3 focus:border-[#00FF00] outline-none h-32 placeholder-zinc-700"
-                           value={formData.longDescription}
-                           onChange={e => setFormData({...formData, longDescription: e.target.value})}
-                        />
-                     </div>
-
-                     <div className="mb-4">
-                         <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest ml-1 mb-2 block">Features (Bullet Points)</label>
-                         <div className="flex gap-2 mb-2">
-                             <input 
-                                value={currentFeature}
-                                onChange={e => setCurrentFeature(e.target.value)}
-                                className="flex-1 bg-[#121212] rounded-xl px-4 py-2 text-white border border-transparent focus:border-[#00FF00] outline-none"
-                                placeholder="e.g. 24/7 Support"
-                             />
-                             <button type="button" onClick={handleAddFeature} className="bg-zinc-800 px-4 rounded-xl text-white hover:bg-[#00FF00] hover:text-black font-bold">+</button>
-                         </div>
-                         <div className="space-y-2">
-                             {formData.features?.map((feat, i) => (
-                                 <div key={i} className="flex justify-between items-center bg-[#121212] px-3 py-2 rounded-lg">
-                                     <span className="text-sm text-zinc-300">{feat}</span>
-                                     <button type="button" onClick={() => handleRemoveFeature(i)} className="text-zinc-600 hover:text-red-500"><X size={14}/></button>
-                                 </div>
-                             ))}
-                         </div>
-                     </div>
-                 </div>
-
-                 <div className="pt-4 flex justify-end gap-3">
-                    <Button type="button" variant="secondary" onClick={() => setIsModalOpen(false)}>{t('common.cancel')}</Button>
-                    <Button type="submit">{t('common.save')}</Button>
-                 </div>
-              </form>
-           </div>
-        </div>
-      )}
+      </form>
     </div>
   );
 };
