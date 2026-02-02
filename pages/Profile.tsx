@@ -250,14 +250,21 @@ const Profile: React.FC = () => {
         </div>
       )}
 
-      {/* Membership & Subscriptions */}
-      {(subscriptions.length > 0 || purchases.length > 0 || assignedPlans.length > 0) && (
-        <div className="space-y-4 pt-4">
-          <h3 className="text-zinc-500 text-xs font-bold uppercase tracking-widest px-2">Mitgliedschaft & Käufe</h3>
-          
-          <div className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl overflow-hidden">
-            {/* Active Subscriptions */}
-            {subscriptions.length > 0 && (
+      {/* Membership & Subscriptions - Always visible for athletes */}
+      <div className="space-y-4 pt-4">
+        <h3 className="text-zinc-500 text-xs font-bold uppercase tracking-widest px-2">Mitgliedschaft & Käufe</h3>
+        
+        <div className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl overflow-hidden">
+          {/* No purchases yet */}
+          {subscriptions.length === 0 && purchases.length === 0 && assignedPlans.length === 0 && (
+            <div className="p-4 border-b border-zinc-800 text-center">
+              <p className="text-zinc-400 text-sm">Noch keine Käufe vorhanden</p>
+              <p className="text-zinc-600 text-xs mt-1">Besuche den Shop um Trainingspläne zu kaufen</p>
+            </div>
+          )}
+
+          {/* Active Subscriptions */}
+          {subscriptions.length > 0 && (
               <div className="p-4 border-b border-zinc-800">
                 <div className="flex items-center gap-3 mb-3">
                   <CreditCard size={18} className="text-[#00FF00]" />
@@ -344,8 +351,7 @@ const Profile: React.FC = () => {
               {portalLoading ? <span className="text-zinc-500 text-sm">Lädt...</span> : <span className="text-zinc-600">→</span>}
             </button>
           </div>
-        </div>
-      )}
+      </div>
 
       {/* Settings Section */}
       <div className="space-y-4 pt-4">
