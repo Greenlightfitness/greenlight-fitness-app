@@ -26,7 +26,7 @@ const AdminProducts: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
 
-  const [formData, setFormData] = useState<Partial<Product>>({
+  const [formData, setFormData] = useState<Partial<Product> & { selectedPlanIds?: string[] }>({
     title: '',
     description: '',
     longDescription: '',
@@ -38,10 +38,12 @@ const AdminProducts: React.FC = () => {
     category: 'GENERAL',
     type: 'PLAN',
     features: [],
-    isActive: true
+    isActive: true,
+    selectedPlanIds: []
   });
 
   const [currentFeature, setCurrentFeature] = useState('');
+  const [creatingStripe, setCreatingStripe] = useState(false);
 
   useEffect(() => {
     if (user) fetchData();
@@ -108,7 +110,8 @@ const AdminProducts: React.FC = () => {
       category: 'GENERAL',
       type: 'PLAN',
       features: [],
-      isActive: true
+      isActive: true,
+      selectedPlanIds: []
     });
     setCurrentFeature('');
     setEditingProduct(null);
@@ -169,6 +172,33 @@ const AdminProducts: React.FC = () => {
     }
   };
 
+  // Create product in Stripe
+  const createStripeProduct = async (productData: any) => {
+    try {
+      const response = await fetch('/api/create-stripe-product', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: productData.title,
+          description: productData.description,
+          price: productData.price,
+          currency: productData.currency,
+          interval: productData.interval,
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Stripe API error');
+      }
+      
+      return await response.json();
+    } catch (err: any) {
+      console.error('Stripe creation failed:', err);
+      return null; // Don't fail the whole operation if Stripe fails
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) {
@@ -181,9 +211,12 @@ const AdminProducts: React.FC = () => {
       setError("Bitte gib einen Produktnamen ein.");
       return;
     }
-    // plan_id is optional now
     if (!formData.price || formData.price <= 0) {
       setError("Bitte gib einen gültigen Preis ein.");
+      return;
+    }
+    if (!formData.selectedPlanIds || formData.selectedPlanIds.length === 0) {
+      setError("Bitte wähle mindestens einen Plan aus.");
       return;
     }
 
@@ -191,9 +224,27 @@ const AdminProducts: React.FC = () => {
     setError(null);
     
     try {
+      // 1. Try to create in Stripe first (optional - won't fail if Stripe not configured)
+      setCreatingStripe(true);
+      let stripeData = null;
+      if (!editingProduct) {
+        stripeData = await createStripeProduct({
+          title: formData.title?.trim(),
+          description: formData.description?.trim(),
+          price: formData.price,
+          currency: formData.currency,
+          interval: formData.interval,
+        });
+        if (stripeData) {
+          console.log('Stripe product created:', stripeData);
+        }
+      }
+      setCreatingStripe(false);
+
+      // 2. Create/update product in our database
       const payload = {
         coach_id: user.id,
-        plan_id: formData.planId || null,
+        plan_id: formData.selectedPlanIds[0] || null, // Primary plan for backwards compatibility
         title: formData.title?.trim(),
         description: formData.description?.trim() || '',
         long_description: formData.longDescription?.trim() || '',
@@ -205,17 +256,27 @@ const AdminProducts: React.FC = () => {
         interval: formData.interval || 'month',
         thumbnail_url: formData.thumbnailUrl || '',
         is_active: formData.isActive ?? true,
+        stripe_product_id: stripeData?.stripe_product_id || null,
+        stripe_price_id: stripeData?.stripe_price_id || null,
       };
       
       console.log("Saving product with payload:", payload);
       
+      let productId: string;
       if (editingProduct) {
         await updateProduct(editingProduct.id, payload);
+        productId = editingProduct.id;
         setSuccess("Produkt erfolgreich aktualisiert!");
       } else {
-        await createProduct(payload);
-        setSuccess("Produkt erfolgreich erstellt!");
+        const newProduct = await createProduct(payload);
+        productId = newProduct.id;
+        setSuccess(stripeData 
+          ? "Produkt erstellt & in Stripe angelegt! ✓" 
+          : "Produkt erfolgreich erstellt!");
       }
+
+      // 3. Save product-plan relationships
+      await saveProductPlans(productId, formData.selectedPlanIds || []);
       
       await fetchData();
       setTimeout(() => {
@@ -228,6 +289,27 @@ const AdminProducts: React.FC = () => {
       setError(`Fehler beim Speichern: ${err.message || 'Unbekannter Fehler'}`);
     } finally {
       setSaving(false);
+      setCreatingStripe(false);
+    }
+  };
+
+  // Save product-plan relationships
+  const saveProductPlans = async (productId: string, planIds: string[]) => {
+    const { supabase } = await import('../services/supabase');
+    
+    // Delete existing relationships
+    await supabase.from('product_plans').delete().eq('product_id', productId);
+    
+    // Insert new relationships
+    if (planIds.length > 0) {
+      const inserts = planIds.map((planId, index) => ({
+        product_id: productId,
+        plan_id: planId,
+        sort_order: index,
+      }));
+      
+      const { error } = await supabase.from('product_plans').insert(inserts);
+      if (error) console.error('Error saving product plans:', error);
     }
   };
 
@@ -436,20 +518,56 @@ const AdminProducts: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">Verknüpfter Plan *</label>
-              <select 
-                value={formData.planId}
-                onChange={e => setFormData({...formData, planId: e.target.value})}
-                className="w-full bg-[#121212] border border-zinc-800 text-white rounded-xl px-4 py-3.5 focus:border-[#00FF00] outline-none transition-colors"
-              >
-                <option value="">-- Plan auswählen --</option>
-                {plans.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-              {plans.length === 0 && (
-                <p className="text-xs text-amber-400 flex items-center gap-1 mt-1">
+              <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">
+                Verknüpfte Pläne * <span className="text-zinc-600 normal-case">(Mehrfachauswahl möglich)</span>
+              </label>
+              {plans.length === 0 ? (
+                <p className="text-xs text-amber-400 flex items-center gap-1 py-3">
                   <AlertCircle size={12} /> Erstelle zuerst einen Plan im Planner
+                </p>
+              ) : (
+                <div className="bg-[#121212] border border-zinc-800 rounded-xl p-3 max-h-48 overflow-y-auto space-y-2">
+                  {plans.map(plan => {
+                    const isSelected = formData.selectedPlanIds?.includes(plan.id);
+                    return (
+                      <label 
+                        key={plan.id} 
+                        className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all ${
+                          isSelected 
+                            ? 'bg-[#00FF00]/10 border border-[#00FF00]/30' 
+                            : 'bg-zinc-900/50 border border-transparent hover:border-zinc-700'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => {
+                            const newIds = e.target.checked
+                              ? [...(formData.selectedPlanIds || []), plan.id]
+                              : formData.selectedPlanIds?.filter(id => id !== plan.id) || [];
+                            setFormData({ ...formData, selectedPlanIds: newIds });
+                          }}
+                          className="w-5 h-5 rounded border-zinc-600 bg-zinc-800 text-[#00FF00] focus:ring-[#00FF00] focus:ring-offset-0"
+                        />
+                        <div className="flex-1">
+                          <span className={`font-medium ${isSelected ? 'text-white' : 'text-zinc-300'}`}>
+                            {plan.name}
+                          </span>
+                          {plan.description && (
+                            <p className="text-xs text-zinc-500 mt-0.5 line-clamp-1">{plan.description}</p>
+                          )}
+                        </div>
+                        {isSelected && (
+                          <CheckCircle size={18} className="text-[#00FF00]" />
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+              {formData.selectedPlanIds && formData.selectedPlanIds.length > 0 && (
+                <p className="text-xs text-[#00FF00] mt-2">
+                  {formData.selectedPlanIds.length} Plan{formData.selectedPlanIds.length > 1 ? 'e' : ''} ausgewählt
                 </p>
               )}
             </div>
