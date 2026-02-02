@@ -8,6 +8,10 @@ interface AuthContextType {
   userProfile: UserProfile | null;
   loading: boolean;
   refreshProfile: () => Promise<void>;
+  // Role switching for dual-role users
+  activeRole: UserRole | null;
+  setActiveRole: (role: UserRole) => void;
+  canSwitchRole: boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -15,6 +19,9 @@ const AuthContext = createContext<AuthContextType>({
   userProfile: null,
   loading: true,
   refreshProfile: async () => {},
+  activeRole: null,
+  setActiveRole: () => {},
+  canSwitchRole: false,
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -23,6 +30,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activeRole, setActiveRoleState] = useState<UserRole | null>(null);
+
+  // Check if user can switch roles (has both primary and secondary role)
+  const canSwitchRole = !!(userProfile?.secondaryRole && userProfile.secondaryRole !== userProfile.role);
+
+  const setActiveRole = (role: UserRole) => {
+    if (userProfile && (role === userProfile.role || role === userProfile.secondaryRole)) {
+      setActiveRoleState(role);
+      // Persist to localStorage for session continuity
+      localStorage.setItem('greenlight_active_role', role);
+    }
+  };
 
   const fetchProfile = async (userId: string) => {
     try {
@@ -33,6 +52,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           uid: profile.id,
           email: profile.email || '',
           role: profile.role as UserRole || UserRole.ATHLETE,
+          secondaryRole: profile.secondary_role as UserRole | undefined,
           displayName: profile.display_name,
           firstName: profile.first_name,
           lastName: profile.last_name,
@@ -49,6 +69,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           createdAt: profile.created_at,
         };
         setUserProfile(mappedProfile);
+        
+        // Set active role from localStorage or default to primary role
+        const savedRole = localStorage.getItem('greenlight_active_role') as UserRole | null;
+        if (savedRole && (savedRole === mappedProfile.role || savedRole === mappedProfile.secondaryRole)) {
+          setActiveRoleState(savedRole);
+        } else {
+          setActiveRoleState(mappedProfile.role);
+        }
       } else {
         console.warn('User profile not found in database');
         setUserProfile(null);
@@ -112,7 +140,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, userProfile, loading, refreshProfile }}>
+    <AuthContext.Provider value={{ user, userProfile, loading, refreshProfile, activeRole, setActiveRole, canSwitchRole }}>
       {!loading && children}
     </AuthContext.Provider>
   );
