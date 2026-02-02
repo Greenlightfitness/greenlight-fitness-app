@@ -32,16 +32,24 @@ const Profile: React.FC = () => {
   }, [user]);
 
   const loadSubscriptionData = async () => {
-    if (!user) return;
+    if (!user?.email) return;
     try {
-      const [subs, purch, plans] = await Promise.all([
-        getUserSubscriptions(user.id).catch(() => []),
-        getUserPurchases(user.id).catch(() => []),
-        getAssignedPlans(user.id).catch(() => []),
-      ]);
-      setSubscriptions(subs);
-      setPurchases(purch);
+      // Load assigned plans from Supabase
+      const plans = await getAssignedPlans(user.id).catch(() => []);
       setAssignedPlans(plans);
+      
+      // Load Stripe data directly from Stripe API
+      const response = await fetch('/api/get-customer-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerEmail: user.email }),
+      });
+      
+      if (response.ok) {
+        const stripeData = await response.json();
+        setSubscriptions(stripeData.subscriptions || []);
+        setPurchases(stripeData.purchases || []);
+      }
     } catch (error) {
       console.error('Error loading subscription data:', error);
     }
@@ -268,22 +276,26 @@ const Profile: React.FC = () => {
               <div className="p-4 border-b border-zinc-800">
                 <div className="flex items-center gap-3 mb-3">
                   <CreditCard size={18} className="text-[#00FF00]" />
-                  <span className="text-white font-medium">Aktive Abonnements</span>
+                  <span className="text-white font-medium">Aktive Abonnements ({subscriptions.length})</span>
                 </div>
                 <div className="space-y-2">
                   {subscriptions.map((sub: any) => (
                     <div key={sub.id} className="flex items-center justify-between bg-zinc-900 rounded-xl p-3">
-                      <div>
-                        <p className="text-white text-sm font-medium">
-                          {sub.status === 'active' ? '✅ Aktiv' : sub.status === 'trialing' ? '🎁 Testphase' : '⚠️ Zahlung ausstehend'}
+                      <div className="flex-1">
+                        <p className="text-white text-sm font-medium">{sub.productName || 'Abonnement'}</p>
+                        <p className="text-zinc-500 text-xs">
+                          {sub.amount} {sub.currency}/{sub.interval === 'month' ? 'Monat' : sub.interval === 'year' ? 'Jahr' : sub.interval}
+                          {sub.status === 'active' && ' • ✅ Aktiv'}
+                          {sub.status === 'trialing' && ' • 🎁 Testphase'}
+                          {sub.status === 'past_due' && ' • ⚠️ Zahlung ausstehend'}
                         </p>
-                        {sub.current_period_end && (
-                          <p className="text-zinc-500 text-xs">
-                            {sub.cancel_at_period_end ? 'Endet am' : 'Verlängert am'}: {new Date(sub.current_period_end).toLocaleDateString('de-DE')}
+                        {sub.currentPeriodEnd && (
+                          <p className="text-zinc-600 text-xs">
+                            {sub.cancelAtPeriodEnd ? 'Endet am' : 'Verlängert am'}: {new Date(sub.currentPeriodEnd).toLocaleDateString('de-DE')}
                           </p>
                         )}
                       </div>
-                      {sub.cancel_at_period_end && (
+                      {sub.cancelAtPeriodEnd && (
                         <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-1 rounded-lg">Gekündigt</span>
                       )}
                     </div>
@@ -317,18 +329,18 @@ const Profile: React.FC = () => {
               </div>
             )}
 
-            {/* Stripe Purchases */}
+            {/* One-time Purchases */}
             {purchases.length > 0 && (
               <div className="p-4 border-b border-zinc-800">
                 <div className="flex items-center gap-3 mb-3">
                   <Receipt size={18} className="text-blue-400" />
-                  <span className="text-white font-medium">Stripe-Käufe ({purchases.length})</span>
+                  <span className="text-white font-medium">Einmalkäufe ({purchases.length})</span>
                 </div>
                 <div className="space-y-2 max-h-32 overflow-y-auto">
                   {purchases.slice(0, 5).map((p: any) => (
-                    <div key={p.id} className="flex items-center justify-between text-sm">
-                      <span className="text-zinc-300">{p.products?.title || 'Produkt'}</span>
-                      <span className="text-zinc-500">{p.amount} {p.currency?.toUpperCase()}</span>
+                    <div key={p.id} className="flex items-center justify-between text-sm bg-zinc-900 rounded-xl p-3">
+                      <span className="text-zinc-300">{p.productName || 'Produkt'}</span>
+                      <span className="text-zinc-500">{p.amount} {p.currency}</span>
                     </div>
                   ))}
                 </div>
