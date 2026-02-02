@@ -129,6 +129,7 @@ const PlanEditor: React.FC<PlanEditorProps> = ({ plan: initialPlan, onBack }) =>
   };
 
   const handleCreateNewWeek = async () => {
+    if (isReadOnly) return;
     const nextOrder = weeks.length + 1;
     try {
       const newWeekData = await createWeek({
