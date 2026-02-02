@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useNavigate, Link } from 'react-router-dom';
-import { signOut, requestDataDeletion, requestDataExport, exportUserData, createAuditLog, getUserPurchases, getUserSubscriptions, getStripeCustomerId } from '../services/supabase';
+import { signOut, requestDataDeletion, requestDataExport, exportUserData, createAuditLog, getUserPurchases, getUserSubscriptions, getStripeCustomerId, getAssignedPlans } from '../services/supabase';
 import { User, Settings, LogOut, Globe, Calculator, UserCog, Mail, Shield, Download, Trash2, FileText, AlertTriangle, RefreshCw, CreditCard, Receipt, ExternalLink } from 'lucide-react';
 import { UserRole } from '../types';
 import Button from '../components/Button';
@@ -22,6 +22,7 @@ const Profile: React.FC = () => {
   const [deleteReason, setDeleteReason] = useState('');
   const [subscriptions, setSubscriptions] = useState<any[]>([]);
   const [purchases, setPurchases] = useState<any[]>([]);
+  const [assignedPlans, setAssignedPlans] = useState<any[]>([]);
   const [portalLoading, setPortalLoading] = useState(false);
 
   useEffect(() => {
@@ -33,12 +34,14 @@ const Profile: React.FC = () => {
   const loadSubscriptionData = async () => {
     if (!user) return;
     try {
-      const [subs, purch] = await Promise.all([
-        getUserSubscriptions(user.id),
-        getUserPurchases(user.id),
+      const [subs, purch, plans] = await Promise.all([
+        getUserSubscriptions(user.id).catch(() => []),
+        getUserPurchases(user.id).catch(() => []),
+        getAssignedPlans(user.id).catch(() => []),
       ]);
       setSubscriptions(subs);
       setPurchases(purch);
+      setAssignedPlans(plans);
     } catch (error) {
       console.error('Error loading subscription data:', error);
     }
@@ -248,7 +251,7 @@ const Profile: React.FC = () => {
       )}
 
       {/* Membership & Subscriptions */}
-      {(subscriptions.length > 0 || purchases.length > 0) && (
+      {(subscriptions.length > 0 || purchases.length > 0 || assignedPlans.length > 0) && (
         <div className="space-y-4 pt-4">
           <h3 className="text-zinc-500 text-xs font-bold uppercase tracking-widest px-2">Mitgliedschaft & Käufe</h3>
           
@@ -282,12 +285,37 @@ const Profile: React.FC = () => {
               </div>
             )}
 
-            {/* Purchases */}
+            {/* Assigned Plans (existing purchases) */}
+            {assignedPlans.length > 0 && (
+              <div className="p-4 border-b border-zinc-800">
+                <div className="flex items-center gap-3 mb-3">
+                  <Receipt size={18} className="text-[#00FF00]" />
+                  <span className="text-white font-medium">Meine Pläne ({assignedPlans.length})</span>
+                </div>
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {assignedPlans.map((plan: any) => (
+                    <div key={plan.id} className="flex items-center justify-between bg-zinc-900 rounded-xl p-3">
+                      <div>
+                        <p className="text-white text-sm font-medium">{plan.plan_name || plan.name || 'Trainingsplan'}</p>
+                        <p className="text-zinc-500 text-xs">
+                          {plan.schedule_status === 'ACTIVE' ? '🟢 Aktiv' : plan.schedule_status === 'COMPLETED' ? '✅ Abgeschlossen' : '⏸️ Pausiert'}
+                        </p>
+                      </div>
+                      {plan.progress_percentage > 0 && (
+                        <span className="text-xs text-[#00FF00] font-bold">{Math.round(plan.progress_percentage)}%</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Stripe Purchases */}
             {purchases.length > 0 && (
               <div className="p-4 border-b border-zinc-800">
                 <div className="flex items-center gap-3 mb-3">
                   <Receipt size={18} className="text-blue-400" />
-                  <span className="text-white font-medium">Gekaufte Produkte ({purchases.length})</span>
+                  <span className="text-white font-medium">Stripe-Käufe ({purchases.length})</span>
                 </div>
                 <div className="space-y-2 max-h-32 overflow-y-auto">
                   {purchases.slice(0, 5).map((p: any) => (
