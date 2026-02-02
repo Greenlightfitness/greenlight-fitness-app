@@ -567,3 +567,373 @@ export const exportUserData = async (userId: string) => {
     audit_logs: auditLogs.data || [],
   };
 };
+
+// ============ PLAN VERSIONING ============
+
+export const getPlanVersions = async (planId: string) => {
+  const { data, error } = await supabase
+    .from('plan_versions')
+    .select('*')
+    .eq('plan_id', planId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+};
+
+export const getCurrentPlanVersion = async (planId: string) => {
+  const { data, error } = await supabase
+    .from('plan_versions')
+    .select('*')
+    .eq('plan_id', planId)
+    .eq('is_current', true)
+    .single();
+  if (error && error.code !== 'PGRST116') throw error;
+  return data;
+};
+
+export const createPlanVersion = async (version: {
+  plan_id: string;
+  version_number: string;
+  version_notes?: string;
+  structure_snapshot?: any;
+  is_published?: boolean;
+}) => {
+  // First, unset current flag on existing versions
+  await supabase
+    .from('plan_versions')
+    .update({ is_current: false })
+    .eq('plan_id', version.plan_id);
+
+  const { data, error } = await supabase
+    .from('plan_versions')
+    .insert({
+      ...version,
+      is_current: true,
+      published_at: version.is_published ? new Date().toISOString() : null,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const publishPlanVersion = async (versionId: string) => {
+  const { data, error } = await supabase
+    .from('plan_versions')
+    .update({ 
+      is_published: true, 
+      published_at: new Date().toISOString() 
+    })
+    .eq('id', versionId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+// ============ BLOCK TEMPLATES ============
+
+export const getBlockTemplates = async (coachId?: string) => {
+  let query = supabase.from('block_templates').select('*');
+  if (coachId) {
+    query = query.or(`coach_id.eq.${coachId},is_system_template.eq.true`);
+  }
+  const { data, error } = await query.order('name');
+  if (error) throw error;
+  return data || [];
+};
+
+export const createBlockTemplate = async (template: {
+  coach_id: string;
+  name: string;
+  description?: string;
+  block_type?: string;
+  block_data: any;
+  tags?: string[];
+}) => {
+  const { data, error } = await supabase
+    .from('block_templates')
+    .insert(template)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const updateBlockTemplate = async (id: string, updates: any) => {
+  const { data, error } = await supabase
+    .from('block_templates')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const deleteBlockTemplate = async (id: string) => {
+  const { error } = await supabase
+    .from('block_templates')
+    .delete()
+    .eq('id', id);
+  if (error) throw error;
+};
+
+// ============ SESSION TEMPLATES ============
+
+export const getSessionTemplates = async (coachId?: string) => {
+  let query = supabase.from('session_templates').select('*');
+  if (coachId) {
+    query = query.or(`coach_id.eq.${coachId},is_system_template.eq.true`);
+  }
+  const { data, error } = await query.order('name');
+  if (error) throw error;
+  return data || [];
+};
+
+export const createSessionTemplate = async (template: {
+  coach_id: string;
+  name: string;
+  description?: string;
+  estimated_duration_min?: number;
+  session_data: any;
+  tags?: string[];
+}) => {
+  const { data, error } = await supabase
+    .from('session_templates')
+    .insert(template)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const updateSessionTemplate = async (id: string, updates: any) => {
+  const { data, error } = await supabase
+    .from('session_templates')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const deleteSessionTemplate = async (id: string) => {
+  const { error } = await supabase
+    .from('session_templates')
+    .delete()
+    .eq('id', id);
+  if (error) throw error;
+};
+
+// ============ WEEK TEMPLATES ============
+
+export const getWeekTemplates = async (coachId?: string) => {
+  let query = supabase.from('week_templates').select('*');
+  if (coachId) {
+    query = query.or(`coach_id.eq.${coachId},is_system_template.eq.true`);
+  }
+  const { data, error } = await query.order('name');
+  if (error) throw error;
+  return data || [];
+};
+
+export const createWeekTemplate = async (template: {
+  coach_id: string;
+  name: string;
+  description?: string;
+  focus?: string;
+  sessions_per_week?: number;
+  week_data: any;
+  tags?: string[];
+}) => {
+  const { data, error } = await supabase
+    .from('week_templates')
+    .insert(template)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const updateWeekTemplate = async (id: string, updates: any) => {
+  const { data, error } = await supabase
+    .from('week_templates')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const deleteWeekTemplate = async (id: string) => {
+  const { error } = await supabase
+    .from('week_templates')
+    .delete()
+    .eq('id', id);
+  if (error) throw error;
+};
+
+// ============ PRODUCT MODULES ============
+
+export const getProductModules = async (productId: string) => {
+  const { data, error } = await supabase
+    .from('product_modules')
+    .select(`
+      *,
+      plan:plans(id, name, description)
+    `)
+    .eq('product_id', productId)
+    .order('module_order');
+  if (error) throw error;
+  return data || [];
+};
+
+export const createProductModule = async (module: {
+  product_id: string;
+  plan_id: string;
+  module_order: number;
+  module_name?: string;
+  is_entry_point?: boolean;
+  prerequisites?: string[];
+}) => {
+  const { data, error } = await supabase
+    .from('product_modules')
+    .insert(module)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const updateProductModule = async (id: string, updates: any) => {
+  const { data, error } = await supabase
+    .from('product_modules')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const deleteProductModule = async (id: string) => {
+  const { error } = await supabase
+    .from('product_modules')
+    .delete()
+    .eq('id', id);
+  if (error) throw error;
+};
+
+// ============ ATHLETE SCHEDULE PREFERENCES ============
+
+export const getAthleteSchedulePreferences = async (athleteId: string, assignedPlanId?: string) => {
+  let query = supabase
+    .from('athlete_schedule_preferences')
+    .select('*')
+    .eq('athlete_id', athleteId);
+  
+  if (assignedPlanId) {
+    query = query.eq('assigned_plan_id', assignedPlanId);
+  }
+  
+  const { data, error } = await query;
+  if (error) throw error;
+  return assignedPlanId ? data?.[0] : data || [];
+};
+
+export const saveAthleteSchedulePreferences = async (preferences: {
+  athlete_id: string;
+  assigned_plan_id: string;
+  available_days: number[];
+  preferred_time_of_day?: string;
+  max_sessions_per_week?: number;
+  min_rest_days?: number;
+  auto_schedule?: boolean;
+}) => {
+  const { data, error } = await supabase
+    .from('athlete_schedule_preferences')
+    .upsert(preferences, { onConflict: 'athlete_id,assigned_plan_id' })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+// ============ ENHANCED ASSIGNED PLANS ============
+
+export const assignPlanWithModules = async (assignment: {
+  athlete_id: string;
+  coach_id: string;
+  original_plan_id: string;
+  product_id?: string;
+  current_module_order?: number;
+  plan_version_id?: string;
+  coaching_type: 'ONE_TO_ONE' | 'GROUP_SYNC' | 'GROUP_ASYNC';
+  start_date: string;
+  plan_name: string;
+  description?: string;
+  structure: any;
+  sessions_per_week?: number;
+  rest_days_between?: number;
+  preferred_days?: number[];
+}) => {
+  // Calculate total sessions
+  let totalSessions = 0;
+  if (assignment.structure?.weeks) {
+    for (const week of assignment.structure.weeks) {
+      totalSessions += week.sessions?.length || 0;
+    }
+  }
+
+  const { data, error } = await supabase
+    .from('assigned_plans')
+    .insert({
+      ...assignment,
+      assignment_type: assignment.coaching_type === 'ONE_TO_ONE' ? 'ONE_TO_ONE' : 'GROUP_FLEX',
+      schedule_status: 'PENDING',
+      total_sessions: totalSessions,
+      completed_sessions: 0,
+      progress_percentage: 0,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const updateAssignedPlanProgress = async (
+  assignedPlanId: string, 
+  completedSessions: number, 
+  totalSessions: number
+) => {
+  const progressPercentage = totalSessions > 0 
+    ? Math.round((completedSessions / totalSessions) * 100 * 100) / 100 
+    : 0;
+
+  const { data, error } = await supabase
+    .from('assigned_plans')
+    .update({
+      completed_sessions: completedSessions,
+      progress_percentage: progressPercentage,
+      schedule_status: progressPercentage >= 100 ? 'COMPLETED' : 'ACTIVE',
+    })
+    .eq('id', assignedPlanId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const advanceToNextModule = async (assignedPlanId: string, nextModuleOrder: number) => {
+  const { data, error } = await supabase
+    .from('assigned_plans')
+    .update({ current_module_order: nextModuleOrder })
+    .eq('id', assignedPlanId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
