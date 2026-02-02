@@ -1,6 +1,7 @@
 import React from 'react';
-import { useLocation, Link } from 'react-router-dom';
+import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 const COMPANY = {
   name: 'Greenlight Fitness',
@@ -14,9 +15,23 @@ const COMPANY = {
 
 const Legal: React.FC = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const path = location.pathname;
   const isPrivacy = path.includes('privacy');
   const isTerms = path.includes('terms');
+
+  const handleBack = () => {
+    // If user is logged in, go back in history or to dashboard
+    // If not logged in, go to login
+    if (window.history.length > 2) {
+      navigate(-1);
+    } else if (user) {
+      navigate('/');
+    } else {
+      navigate('/login');
+    }
+  };
 
   const renderPrivacy = () => (
     <>
@@ -290,9 +305,9 @@ const Legal: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#000000] text-zinc-300 font-sans p-6 md:p-12">
       <div className="max-w-3xl mx-auto">
-        <Link to="/login" className="inline-flex items-center text-[#00FF00] hover:text-white mb-8 transition-colors font-bold">
+        <button onClick={handleBack} className="inline-flex items-center text-[#00FF00] hover:text-white mb-8 transition-colors font-bold">
           <ChevronLeft size={20} /> Zurück
-        </Link>
+        </button>
 
         <nav className="flex gap-4 mb-8 border-b border-zinc-800 pb-4">
           <Link to="/legal/privacy" className={`px-4 py-2 rounded-lg font-semibold transition-colors ${isPrivacy ? 'bg-[#00FF00] text-black' : 'text-zinc-400 hover:text-white'}`}>
