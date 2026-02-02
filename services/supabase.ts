@@ -108,7 +108,8 @@ export const deleteExercise = async (id: string) => {
 export const getPlans = async (coachId?: string) => {
   let query = supabase.from('plans').select('*');
   if (coachId) {
-    query = query.eq('coach_id', coachId);
+    // Show own plans + system plans (created by admins for all coaches)
+    query = query.or(`coach_id.eq.${coachId},is_system_plan.eq.true`);
   }
   const { data, error } = await query.order('created_at', { ascending: false });
   if (error) throw error;
