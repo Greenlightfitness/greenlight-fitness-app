@@ -3,7 +3,7 @@ import { Outlet, NavLink, useNavigate, useLocation, Link } from 'react-router-do
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { UserRole } from '../types';
-import { LayoutDashboard, Dumbbell, Calendar, LogOut, Menu, X, Globe, ShoppingBag, Package, Home, Activity, Users, User, MessageCircle, Scale } from 'lucide-react';
+import { LayoutDashboard, Dumbbell, Calendar, LogOut, Menu, X, Globe, ShoppingBag, Package, Home, Users, User, MessageCircle, Scale } from 'lucide-react';
 import { signOut } from '../services/supabase';
 
 const Layout: React.FC = () => {
@@ -73,6 +73,7 @@ const Layout: React.FC = () => {
                 <div className="max-w-md mx-auto pointer-events-auto">
                     <div className="bg-[#1C1C1E]/95 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] shadow-2xl flex justify-between items-center px-6 py-4">
                         
+                        {/* Home / Hub */}
                         <button 
                             onClick={() => handleAthleteNav('hub')}
                             className={`flex flex-col items-center gap-1 transition-all duration-300 ${!isShopActive && !isProfileActive && !isChatActive && !isPlannerActive && currentView === 'hub' ? 'text-[#00FF00] scale-110' : 'text-zinc-500 hover:text-zinc-300'}`}
@@ -80,21 +81,13 @@ const Layout: React.FC = () => {
                             <Home size={24} strokeWidth={!isShopActive && !isProfileActive && !isChatActive && !isPlannerActive && currentView === 'hub' ? 2.5 : 2} />
                         </button>
 
-                        {/* Training Dashboard View */}
+                        {/* Training View - Combined Calendar & Workout */}
                         <button 
                             onClick={() => handleAthleteNav('training')}
                             className={`flex flex-col items-center gap-1 transition-all duration-300 ${!isShopActive && !isProfileActive && !isChatActive && !isPlannerActive && currentView === 'training' ? 'text-[#00FF00] scale-110' : 'text-zinc-500 hover:text-zinc-300'}`}
                         >
-                            <Activity size={24} strokeWidth={!isShopActive && !isProfileActive && !isChatActive && !isPlannerActive && currentView === 'training' ? 2.5 : 2} />
+                            <Calendar size={24} strokeWidth={!isShopActive && !isProfileActive && !isChatActive && !isPlannerActive && currentView === 'training' ? 2.5 : 2} />
                         </button>
-
-                        {/* Athlete Calendar */}
-                        <NavLink 
-                            to="/calendar"
-                            className={({ isActive }) => `flex flex-col items-center gap-1 transition-all duration-300 ${isActive ? 'text-[#00FF00] scale-110' : 'text-zinc-500 hover:text-zinc-300'}`}
-                        >
-                            <Calendar size={24} strokeWidth={location.pathname === '/calendar' ? 2.5 : 2} />
-                        </NavLink>
 
                         <NavLink 
                             to="/shop"

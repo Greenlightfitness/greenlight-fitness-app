@@ -1,26 +1,38 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { supabase, getAssignedPlans } from '../services/supabase';
-import { ChevronLeft, ChevronRight, Plus, Check, Play, Clock, Dumbbell, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { supabase, getAssignedPlans, getExercises } from '../services/supabase';
+import { ChevronLeft, ChevronRight, Plus, Check, Play, Dumbbell, X, ChevronDown, ChevronUp, Search, Trash2, Trophy, Repeat, Link, Layers, Timer, Square, Pause, ClipboardList, Pencil, CheckCircle, Bookmark, Lock } from 'lucide-react';
 import Button from './Button';
+import { Exercise, BlockType } from '../types';
+
+interface WorkoutSet {
+  id: string;
+  reps?: string;
+  weight?: string;
+  rpe?: string;
+  time?: string;
+  rest?: string;
+  isCompleted?: boolean;
+  completedReps?: string;
+  completedWeight?: string;
+}
+
+interface WorkoutExercise {
+  id: string;
+  exerciseId?: string;
+  name: string;
+  sets: WorkoutSet[];
+  lastValues?: { reps: string; weight: string }[];
+  personalBest?: { weight: string; reps: string };
+}
 
 interface WorkoutBlock {
   id: string;
   name: string;
-  exercises: {
-    id: string;
-    name: string;
-    sets: {
-      id: string;
-      reps?: string;
-      weight?: string;
-      rpe?: string;
-      time?: string;
-      isCompleted?: boolean;
-      actualReps?: string;
-      actualWeight?: string;
-    }[];
-  }[];
+  type: BlockType;
+  rounds?: string;
+  restBetweenRounds?: string;
+  exercises: WorkoutExercise[];
 }
 
 interface DayWorkout {
@@ -31,7 +43,26 @@ interface DayWorkout {
   workoutData: WorkoutBlock[];
   isCustom: boolean;
   completed: boolean;
+  duration?: number; // in seconds
+  completedAt?: string;
 }
+
+interface ExerciseHistory {
+  date: string;
+  sets: { reps: string; weight: string }[];
+}
+
+const BLOCK_TYPE_ICONS: Record<BlockType, React.ReactNode> = {
+  'Normal': <Layers size={14} />,
+  'Superset': <Link size={14} />,
+  'Circuit': <Repeat size={14} />
+};
+
+const BLOCK_TYPE_LABELS: Record<BlockType, string> = {
+  'Normal': 'Normal',
+  'Superset': 'Supersatz',
+  'Circuit': 'Zirkel'
+};
 
 const DAYS_DE = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 const DAYS_FULL = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
@@ -53,18 +84,35 @@ const AthleteTrainingView: React.FC = () => {
   const [workouts, setWorkouts] = useState<Record<string, DayWorkout[]>>({});
   const [expandedBlocks, setExpandedBlocks] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
-  const [sessionActive, setSessionActive] = useState(false);
   
-  // Add custom workout modal
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [customWorkoutName, setCustomWorkoutName] = useState('');
+  // Block-based active tracking (instead of session-based)
+  const [activeBlocks, setActiveBlocks] = useState<Set<string>>(new Set()); // Active block IDs
+  const [blockTimers, setBlockTimers] = useState<Record<string, { startTime: Date; elapsed: number }>>({});
+  const timerInterval = useRef<NodeJS.Timeout | null>(null);
   
-  // Add block modal
-  const [showAddBlockModal, setShowAddBlockModal] = useState<string | null>(null); // workoutId
-  const [newBlockName, setNewBlockName] = useState('');
-  const [newExerciseName, setNewExerciseName] = useState('');
-  const [newExerciseSets, setNewExerciseSets] = useState('3');
-  const [newExerciseReps, setNewExerciseReps] = useState('10');
+  // Rest timer - tracks which set triggered it
+  const [restTimer, setRestTimer] = useState<{ active: boolean; seconds: number; preset: number; afterSetId: string | null }>({ active: false, seconds: 0, preset: 90, afterSetId: null });
+  const restInterval = useRef<NodeJS.Timeout | null>(null);
+  
+  // Add exercise modal - which session/block to add to
+  const [showAddExerciseModal, setShowAddExerciseModal] = useState<{ sessionId: string; blockId?: string } | null>(null);
+  const [showBlockTypeModal, setShowBlockTypeModal] = useState<{ sessionId: string; blockId: string } | null>(null);
+  const [editingSessionName, setEditingSessionName] = useState<string | null>(null);
+  const [editingBlockName, setEditingBlockName] = useState<string | null>(null);
+  
+  // Current block being built (for adding multiple exercises to same block)
+  const [currentBlockId, setCurrentBlockId] = useState<string | null>(null);
+  const [currentBlockType, setCurrentBlockType] = useState<BlockType>('Normal');
+  const [addedExerciseIds, setAddedExerciseIds] = useState<Set<string>>(new Set());
+  
+  // Exercise selection
+  const [exerciseLibrary, setExerciseLibrary] = useState<Exercise[]>([]);
+  const [exerciseSearch, setExerciseSearch] = useState('');
+  const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
+  
+  // Exercise history cache
+  const [exerciseHistory, setExerciseHistory] = useState<Record<string, { lastSets: { reps: string; weight: string }[]; pb: { weight: string; reps: string } | null }>>({});
+  
 
   // Get week dates
   const weekDates = useMemo(() => {
@@ -167,83 +215,662 @@ const AthleteTrainingView: React.FC = () => {
     });
   };
 
-  const addCustomWorkout = async () => {
-    if (!user || !customWorkoutName.trim()) return;
+  // Auto-create session when + is clicked (no modal needed)
+  const addSession = async () => {
+    if (!user) return;
     
     try {
-      const { error } = await supabase
+      const existingSessions = workouts[selectedDateKey] || [];
+      const sessionNumber = existingSessions.filter(s => s.isCustom).length + 1;
+      const defaultTitle = `Session ${sessionNumber}`;
+      
+      const { data, error } = await supabase
         .from('athlete_schedule')
         .insert({
           athlete_id: user.id,
           date: selectedDateKey,
-          plan_name: 'Custom',
-          session_title: customWorkoutName,
+          plan_name: 'Eigenes Training',
+          session_title: defaultTitle,
           workout_data: [],
           completed: false,
-        });
+        })
+        .select()
+        .single();
       
       if (error) throw error;
       
-      setShowAddModal(false);
-      setCustomWorkoutName('');
       loadWorkouts();
+      // Auto-open exercise modal for the new session
+      if (data) {
+        setShowAddExerciseModal({ sessionId: data.id });
+      }
     } catch (error) {
-      console.error('Error adding custom workout:', error);
+      console.error('Error adding session:', error);
     }
   };
 
-  const addBlockToWorkout = async (workoutId: string) => {
-    if (!user || !newBlockName.trim() || !newExerciseName.trim()) return;
+  // Update session title
+  const updateSessionTitle = async (sessionId: string, newTitle: string) => {
+    try {
+      const { error } = await supabase
+        .from('athlete_schedule')
+        .update({ session_title: newTitle })
+        .eq('id', sessionId);
+      
+      if (error) throw error;
+      setEditingSessionName(null);
+      loadWorkouts();
+    } catch (error) {
+      console.error('Error updating session title:', error);
+    }
+  };
+
+  // Load exercise library when modal opens
+  useEffect(() => {
+    if (showAddExerciseModal) {
+      loadExerciseLibrary();
+    }
+  }, [showAddExerciseModal]);
+
+  const loadExerciseLibrary = async () => {
+    try {
+      const data = await getExercises();
+      setExerciseLibrary(data.map((e: any) => ({
+        id: e.id,
+        name: e.name,
+        description: e.description,
+        category: e.category,
+        difficulty: e.difficulty,
+        videoUrl: e.video_url,
+        thumbnailUrl: e.thumbnail_url,
+      } as Exercise)));
+    } catch (error) {
+      console.error('Error loading exercises:', error);
+    }
+  };
+
+  // Filter exercises based on search
+  const filteredExercises = useMemo(() => {
+    if (!exerciseSearch.trim()) return exerciseLibrary.slice(0, 20);
+    const search = exerciseSearch.toLowerCase();
+    return exerciseLibrary.filter(e => 
+      e.name.toLowerCase().includes(search) || 
+      e.category?.toLowerCase().includes(search)
+    ).slice(0, 20);
+  }, [exerciseLibrary, exerciseSearch]);
+
+  // Add exercise to session - adds to current block or creates one if needed
+  const addExerciseToSession = async (exercise: Exercise) => {
+    if (!user || !showAddExerciseModal) return;
     
     try {
-      // Find the workout in state
+      const { sessionId, blockId } = showAddExerciseModal;
       const dayWorkouts = workouts[selectedDateKey] || [];
-      const workout = dayWorkouts.find(w => w.id === workoutId);
-      if (!workout) return;
+      const session = dayWorkouts.find(w => w.id === sessionId);
+      if (!session) return;
 
-      // Create new block with exercise
-      const newBlock: WorkoutBlock = {
-        id: `block-${Date.now()}`,
-        name: newBlockName,
-        exercises: [{
-          id: `ex-${Date.now()}`,
-          name: newExerciseName,
-          sets: Array.from({ length: parseInt(newExerciseSets) || 3 }, (_, i) => ({
-            id: `set-${Date.now()}-${i}`,
-            reps: newExerciseReps || '10',
-            weight: '',
-          }))
-        }]
+      let updatedWorkoutData = [...(session.workoutData || [])];
+      
+      // Create new exercise with 3 sets @ 10 reps (standard)
+      const newExercise: WorkoutExercise = {
+        id: `ex-${Date.now()}`,
+        exerciseId: exercise.id,
+        name: exercise.name,
+        sets: Array.from({ length: 3 }, (_, i) => ({
+          id: `set-${Date.now()}-${i}`,
+          reps: '10',
+          weight: '',
+        }))
       };
 
-      const updatedWorkoutData = [...(workout.workoutData || []), newBlock];
+      // Determine which block to add to
+      const targetBlockId = blockId || currentBlockId;
+      
+      if (targetBlockId) {
+        // Add to existing block
+        updatedWorkoutData = updatedWorkoutData.map(block => {
+          if (block.id === targetBlockId) {
+            return { ...block, exercises: [...block.exercises, newExercise] };
+          }
+          return block;
+        });
+      } else {
+        // Create first block with selected type
+        const newBlockId = `block-${Date.now()}`;
+        const newBlock: WorkoutBlock = {
+          id: newBlockId,
+          name: 'Block A',
+          type: currentBlockType,
+          exercises: [newExercise]
+        };
+        updatedWorkoutData.push(newBlock);
+        setCurrentBlockId(newBlockId); // Remember this block for subsequent exercises
+      }
 
       const { error } = await supabase
         .from('athlete_schedule')
         .update({ workout_data: updatedWorkoutData })
-        .eq('id', workoutId);
+        .eq('id', sessionId);
 
       if (error) throw error;
 
-      setShowAddBlockModal(null);
-      setNewBlockName('');
-      setNewExerciseName('');
-      setNewExerciseSets('3');
-      setNewExerciseReps('10');
+      // Mark exercise as added
+      setAddedExerciseIds(prev => new Set([...prev, exercise.id]));
+      setExerciseSearch('');
+      setSelectedExercise(null);
       loadWorkouts();
     } catch (error) {
-      console.error('Error adding block:', error);
+      console.error('Error adding exercise:', error);
+    }
+  };
+
+  // Start a new block (finish current one, start fresh)
+  const startNewBlock = () => {
+    if (!showAddExerciseModal) return;
+    
+    const dayWorkouts = workouts[selectedDateKey] || [];
+    const session = dayWorkouts.find(w => w.id === showAddExerciseModal.sessionId);
+    if (!session) return;
+    
+    const blockCount = (session.workoutData || []).length;
+    const nextLetter = String.fromCharCode(65 + blockCount); // A, B, C...
+    
+    // Reset current block - next exercise will create a new one
+    setCurrentBlockId(null);
+    setCurrentBlockType('Normal');
+  };
+
+  // Close exercise modal and reset state
+  const closeExerciseModal = () => {
+    setShowAddExerciseModal(null);
+    setSelectedExercise(null);
+    setExerciseSearch('');
+    setCurrentBlockId(null);
+    setCurrentBlockType('Normal');
+    setAddedExerciseIds(new Set());
+  };
+
+  // Start block - load history and start timer for this block
+  const startBlock = async (workoutId: string, blockId: string) => {
+    // Add to active blocks
+    setActiveBlocks(prev => new Set([...prev, blockId]));
+    setExpandedBlocks(prev => new Set([...prev, blockId]));
+    
+    // Start block timer
+    setBlockTimers(prev => ({
+      ...prev,
+      [blockId]: { startTime: new Date(), elapsed: 0 }
+    }));
+    
+    // Start global timer interval if not running
+    if (!timerInterval.current) {
+      timerInterval.current = setInterval(() => {
+        setBlockTimers(prev => {
+          const updated = { ...prev };
+          Object.keys(updated).forEach(id => {
+            updated[id] = { ...updated[id], elapsed: updated[id].elapsed + 1 };
+          });
+          return updated;
+        });
+      }, 1000);
+    }
+    
+    // Load exercise history
+    const workout = workouts[selectedDateKey]?.find(w => w.id === workoutId);
+    const block = workout?.workoutData?.find(b => b.id === blockId);
+    const exerciseIds = block?.exercises.map(e => e.exerciseId).filter(Boolean) || [];
+    
+    if (exerciseIds.length > 0 && user) {
+      try {
+        const { data: historyData } = await supabase
+          .from('workout_logs')
+          .select('exercise_id, sets, created_at')
+          .eq('athlete_id', user.id)
+          .in('exercise_id', exerciseIds)
+          .order('created_at', { ascending: false })
+          .limit(100);
+        
+        const historyMap: Record<string, { lastSets: { reps: string; weight: string }[]; pb: { weight: string; reps: string } | null }> = {};
+        
+        (historyData || []).forEach((log: any) => {
+          const exId = log.exercise_id;
+          if (!historyMap[exId]) {
+            historyMap[exId] = { lastSets: log.sets || [], pb: null };
+          }
+          (log.sets || []).forEach((set: any) => {
+            const weight = parseFloat(set.weight) || 0;
+            const reps = parseInt(set.reps) || 0;
+            if (weight > 0 && reps > 0) {
+              const currentPB = historyMap[exId].pb;
+              if (!currentPB || weight > parseFloat(currentPB.weight)) {
+                historyMap[exId].pb = { weight: set.weight, reps: set.reps };
+              }
+            }
+          });
+        });
+        
+        setExerciseHistory(prev => ({ ...prev, ...historyMap }));
+      } catch (error) {
+        console.error('Error loading exercise history:', error);
+      }
+    }
+  };
+
+  // Complete block and save logs
+  const completeBlock = async (workoutId: string, blockId: string) => {
+    // Stop rest timer if active
+    if (restInterval.current) {
+      clearInterval(restInterval.current);
+      restInterval.current = null;
+    }
+    setRestTimer({ active: false, seconds: 0, preset: 90, afterSetId: null });
+    
+    const workout = workouts[selectedDateKey]?.find(w => w.id === workoutId);
+    const block = workout?.workoutData?.find(b => b.id === blockId);
+    
+    if (!block || !user) return;
+    
+    const blockDuration = blockTimers[blockId]?.elapsed || 0;
+    
+    try {
+      // Save workout log for each exercise in this block
+      const logs = block.exercises.map(ex => ({
+        athlete_id: user.id,
+        exercise_id: ex.exerciseId,
+        exercise_name: ex.name,
+        sets: ex.sets.map(s => ({
+          reps: s.completedReps || s.reps,
+          weight: s.completedWeight || s.weight,
+        })),
+        duration_seconds: blockDuration,
+        created_at: new Date().toISOString(),
+      }));
+      
+      if (logs.length > 0) {
+        await supabase.from('workout_logs').insert(logs);
+      }
+      
+      // Mark block as completed in local state
+      setWorkouts(prev => {
+        const updated = { ...prev };
+        if (updated[selectedDateKey]) {
+          updated[selectedDateKey] = updated[selectedDateKey].map(w => {
+            if (w.id !== workoutId) return w;
+            const updatedBlocks = w.workoutData?.map(b => 
+              b.id === blockId ? { ...b, isCompleted: true } : b
+            ) || [];
+            // Check if all blocks are completed
+            const allCompleted = updatedBlocks.every(b => b.isCompleted);
+            const totalDuration = Object.values(blockTimers).reduce<number>((sum, t) => sum + (t as { elapsed: number }).elapsed, 0);
+            return { 
+              ...w, 
+              workoutData: updatedBlocks,
+              completed: allCompleted,
+              duration: allCompleted ? totalDuration : w.duration,
+              completedAt: allCompleted ? new Date().toISOString() : w.completedAt
+            };
+          });
+        }
+        return updated;
+      });
+      
+      // Update DB for custom workouts
+      if (workout?.isCustom) {
+        const updatedWorkout = workouts[selectedDateKey]?.find(w => w.id === workoutId);
+        await supabase
+          .from('athlete_schedule')
+          .update({ 
+            workout_data: updatedWorkout?.workoutData,
+            completed: updatedWorkout?.completed 
+          })
+          .eq('id', workoutId);
+      }
+      
+      // Remove from active blocks and auto-start next block
+      const currentBlockIdx = workout?.workoutData?.findIndex(b => b.id === blockId) ?? -1;
+      const nextBlock = workout?.workoutData?.[currentBlockIdx + 1];
+      
+      setActiveBlocks(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(blockId);
+        // Auto-start next block if exists
+        if (nextBlock && !nextBlock.isCompleted) {
+          newSet.add(nextBlock.id);
+          setExpandedBlocks(p => new Set([...p, nextBlock.id]));
+          setBlockTimers(t => ({ ...t, [nextBlock.id]: { startTime: new Date(), elapsed: 0 } }));
+        } else if (newSet.size === 0 && timerInterval.current) {
+          // Stop timer if no more active blocks
+          clearInterval(timerInterval.current);
+          timerInterval.current = null;
+        }
+        return newSet;
+      });
+      
+      // Clean up completed block timer
+      setBlockTimers(prev => {
+        const updated = { ...prev };
+        delete updated[blockId];
+        return updated;
+      });
+      
+    } catch (error) {
+      console.error('Error completing block:', error);
+    }
+  };
+
+  // Check if exercise is complete (all sets done)
+  const isExerciseComplete = (exercise: WorkoutExercise) => {
+    return exercise.sets?.every(s => s.isCompleted) || false;
+  };
+
+  // Check if block is complete (all exercises done)
+  const isBlockComplete = (block: WorkoutBlock) => {
+    return block.exercises?.every(ex => isExerciseComplete(ex)) || false;
+  };
+
+  // Rest timer functions
+  const startRestTimer = (afterSetId: string, seconds?: number) => {
+    if (restInterval.current) {
+      clearInterval(restInterval.current);
+    }
+    const preset = seconds || restTimer.preset;
+    setRestTimer({ active: true, seconds: preset, preset, afterSetId });
+    restInterval.current = setInterval(() => {
+      setRestTimer(prev => {
+        if (prev.seconds <= 1) {
+          if (restInterval.current) clearInterval(restInterval.current);
+          return { ...prev, active: false, seconds: 0, afterSetId: null };
+        }
+        return { ...prev, seconds: prev.seconds - 1 };
+      });
+    }, 1000);
+  };
+
+  const stopRestTimer = () => {
+    if (restInterval.current) {
+      clearInterval(restInterval.current);
+      restInterval.current = null;
+    }
+    setRestTimer(prev => ({ ...prev, active: false, seconds: 0, afterSetId: null }));
+  };
+
+  // Add set to exercise (works on workouts directly)
+  const addSetToExercise = (workoutId: string, blockId: string, exerciseId: string) => {
+    setWorkouts(prev => {
+      const updated = { ...prev };
+      if (updated[selectedDateKey]) {
+        updated[selectedDateKey] = updated[selectedDateKey].map(w => {
+          if (w.id !== workoutId) return w;
+          return {
+            ...w,
+            workoutData: w.workoutData?.map(block => {
+              if (block.id !== blockId) return block;
+              return {
+                ...block,
+                exercises: block.exercises.map(ex => {
+                  if (ex.id !== exerciseId) return ex;
+                  const lastSet = ex.sets[ex.sets.length - 1];
+                  return {
+                    ...ex,
+                    sets: [...ex.sets, {
+                      id: `set-${Date.now()}`,
+                      reps: lastSet?.reps || '10',
+                      weight: lastSet?.weight || '',
+                    }]
+                  };
+                })
+              };
+            })
+          };
+        });
+      }
+      return updated;
+    });
+  };
+  
+  // Add exercise to block (during active block)
+  const addExerciseToBlock = (workoutId: string, blockId: string, exercise: Exercise) => {
+    const newExercise: WorkoutExercise = {
+      id: `ex-${Date.now()}`,
+      exerciseId: exercise.id,
+      name: exercise.name,
+      sets: [
+        { id: `set-${Date.now()}-1`, reps: '10', weight: '' },
+        { id: `set-${Date.now()}-2`, reps: '10', weight: '' },
+        { id: `set-${Date.now()}-3`, reps: '10', weight: '' },
+      ]
+    };
+    
+    setWorkouts(prev => {
+      const updated = { ...prev };
+      if (updated[selectedDateKey]) {
+        updated[selectedDateKey] = updated[selectedDateKey].map(w => {
+          if (w.id !== workoutId) return w;
+          return {
+            ...w,
+            workoutData: w.workoutData?.map(block => {
+              if (block.id !== blockId) return block;
+              return {
+                ...block,
+                exercises: [...block.exercises, newExercise]
+              };
+            })
+          };
+        });
+      }
+      return updated;
+    });
+  };
+
+  // Format time helper
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Update set value (works directly on workouts state)
+  const updateSetValue = (workoutId: string, blockId: string, exerciseId: string, setId: string, field: 'completedReps' | 'completedWeight', value: string) => {
+    setWorkouts(prev => {
+      const updated = { ...prev };
+      if (updated[selectedDateKey]) {
+        updated[selectedDateKey] = updated[selectedDateKey].map(w => {
+          if (w.id !== workoutId) return w;
+          return {
+            ...w,
+            workoutData: w.workoutData?.map(block => {
+              if (block.id !== blockId) return block;
+              return {
+                ...block,
+                exercises: block.exercises.map(ex => {
+                  if (ex.id !== exerciseId) return ex;
+                  return {
+                    ...ex,
+                    sets: ex.sets.map(set => {
+                      if (set.id !== setId) return set;
+                      return { ...set, [field]: value };
+                    })
+                  };
+                })
+              };
+            })
+          };
+        });
+      }
+      return updated;
+    });
+  };
+
+  // Toggle set completion (works directly on workouts state)
+  const toggleSetComplete = (workoutId: string, blockId: string, exerciseId: string, setId: string) => {
+    setWorkouts(prev => {
+      const updated = { ...prev };
+      if (updated[selectedDateKey]) {
+        updated[selectedDateKey] = updated[selectedDateKey].map(w => {
+          if (w.id !== workoutId) return w;
+          return {
+            ...w,
+            workoutData: w.workoutData?.map(block => {
+              if (block.id !== blockId) return block;
+              return {
+                ...block,
+                exercises: block.exercises.map(ex => {
+                  if (ex.id !== exerciseId) return ex;
+                  return {
+                    ...ex,
+                    sets: ex.sets.map(set => {
+                      if (set.id !== setId) return set;
+                      return { ...set, isCompleted: !set.isCompleted };
+                    })
+                  };
+                })
+              };
+            })
+          };
+        });
+      }
+      return updated;
+    });
+  };
+
+  // Update block name
+  const updateBlockName = async (sessionId: string, blockId: string, newName: string) => {
+    const dayWorkouts = workouts[selectedDateKey] || [];
+    const session = dayWorkouts.find(w => w.id === sessionId);
+    if (!session || !session.isCustom) return;
+    
+    const updatedWorkoutData = session.workoutData.map(block => {
+      if (block.id === blockId) {
+        return { ...block, name: newName };
+      }
+      return block;
+    });
+    
+    // Update local state immediately
+    setWorkouts(prev => {
+      const updated = { ...prev };
+      if (updated[selectedDateKey]) {
+        updated[selectedDateKey] = updated[selectedDateKey].map(w => 
+          w.id === sessionId ? { ...w, workoutData: updatedWorkoutData } : w
+        );
+      }
+      return updated;
+    });
+    
+    // Save to database
+    await supabase
+      .from('athlete_schedule')
+      .update({ workout_data: updatedWorkoutData })
+      .eq('id', sessionId);
+  };
+
+  // Update block type
+  const updateBlockType = async (sessionId: string, blockId: string, newType: BlockType) => {
+    const dayWorkouts = workouts[selectedDateKey] || [];
+    const session = dayWorkouts.find(w => w.id === sessionId);
+    if (!session || !session.isCustom) return;
+    
+    const updatedWorkoutData = session.workoutData.map(block => {
+      if (block.id === blockId) {
+        return { ...block, type: newType };
+      }
+      return block;
+    });
+    
+    try {
+      await supabase
+        .from('athlete_schedule')
+        .update({ workout_data: updatedWorkoutData })
+        .eq('id', sessionId);
+      
+      setShowBlockTypeModal(null);
+      loadWorkouts();
+    } catch (error) {
+      console.error('Error updating block type:', error);
     }
   };
 
   const todayWorkouts = workouts[selectedDateKey] || [];
   const isToday = new Date().toISOString().split('T')[0] === selectedDateKey;
 
+  // Check if any block in workout is active
+  const hasActiveBlock = (workout: DayWorkout) => {
+    return workout.workoutData?.some(b => activeBlocks.has(b.id)) || false;
+  };
+  
+  // Get total elapsed time for all active blocks in a workout
+  const getWorkoutElapsed = (workout: DayWorkout) => {
+    let total = 0;
+    workout.workoutData?.forEach(b => {
+      if (blockTimers[b.id]) {
+        total += blockTimers[b.id].elapsed;
+      }
+    });
+    return total;
+  };
+
   // Format week range for header
   const weekRangeText = `${weekDates[0].getDate()}.${weekDates[0].getMonth() + 1} - ${weekDates[6].getDate()}.${weekDates[6].getMonth() + 1}`;
 
+  // Weekly stats calculation
+  const weeklyStats = useMemo(() => {
+    let completedSessions = 0;
+    let totalSessions = 0;
+    let totalDuration = 0;
+    let totalSets = 0;
+    
+    weekDates.forEach(date => {
+      const dateKey = date.toISOString().split('T')[0];
+      const dayWorkouts = workouts[dateKey] || [];
+      totalSessions += dayWorkouts.length;
+      
+      dayWorkouts.forEach(w => {
+        if (w.completed) {
+          completedSessions++;
+          totalDuration += w.duration || 0;
+        }
+        w.workoutData?.forEach(block => {
+          block.exercises?.forEach(ex => {
+            totalSets += ex.sets?.length || 0;
+          });
+        });
+      });
+    });
+    
+    return { completedSessions, totalSessions, totalDuration, totalSets };
+  }, [workouts, weekDates]);
+
   return (
     <div className="space-y-4 animate-in fade-in">
+      {/* Week Stats Summary */}
+      {weeklyStats.completedSessions > 0 && (
+        <div className="bg-gradient-to-r from-[#00FF00]/10 to-transparent border border-[#00FF00]/20 rounded-2xl p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-[#00FF00]/20 rounded-xl flex items-center justify-center">
+                <Check size={24} className="text-[#00FF00]" />
+              </div>
+              <div>
+                <p className="text-white font-bold">Diese Woche</p>
+                <p className="text-sm text-zinc-400">
+                  {weeklyStats.completedSessions} von {weeklyStats.totalSessions} Sessions
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-4 text-right">
+              <div>
+                <p className="text-lg font-bold text-white">{formatTime(weeklyStats.totalDuration)}</p>
+                <p className="text-xs text-zinc-500">Trainingszeit</p>
+              </div>
+              <div>
+                <p className="text-lg font-bold text-[#00FF00]">{weeklyStats.totalSets}</p>
+                <p className="text-xs text-zinc-500">Sätze</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Week Navigation */}
       <div className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl p-4">
         <div className="flex items-center justify-between mb-4">
@@ -365,11 +992,11 @@ const AthleteTrainingView: React.FC = () => {
         </div>
         
         <button
-          onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-400 hover:text-white hover:border-zinc-600 transition-colors"
+          onClick={addSession}
+          className="flex items-center gap-2 px-4 py-2 bg-[#00FF00] text-black rounded-xl font-bold hover:bg-[#00FF00]/90 transition-colors"
         >
           <Plus size={18} />
-          <span className="hidden sm:inline">Hinzufügen</span>
+          <span className="hidden sm:inline">Session</span>
         </button>
       </div>
 
@@ -381,8 +1008,8 @@ const AthleteTrainingView: React.FC = () => {
           <Dumbbell size={48} className="mx-auto mb-4 text-zinc-700" />
           <h3 className="text-lg font-bold text-white mb-2">Kein Training geplant</h3>
           <p className="text-zinc-500 text-sm mb-4">Füge ein eigenes Workout hinzu oder plane einen gekauften Plan ein.</p>
-          <Button onClick={() => setShowAddModal(true)} className="mx-auto">
-            <Plus size={18} className="mr-2" /> Workout hinzufügen
+          <Button onClick={addSession} className="mx-auto">
+            <Plus size={18} className="mr-2" /> Session hinzufügen
           </Button>
         </div>
       ) : (
@@ -395,33 +1022,103 @@ const AthleteTrainingView: React.FC = () => {
               }`}
             >
               {/* Workout Header */}
-              <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-zinc-500 mb-1">
-                    {workout.isCustom ? '🏋️ Custom' : `📋 ${workout.planName}`}
-                  </p>
-                  <h3 className="text-lg font-bold text-white">{workout.sessionTitle}</h3>
+              <div className="p-4 border-b border-zinc-800">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-zinc-500 mb-1">
+                      <span className="flex items-center gap-1">{workout.isCustom ? <><Dumbbell size={12} /> Eigenes Training</> : <><ClipboardList size={12} /> {workout.planName}</>}</span>
+                    </p>
+                    {editingSessionName === workout.id ? (
+                      <input
+                        type="text"
+                        defaultValue={workout.sessionTitle}
+                        autoFocus
+                        className="text-lg font-bold text-white bg-transparent border-b border-[#00FF00] outline-none w-full"
+                        onBlur={(e) => updateSessionTitle(workout.id, e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            updateSessionTitle(workout.id, (e.target as HTMLInputElement).value);
+                          }
+                          if (e.key === 'Escape') setEditingSessionName(null);
+                        }}
+                      />
+                    ) : (
+                      <h3 
+                        className="text-lg font-bold text-white cursor-pointer hover:text-[#00FF00] transition-colors"
+                        onClick={() => workout.isCustom && setEditingSessionName(workout.id)}
+                      >
+                        {workout.sessionTitle}
+                        {workout.isCustom && <Pencil size={12} className="text-zinc-600 ml-2 inline" />}
+                      </h3>
+                    )}
+                  </div>
+                  
+                  {hasActiveBlock(workout) ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-orange-400 font-mono text-sm flex items-center gap-1">
+                        <Timer size={14} /> {formatTime(getWorkoutElapsed(workout))}
+                      </span>
+                    </div>
+                  ) : workout.completed ? (
+                    <button 
+                      onClick={() => {
+                        // Restart first block to continue training
+                        const firstBlock = workout.workoutData?.[0];
+                        if (firstBlock) startBlock(workout.id, firstBlock.id);
+                      }}
+                      className="flex items-center gap-2 text-[#00FF00] hover:bg-[#00FF00]/10 px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                      <Check size={18} />
+                      <span className="text-sm font-bold">Erledigt</span>
+                      {workout.duration && (
+                        <span className="text-xs bg-[#00FF00]/20 px-2 py-1 rounded-lg ml-1">
+                          {formatTime(workout.duration)}
+                        </span>
+                      )}
+                    </button>
+                  ) : (
+                    <button 
+                      onClick={() => {
+                        // Start first block automatically
+                        const firstBlock = workout.workoutData?.[0];
+                        if (firstBlock) startBlock(workout.id, firstBlock.id);
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 bg-[#00FF00] text-black rounded-xl font-bold hover:bg-[#00FF00]/90 transition-colors"
+                    >
+                      <Play size={16} /> Start
+                    </button>
+                  )}
                 </div>
                 
-                {!sessionActive ? (
-                  <Button 
-                    onClick={() => {
-                      setSessionActive(true);
-                      if (workout.workoutData?.[0]) {
-                        setExpandedBlocks(new Set([workout.workoutData[0].id]));
-                      }
-                    }}
-                    className="flex items-center gap-2"
-                  >
-                    <Play size={16} /> Start
-                  </Button>
-                ) : (
-                  <button 
-                    onClick={() => setSessionActive(false)}
-                    className="px-4 py-2 bg-red-500/20 text-red-400 rounded-xl font-bold text-sm"
-                  >
-                    Beenden
-                  </button>
+                {/* Rest Timer Preset - show when any block is active */}
+                {hasActiveBlock(workout) && (
+                  <div className="mt-2 flex items-center gap-1 text-xs text-zinc-500">
+                    <Timer size={12} className="text-zinc-500" />
+                    <span>Pause:</span>
+                    {[60, 90, 120, 180].map(sec => (
+                      <button
+                        key={sec}
+                        onClick={() => setRestTimer(prev => ({ ...prev, preset: sec }))}
+                        className={`px-1.5 py-0.5 rounded transition-colors ${
+                          restTimer.preset === sec 
+                            ? 'bg-[#00FF00]/20 text-[#00FF00]' 
+                            : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                        }`}
+                      >
+                        {sec < 60 ? `${sec}s` : `${Math.floor(sec/60)}:${(sec%60).toString().padStart(2,'0')}`}
+                      </button>
+                    ))}
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      value={restTimer.preset}
+                      onChange={(e) => setRestTimer(prev => ({ ...prev, preset: Math.max(10, Math.min(600, parseInt(e.target.value) || 90)) }))}
+                      className="w-12 bg-zinc-800 border border-zinc-700 rounded px-1 py-0.5 text-center text-white text-xs focus:border-[#00FF00] outline-none"
+                      min={10}
+                      max={600}
+                    />
+                    <span className="text-zinc-600">s</span>
+                  </div>
                 )}
               </div>
 
@@ -429,88 +1126,321 @@ const AthleteTrainingView: React.FC = () => {
               <div className="divide-y divide-zinc-800">
                 {(workout.workoutData || []).map((block, blockIdx) => {
                   const isExpanded = expandedBlocks.has(block.id);
+                  const isBlockActive = activeBlocks.has(block.id);
+                  const blockComplete = isBlockComplete(block);
+                  const blockType = block.type || 'Normal';
                   
                   return (
                     <div key={block.id} className="bg-zinc-900/50">
                       {/* Block Header */}
-                      <button
-                        onClick={() => toggleBlock(block.id)}
-                        className="w-full p-4 flex items-center justify-between hover:bg-zinc-800/50 transition-colors"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-[#00FF00]/10 text-[#00FF00] rounded-lg flex items-center justify-center font-bold text-sm">
-                            {blockIdx + 1}
+                      <div className="flex items-center">
+                        <button
+                          onClick={() => toggleBlock(block.id)}
+                          className="flex-1 p-3 flex items-center justify-between hover:bg-zinc-800/50 transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm ${
+                              blockType === 'Circuit' ? 'bg-purple-500/20 text-purple-400' :
+                              blockType === 'Superset' ? 'bg-blue-500/20 text-blue-400' :
+                              'bg-[#00FF00]/10 text-[#00FF00]'
+                            }`}>
+                              {BLOCK_TYPE_ICONS[blockType]}
+                            </div>
+                            <div className="text-left">
+                              <div className="flex items-center gap-2">
+                                {editingBlockName === block.id ? (
+                                  <input
+                                    type="text"
+                                    defaultValue={block.name || `Block ${String.fromCharCode(65 + blockIdx)}`}
+                                    autoFocus
+                                    onClick={(e) => e.stopPropagation()}
+                                    onBlur={(e) => {
+                                      updateBlockName(workout.id, block.id, e.target.value);
+                                      setEditingBlockName(null);
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        updateBlockName(workout.id, block.id, (e.target as HTMLInputElement).value);
+                                        setEditingBlockName(null);
+                                      }
+                                      if (e.key === 'Escape') setEditingBlockName(null);
+                                    }}
+                                    className="font-bold text-white bg-transparent border-b border-[#00FF00] outline-none w-20"
+                                  />
+                                ) : (
+                                  <h4 
+                                    className={`font-bold text-white ${workout.isCustom ? 'cursor-pointer hover:text-[#00FF00]' : ''}`}
+                                    onClick={(e) => {
+                                      if (workout.isCustom) {
+                                        e.stopPropagation();
+                                        setEditingBlockName(block.id);
+                                      }
+                                    }}
+                                  >
+                                    {block.name || `Block ${String.fromCharCode(65 + blockIdx)}`}
+                                    {workout.isCustom && <Pencil size={10} className="text-zinc-600 ml-1 inline" />}
+                                  </h4>
+                                )}
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                                  blockType === 'Circuit' ? 'bg-purple-500/20 text-purple-400' :
+                                  blockType === 'Superset' ? 'bg-blue-500/20 text-blue-400' :
+                                  'bg-zinc-700 text-zinc-400'
+                                }`}>
+                                  {BLOCK_TYPE_LABELS[blockType]}
+                                </span>
+                              </div>
+                              <p className="text-xs text-zinc-500">
+                                {block.exercises?.length || 0} Übungen
+                                {blockType === 'Circuit' && block.rounds && ` • ${block.rounds} Runden`}
+                              </p>
+                            </div>
                           </div>
-                          <div className="text-left">
-                            <h4 className="font-bold text-white">{block.name || `Block ${blockIdx + 1}`}</h4>
-                            <p className="text-xs text-zinc-500">{block.exercises?.length || 0} Übungen</p>
-                          </div>
-                        </div>
-                        {isExpanded ? <ChevronUp size={20} className="text-zinc-500" /> : <ChevronDown size={20} className="text-zinc-500" />}
-                      </button>
+                          {isExpanded ? <ChevronUp size={20} className="text-zinc-500" /> : <ChevronDown size={20} className="text-zinc-500" />}
+                        </button>
+                        
+                        {/* Block Type Selector for custom sessions */}
+                        {workout.isCustom && !isBlockActive && (
+                          <>
+                            <button
+                              onClick={() => setShowBlockTypeModal({ sessionId: workout.id, blockId: block.id })}
+                              className="p-2 text-zinc-500 hover:text-white"
+                              title="Block-Typ ändern"
+                            >
+                              <Layers size={16} />
+                            </button>
+                            {/* Save Block as Template - Paywall Ready */}
+                            <button
+                              onClick={() => {
+                                // TODO: Check if user has coaching subscription
+                                // For now, show locked state for all
+                                alert('Diese Funktion ist Teil des Coaching-Pakets. Upgrade um Blöcke als Vorlagen zu speichern.');
+                              }}
+                              className="p-2 mr-2 text-zinc-500 hover:text-[#00FF00] relative group"
+                              title="Block als Vorlage speichern (Premium)"
+                            >
+                              <Bookmark size={16} />
+                              <Lock size={8} className="absolute -top-0.5 -right-0.5 text-yellow-500" />
+                            </button>
+                          </>
+                        )}
+                      </div>
 
                       {/* Block Content */}
                       {isExpanded && (
-                        <div className="px-4 pb-4 space-y-3">
-                          {(block.exercises || []).map((exercise, exIdx) => (
-                            <div key={exercise.id} className="bg-zinc-900 rounded-xl p-3">
-                              <p className="font-medium text-white mb-2">{exercise.name}</p>
+                        <div className="px-3 pb-3 space-y-2">
+                          {(block.exercises || []).map((exercise, exIdx) => {
+                            const history = exerciseHistory[exercise.exerciseId || ''];
+                            const pb = history?.pb;
+                            const lastSets = history?.lastSets || [];
+                            const exerciseComplete = isExerciseComplete(exercise);
+                            
+                            // Compact summary for completed exercises
+                            const getCompactSummary = () => {
+                              const sets = exercise.sets || [];
+                              const completedSets = sets.filter(s => s.isCompleted);
+                              if (completedSets.length === 0) return null;
                               
-                              {/* Sets */}
-                              <div className="space-y-2">
-                                {(exercise.sets || []).map((set, setIdx) => (
-                                  <div 
-                                    key={set.id}
-                                    className={`flex items-center gap-3 p-2 rounded-lg ${
-                                      set.isCompleted ? 'bg-[#00FF00]/10' : 'bg-zinc-800'
-                                    }`}
-                                  >
-                                    <span className="text-xs text-zinc-500 w-6">S{setIdx + 1}</span>
-                                    
-                                    {/* Target */}
-                                    <div className="flex-1 text-sm text-zinc-400">
-                                      {set.reps && <span>{set.reps} reps</span>}
-                                      {set.weight && <span className="ml-2">@ {set.weight}</span>}
-                                      {set.rpe && <span className="ml-2">RPE {set.rpe}</span>}
-                                      {set.time && <span>{set.time}</span>}
+                              // Group by reps×weight
+                              const groups: Record<string, number> = {};
+                              completedSets.forEach(s => {
+                                const key = `${s.completedReps || s.reps || '?'}×${s.completedWeight || s.weight || '?'}`;
+                                groups[key] = (groups[key] || 0) + 1;
+                              });
+                              
+                              return Object.entries(groups).map(([key, count]) => `${count}×${key}kg`).join(', ');
+                            };
+                            
+                            // If exercise is complete and block is not active, show compact view
+                            if (exerciseComplete && !isBlockActive) {
+                              return (
+                                <div 
+                                  key={exercise.id} 
+                                  className="bg-[#00FF00]/5 border border-[#00FF00]/20 rounded-lg p-2 flex items-center justify-between"
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-6 h-6 bg-[#00FF00] rounded-full flex items-center justify-center">
+                                      <Check size={14} className="text-black" />
                                     </div>
-
-                                    {/* Completion Toggle */}
-                                    {sessionActive && (
-                                      <button 
-                                        className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
-                                          set.isCompleted 
-                                            ? 'bg-[#00FF00] text-black' 
-                                            : 'bg-zinc-700 text-zinc-400 hover:bg-zinc-600'
+                                    <p className="font-medium text-white">{exercise.name}</p>
+                                  </div>
+                                  <span className="text-[#00FF00] font-mono text-sm">{getCompactSummary()}</span>
+                                </div>
+                              );
+                            }
+                            
+                            return (
+                              <div key={exercise.id} className="bg-zinc-900 rounded-lg p-2">
+                                {/* Exercise Header with PB */}
+                                <div className="flex items-center justify-between mb-3">
+                                  <div className="flex items-center gap-2">
+                                    {exerciseComplete && (
+                                      <div className="w-5 h-5 bg-[#00FF00] rounded-full flex items-center justify-center">
+                                        <Check size={12} className="text-black" />
+                                      </div>
+                                    )}
+                                    <p className={`font-medium ${exerciseComplete ? 'text-[#00FF00]' : 'text-white'}`}>{exercise.name}</p>
+                                  </div>
+                                  {pb && isBlockActive && (
+                                    <div className="flex items-center gap-1 text-xs bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded-full">
+                                      <Trophy size={12} />
+                                      <span>{pb.weight}kg × {pb.reps}</span>
+                                    </div>
+                                  )}
+                                </div>
+                                
+                                {/* Sets - Simplified layout */}
+                                <div className="space-y-2">
+                                  {(exercise.sets || []).map((set, setIdx) => {
+                                    const lastSet = lastSets[setIdx];
+                                    const hasTarget = (set.reps || set.weight) && !workout.isCustom;
+                                    
+                                    return (
+                                      <React.Fragment key={set.id}>
+                                      <div 
+                                        className={`flex items-center gap-2 p-2 rounded-lg transition-all ${
+                                          set.isCompleted ? 'bg-[#00FF00]/10 ring-1 ring-[#00FF00]/30' : 'bg-zinc-800'
                                         }`}
                                       >
-                                        <Check size={16} />
-                                      </button>
-                                    )}
-                                  </div>
-                                ))}
+                                        {/* Set Number */}
+                                        <span className="text-xs font-bold text-zinc-500 w-6">{setIdx + 1}</span>
+                                        
+                                        {/* Target (only if coach prescribed and has values) */}
+                                        {hasTarget && (
+                                          <div className="flex items-center gap-1 text-sm text-zinc-500 bg-zinc-700/50 px-2 py-1 rounded">
+                                            <span>{set.reps || '-'}</span>
+                                            <span className="text-zinc-600">×</span>
+                                            <span>{set.weight || '-'}</span>
+                                            <span className="text-[10px]">kg</span>
+                                          </div>
+                                        )}
+                                        
+                                        {/* Input Fields - Always show during active session */}
+                                        {isBlockActive ? (
+                                          <div className="flex items-center gap-1 flex-1">
+                                            <input
+                                              type="text"
+                                              inputMode="numeric"
+                                              placeholder={set.reps || lastSet?.reps || '10'}
+                                              value={set.completedReps || ''}
+                                              onChange={(e) => updateSetValue(workout.id, block.id, exercise.id, set.id, 'completedReps', e.target.value)}
+                                              className="w-14 bg-zinc-700 border border-zinc-600 rounded px-2 py-1.5 text-white text-center text-sm focus:border-[#00FF00] outline-none"
+                                            />
+                                            <span className="text-zinc-500 text-xs">Wdh</span>
+                                            <span className="text-zinc-600 mx-1">×</span>
+                                            <input
+                                              type="text"
+                                              inputMode="decimal"
+                                              placeholder={set.weight || lastSet?.weight || '0'}
+                                              value={set.completedWeight || ''}
+                                              onChange={(e) => updateSetValue(workout.id, block.id, exercise.id, set.id, 'completedWeight', e.target.value)}
+                                              className="w-16 bg-zinc-700 border border-zinc-600 rounded px-2 py-1.5 text-white text-center text-sm focus:border-[#00FF00] outline-none"
+                                            />
+                                            <span className="text-zinc-500 text-xs">kg</span>
+                                          </div>
+                                        ) : (
+                                          /* Preview mode - show simple set info */
+                                          !hasTarget && (
+                                            <div className="flex items-center gap-1 text-sm text-zinc-400">
+                                              <span>{set.reps || '10'}</span>
+                                              <span className="text-zinc-600">×</span>
+                                              <span>{set.weight || '-'}</span>
+                                              <span className="text-[10px]">kg</span>
+                                            </div>
+                                          )
+                                        )}
+                                        
+                                        {/* RPE badge */}
+                                        {set.rpe && (
+                                          <span className="text-[10px] bg-orange-500/20 text-orange-400 px-1.5 py-0.5 rounded">
+                                            RPE {set.rpe}
+                                          </span>
+                                        )}
+                                        
+                                        {/* Complete Button */}
+                                        {isBlockActive && (
+                                          <button 
+                                            onClick={() => {
+                                              toggleSetComplete(workout.id, block.id, exercise.id, set.id);
+                                              // Auto-start rest timer on set completion
+                                              if (!set.isCompleted) startRestTimer(set.id);
+                                            }}
+                                            className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors shrink-0 ${
+                                              set.isCompleted 
+                                                ? 'bg-[#00FF00] text-black' 
+                                                : 'bg-zinc-700 text-zinc-400 hover:bg-zinc-600'
+                                            }`}
+                                          >
+                                            <Check size={16} />
+                                          </button>
+                                        )}
+                                      </div>
+                                      
+                                      {/* Inline Rest Timer - shows after completed set */}
+                                      {restTimer.active && restTimer.afterSetId === set.id && (
+                                        <div className="flex items-center justify-center gap-3 py-2 bg-orange-500/10 rounded-lg animate-pulse">
+                                          <span className="text-orange-400 text-sm flex items-center gap-1"><Timer size={14} /> Pause</span>
+                                          <span className="text-white font-mono text-xl font-bold">{formatTime(restTimer.seconds)}</span>
+                                          <button 
+                                            onClick={stopRestTimer}
+                                            className="text-orange-400 hover:text-white text-xs"
+                                          >
+                                            Überspringen
+                                          </button>
+                                        </div>
+                                      )}
+                                    </React.Fragment>
+                                    );
+                                  })}
+                                  
+                                  {/* Add Set Button - during active session */}
+                                  {isBlockActive && (
+                                    <button
+                                      onClick={() => addSetToExercise(workout.id, block.id, exercise.id)}
+                                      className="w-full p-1.5 border border-dashed border-zinc-700 rounded-lg text-zinc-500 text-xs hover:border-[#00FF00] hover:text-[#00FF00] transition-colors flex items-center justify-center gap-1"
+                                    >
+                                      <Plus size={12} /> Satz
+                                    </button>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                           
-                          {/* Next Block Button */}
-                          {sessionActive && blockIdx < (workout.workoutData?.length || 0) - 1 && (
+                          {/* Add Exercise to Block Button (for custom sessions) */}
+                          {workout.isCustom && !isBlockActive && (
+                            <button
+                              onClick={() => setShowAddExerciseModal({ sessionId: workout.id, blockId: block.id })}
+                              className="w-full p-2 border border-dashed border-zinc-700 rounded-xl text-zinc-500 text-sm hover:border-[#00FF00] hover:text-[#00FF00] transition-colors flex items-center justify-center gap-2"
+                            >
+                              <Plus size={14} /> Übung zu Block hinzufügen
+                            </button>
+                          )}
+                          
+                          {/* Block Action Button */}
+                          {isBlockActive ? (
+                            <div className="flex gap-2">
+                              <Button 
+                                onClick={() => completeBlock(workout.id, block.id)}
+                                fullWidth
+                                variant={blockComplete ? 'primary' : 'secondary'}
+                              >
+                                {blockComplete ? <><Check size={14} className="mr-1" /> Weiter zum nächsten Block</> : 'Block abschließen'}
+                              </Button>
+                            </div>
+                          ) : block.isCompleted ? (
+                            <button 
+                              onClick={() => startBlock(workout.id, block.id)}
+                              className="w-full p-2 text-[#00FF00] text-sm font-medium hover:bg-[#00FF00]/10 rounded-lg transition-colors flex items-center justify-center gap-2"
+                            >
+                              <><CheckCircle size={14} className="mr-1" /> Block erledigt – Erneut bearbeiten?</>
+                            </button>
+                          ) : (
                             <Button 
-                              onClick={() => {
-                                const nextBlock = workout.workoutData?.[blockIdx + 1];
-                                if (nextBlock) {
-                                  setExpandedBlocks(prev => {
-                                    const next = new Set(prev);
-                                    next.delete(block.id);
-                                    next.add(nextBlock.id);
-                                    return next;
-                                  });
-                                }
-                              }}
+                              onClick={() => startBlock(workout.id, block.id)}
                               fullWidth
                               variant="secondary"
                             >
-                              Nächster Block →
+                              <Play size={14} className="mr-2" /> Block starten
                             </Button>
                           )}
                         </div>
@@ -519,13 +1449,13 @@ const AthleteTrainingView: React.FC = () => {
                   );
                 })}
 
-                {/* Add block button for custom workouts */}
-                {workout.isCustom && (
+                {/* Add Block/Exercise button for custom sessions */}
+                {workout.isCustom && !hasActiveBlock(workout) && (
                   <button 
-                    onClick={() => setShowAddBlockModal(workout.id)}
+                    onClick={() => setShowAddExerciseModal({ sessionId: workout.id })}
                     className="w-full p-4 border-t border-zinc-800 text-[#00FF00] text-sm font-medium hover:bg-zinc-800/50 transition-colors flex items-center justify-center gap-2"
                   >
-                    <Plus size={16} /> Übung hinzufügen
+                    <Plus size={16} /> Neuen Block hinzufügen
                   </button>
                 )}
 
@@ -541,98 +1471,170 @@ const AthleteTrainingView: React.FC = () => {
         </div>
       )}
 
-      {/* Add Custom Workout Modal */}
-      {showAddModal && (
+      {/* Add Exercise Modal - Improved UX */}
+      {showAddExerciseModal && (
         <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl w-full max-w-sm overflow-hidden">
-            <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
-              <h3 className="font-bold text-white">Workout hinzufügen</h3>
-              <button onClick={() => setShowAddModal(false)} className="text-zinc-500 hover:text-white">
-                <X size={24} />
-              </button>
+          <div className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl w-full max-w-md overflow-hidden max-h-[85vh] flex flex-col">
+            {/* Header */}
+            <div className="p-4 border-b border-zinc-800 shrink-0">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-bold text-white text-lg">Übungen wählen</h3>
+                <button onClick={closeExerciseModal} className="text-zinc-500 hover:text-white p-1">
+                  <X size={24} />
+                </button>
+              </div>
+              
+              {/* Block Type Selector - Only show if no block created yet */}
+              {!currentBlockId && !showAddExerciseModal.blockId && (
+                <div className="flex gap-2 mb-3">
+                  {(['Normal', 'Superset', 'Circuit'] as BlockType[]).map(type => (
+                    <button
+                      key={type}
+                      onClick={() => setCurrentBlockType(type)}
+                      className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                        currentBlockType === type
+                          ? type === 'Circuit' ? 'bg-purple-500/20 text-purple-400 ring-1 ring-purple-500' :
+                            type === 'Superset' ? 'bg-blue-500/20 text-blue-400 ring-1 ring-blue-500' :
+                            'bg-[#00FF00]/20 text-[#00FF00] ring-1 ring-[#00FF00]'
+                          : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                      }`}
+                    >
+                      {BLOCK_TYPE_ICONS[type]}
+                      {BLOCK_TYPE_LABELS[type]}
+                    </button>
+                  ))}
+                </div>
+              )}
+              
+              {/* Current block info */}
+              {(currentBlockId || showAddExerciseModal.blockId) && (
+                <div className="bg-zinc-800 rounded-xl p-2 flex items-center justify-between">
+                  <span className="text-xs text-zinc-400">
+                    Übungen werden zu <span className="text-white font-bold">Block A</span> hinzugefügt
+                  </span>
+                  <button
+                    onClick={startNewBlock}
+                    className="text-xs text-[#00FF00] hover:underline"
+                  >
+                    + Neuer Block
+                  </button>
+                </div>
+              )}
+              
+              {/* Added count */}
+              {addedExerciseIds.size > 0 && (
+                <div className="mt-2 text-xs text-[#00FF00]">
+                  <span className="flex items-center gap-1"><Check size={12} /> {addedExerciseIds.size} Übung{addedExerciseIds.size > 1 ? 'en' : ''} hinzugefügt</span>
+                </div>
+              )}
             </div>
-            <div className="p-4 space-y-4">
-              <div>
-                <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">Name</label>
+            
+            {/* Search */}
+            <div className="p-4 pb-2 shrink-0">
+              <div className="relative">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
                 <input
                   type="text"
-                  value={customWorkoutName}
-                  onChange={(e) => setCustomWorkoutName(e.target.value)}
-                  placeholder="z.B. Oberkörper, Cardio, ..."
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-white focus:border-[#00FF00] outline-none"
+                  value={exerciseSearch}
+                  onChange={(e) => setExerciseSearch(e.target.value)}
+                  placeholder="Übung suchen..."
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 pl-10 text-white focus:border-[#00FF00] outline-none"
                   autoFocus
                 />
               </div>
-              <Button onClick={addCustomWorkout} fullWidth disabled={!customWorkoutName.trim()}>
-                Hinzufügen
+            </div>
+            
+            {/* Exercise List */}
+            <div className="p-4 pt-2 flex-1 overflow-y-auto">
+              <div className="space-y-2">
+                {filteredExercises.length === 0 ? (
+                  <p className="text-zinc-500 text-sm text-center py-8">Keine Übungen gefunden</p>
+                ) : (
+                  filteredExercises.map(exercise => {
+                    const isAdded = addedExerciseIds.has(exercise.id);
+                    
+                    return (
+                      <button
+                        key={exercise.id}
+                        onClick={() => !isAdded && addExerciseToSession(exercise)}
+                        disabled={isAdded}
+                        className={`w-full text-left p-3 rounded-xl border transition-all flex items-center justify-between ${
+                          isAdded
+                            ? 'bg-[#00FF00]/10 border-[#00FF00]/30 cursor-default'
+                            : 'bg-zinc-900 border-zinc-800 hover:border-[#00FF00] group'
+                        }`}
+                      >
+                        <div>
+                          <p className={`font-medium ${isAdded ? 'text-[#00FF00]' : 'text-white group-hover:text-[#00FF00]'}`}>
+                            {exercise.name}
+                          </p>
+                          <p className="text-xs text-zinc-500">{exercise.category} • {exercise.difficulty}</p>
+                        </div>
+                        {isAdded ? (
+                          <div className="text-[#00FF00]">
+                            <Check size={20} />
+                          </div>
+                        ) : (
+                          <div className="text-[#00FF00] opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Plus size={20} />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+            
+            {/* Footer */}
+            <div className="p-4 border-t border-zinc-800 shrink-0">
+              <Button onClick={closeExerciseModal} fullWidth>
+                {addedExerciseIds.size > 0 ? `Fertig (${addedExerciseIds.size} Übungen)` : 'Schließen'}
               </Button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Add Block/Exercise Modal */}
-      {showAddBlockModal && (
+      {/* Block Type Modal */}
+      {showBlockTypeModal && (
         <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl w-full max-w-sm overflow-hidden">
             <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
-              <h3 className="font-bold text-white">Übung hinzufügen</h3>
-              <button onClick={() => setShowAddBlockModal(null)} className="text-zinc-500 hover:text-white">
+              <h3 className="font-bold text-white">Block-Typ wählen</h3>
+              <button onClick={() => setShowBlockTypeModal(null)} className="text-zinc-500 hover:text-white p-2">
                 <X size={24} />
               </button>
             </div>
-            <div className="p-4 space-y-4">
-              <div>
-                <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">Block Name</label>
-                <input
-                  type="text"
-                  value={newBlockName}
-                  onChange={(e) => setNewBlockName(e.target.value)}
-                  placeholder="z.B. Block A, Warm-up, ..."
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-white focus:border-[#00FF00] outline-none"
-                  autoFocus
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">Übung</label>
-                <input
-                  type="text"
-                  value={newExerciseName}
-                  onChange={(e) => setNewExerciseName(e.target.value)}
-                  placeholder="z.B. Bankdrücken, Kniebeugen, ..."
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-white focus:border-[#00FF00] outline-none"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">Sätze</label>
-                  <input
-                    type="number"
-                    value={newExerciseSets}
-                    onChange={(e) => setNewExerciseSets(e.target.value)}
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-white focus:border-[#00FF00] outline-none text-center"
-                    min="1"
-                    max="10"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">Wdh.</label>
-                  <input
-                    type="text"
-                    value={newExerciseReps}
-                    onChange={(e) => setNewExerciseReps(e.target.value)}
-                    placeholder="10"
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-white focus:border-[#00FF00] outline-none text-center"
-                  />
-                </div>
-              </div>
-              <Button 
-                onClick={() => showAddBlockModal && addBlockToWorkout(showAddBlockModal)} 
-                fullWidth 
-                disabled={!newBlockName.trim() || !newExerciseName.trim()}
-              >
-                Übung hinzufügen
-              </Button>
+            
+            <div className="p-4 space-y-2">
+              {(['Normal', 'Superset', 'Circuit'] as BlockType[]).map(type => (
+                <button
+                  key={type}
+                  onClick={() => updateBlockType(showBlockTypeModal.sessionId, showBlockTypeModal.blockId, type)}
+                  className={`w-full p-4 rounded-xl border transition-all flex items-center gap-3 ${
+                    type === 'Circuit' ? 'border-purple-500/30 hover:border-purple-500 hover:bg-purple-500/10' :
+                    type === 'Superset' ? 'border-blue-500/30 hover:border-blue-500 hover:bg-blue-500/10' :
+                    'border-zinc-700 hover:border-[#00FF00] hover:bg-[#00FF00]/10'
+                  }`}
+                >
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                    type === 'Circuit' ? 'bg-purple-500/20 text-purple-400' :
+                    type === 'Superset' ? 'bg-blue-500/20 text-blue-400' :
+                    'bg-[#00FF00]/10 text-[#00FF00]'
+                  }`}>
+                    {BLOCK_TYPE_ICONS[type]}
+                  </div>
+                  <div className="text-left">
+                    <p className="font-bold text-white">{BLOCK_TYPE_LABELS[type]}</p>
+                    <p className="text-xs text-zinc-500">
+                      {type === 'Normal' && 'Übungen nacheinander ausführen'}
+                      {type === 'Superset' && 'Übungen direkt hintereinander ohne Pause'}
+                      {type === 'Circuit' && 'Alle Übungen als Zirkel durchlaufen'}
+                    </p>
+                  </div>
+                </button>
+              ))}
             </div>
           </div>
         </div>
