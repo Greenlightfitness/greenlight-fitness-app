@@ -26,7 +26,7 @@ const PWAInstallPrompt: React.FC = () => {
     setIsIOS(ios);
     
     // Debug log
-    console.log('[PWA] iOS:', ios, 'Standalone:', standalone);
+    console.log('[PWA] iOS:', ios, 'Standalone:', standalone, 'UserAgent:', navigator.userAgent);
 
     // Check if user dismissed before (with 7-day expiry)
     const dismissedAt = localStorage.getItem('pwa-install-dismissed');
@@ -51,7 +51,11 @@ const PWAInstallPrompt: React.FC = () => {
 
     // For iOS, show custom prompt after delay
     if (ios && !standalone) {
-      setTimeout(() => setShowPrompt(true), 5000);
+      console.log('[PWA] iOS detected, showing prompt in 3 seconds...');
+      setTimeout(() => {
+        console.log('[PWA] Setting showPrompt to true');
+        setShowPrompt(true);
+      }, 3000);
     }
 
     return () => {
@@ -76,13 +80,16 @@ const PWAInstallPrompt: React.FC = () => {
     localStorage.setItem('pwa-install-dismissed', new Date().toISOString());
   };
 
+  // Debug current state
+  console.log('[PWA] Render - showPrompt:', showPrompt, 'isIOS:', isIOS, 'isStandalone:', isStandalone, 'dismissed:', dismissed);
+
   // Don't show if already installed, dismissed, or not applicable
   if (isStandalone || dismissed || !showPrompt) return null;
 
   // iOS-specific prompt (can't auto-install on iOS)
   if (isIOS) {
     return (
-      <div className="fixed bottom-20 left-4 right-4 z-50 animate-in slide-in-from-bottom-4 duration-300">
+      <div className="fixed bottom-20 left-4 right-4 z-[9999]" style={{ transform: 'translateY(0)', transition: 'transform 0.3s ease-out' }}>
         <div className="bg-zinc-900/95 backdrop-blur-xl border border-zinc-700 rounded-2xl p-4 shadow-2xl">
           <button 
             onClick={handleDismiss}
@@ -116,7 +123,7 @@ const PWAInstallPrompt: React.FC = () => {
   // Android/Desktop prompt
   if (deferredPrompt) {
     return (
-      <div className="fixed bottom-20 left-4 right-4 z-50 animate-in slide-in-from-bottom-4 duration-300">
+      <div className="fixed bottom-20 left-4 right-4 z-[9999]" style={{ transform: 'translateY(0)', transition: 'transform 0.3s ease-out' }}>
         <div className="bg-zinc-900/95 backdrop-blur-xl border border-zinc-700 rounded-2xl p-4 shadow-2xl">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-[#00FF00]/10 flex items-center justify-center flex-shrink-0">
