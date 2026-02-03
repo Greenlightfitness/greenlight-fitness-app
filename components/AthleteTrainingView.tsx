@@ -99,6 +99,7 @@ const AthleteTrainingView: React.FC = () => {
   const [showBlockTypeModal, setShowBlockTypeModal] = useState<{ sessionId: string; blockId: string } | null>(null);
   const [editingSessionName, setEditingSessionName] = useState<string | null>(null);
   const [editingBlockName, setEditingBlockName] = useState<string | null>(null);
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
   
   // Current block being built (for adding multiple exercises to same block)
   const [currentBlockId, setCurrentBlockId] = useState<string | null>(null);
@@ -1210,11 +1211,7 @@ const AthleteTrainingView: React.FC = () => {
                             </button>
                             {/* Save Block as Template - Paywall Ready */}
                             <button
-                              onClick={() => {
-                                // TODO: Check if user has coaching subscription
-                                // For now, show locked state for all
-                                alert('Diese Funktion ist Teil des Coaching-Pakets. Upgrade um Blöcke als Vorlagen zu speichern.');
-                              }}
+                              onClick={() => setShowPremiumModal(true)}
                               className="p-2 mr-2 text-zinc-500 hover:text-[#00FF00] relative group"
                               title="Block als Vorlage speichern (Premium)"
                             >
@@ -1635,6 +1632,87 @@ const AthleteTrainingView: React.FC = () => {
                   </div>
                 </button>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Premium Feature Modal - Block Templates */}
+      {showPremiumModal && (
+        <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-gradient-to-b from-[#1C1C1E] to-black border border-zinc-800 w-full max-w-md rounded-3xl overflow-hidden shadow-2xl">
+            {/* Hero Section */}
+            <div className="relative p-8 pb-6 text-center bg-gradient-to-b from-[#00FF00]/10 to-transparent">
+              <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2220%22%20height%3D%2220%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M0%200h1v1H0z%22%20fill%3D%22%2300FF00%22%20fill-opacity%3D%22.03%22%2F%3E%3C%2Fsvg%3E')] opacity-50"></div>
+              
+              <div className="relative">
+                <div className="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-[#00FF00]/20 to-[#00FF00]/5 rounded-2xl flex items-center justify-center border border-[#00FF00]/30 shadow-[0_0_30px_rgba(0,255,0,0.2)]">
+                  <Bookmark size={36} className="text-[#00FF00]" />
+                </div>
+                <h2 className="text-2xl font-bold text-white mb-2">Block-Vorlagen</h2>
+                <p className="text-zinc-400 text-sm">Speichere deine Trainingsblöcke als wiederverwendbare Vorlagen</p>
+              </div>
+            </div>
+
+            {/* Benefits */}
+            <div className="px-6 py-4 space-y-3">
+              <div className="flex items-start gap-3 p-3 bg-zinc-900/50 rounded-xl border border-zinc-800">
+                <div className="w-10 h-10 bg-blue-500/10 rounded-lg flex items-center justify-center shrink-0">
+                  <Repeat size={18} className="text-blue-400" />
+                </div>
+                <div>
+                  <p className="font-bold text-white text-sm">Zeitersparnis</p>
+                  <p className="text-xs text-zinc-500">Erstelle einmal, nutze immer wieder. Keine manuelle Eingabe mehr.</p>
+                </div>
+              </div>
+              
+              <div className="flex items-start gap-3 p-3 bg-zinc-900/50 rounded-xl border border-zinc-800">
+                <div className="w-10 h-10 bg-purple-500/10 rounded-lg flex items-center justify-center shrink-0">
+                  <Layers size={18} className="text-purple-400" />
+                </div>
+                <div>
+                  <p className="font-bold text-white text-sm">Perfekte Struktur</p>
+                  <p className="text-xs text-zinc-500">Supersets, Zirkel & mehr – bewahre deine bewährten Kombinationen.</p>
+                </div>
+              </div>
+              
+              <div className="flex items-start gap-3 p-3 bg-zinc-900/50 rounded-xl border border-zinc-800">
+                <div className="w-10 h-10 bg-[#00FF00]/10 rounded-lg flex items-center justify-center shrink-0">
+                  <Trophy size={18} className="text-[#00FF00]" />
+                </div>
+                <div>
+                  <p className="font-bold text-white text-sm">Konsistenz</p>
+                  <p className="text-xs text-zinc-500">Trainiere immer mit den gleichen effektiven Übungen und Reihenfolgen.</p>
+                </div>
+              </div>
+            </div>
+
+            {/* CTA Section */}
+            <div className="p-6 pt-2 space-y-3">
+              <div className="bg-gradient-to-r from-[#00FF00]/10 to-transparent p-4 rounded-xl border border-[#00FF00]/20">
+                <p className="text-xs text-zinc-400 mb-1">Verfügbar mit</p>
+                <p className="text-lg font-bold text-white flex items-center gap-2">
+                  <span className="text-[#00FF00]">Coaching</span> Paket
+                </p>
+                <p className="text-xs text-zinc-500 mt-1">Unlimitierte Vorlagen + persönliche Betreuung</p>
+              </div>
+
+              <button 
+                onClick={() => {
+                  setShowPremiumModal(false);
+                  window.location.href = '/shop';
+                }}
+                className="w-full py-4 bg-[#00FF00] text-black font-bold rounded-xl text-lg shadow-[0_0_20px_rgba(0,255,0,0.3)] hover:shadow-[0_0_30px_rgba(0,255,0,0.5)] transition-all active:scale-[0.98]"
+              >
+                Zum Shop
+              </button>
+              
+              <button 
+                onClick={() => setShowPremiumModal(false)}
+                className="w-full py-3 text-zinc-500 text-sm hover:text-white transition-colors"
+              >
+                Später
+              </button>
             </div>
           </div>
         </div>
