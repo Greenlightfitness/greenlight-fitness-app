@@ -58,6 +58,13 @@ const AthleteTrainingView: React.FC = () => {
   // Add custom workout modal
   const [showAddModal, setShowAddModal] = useState(false);
   const [customWorkoutName, setCustomWorkoutName] = useState('');
+  
+  // Add block modal
+  const [showAddBlockModal, setShowAddBlockModal] = useState<string | null>(null); // workoutId
+  const [newBlockName, setNewBlockName] = useState('');
+  const [newExerciseName, setNewExerciseName] = useState('');
+  const [newExerciseSets, setNewExerciseSets] = useState('3');
+  const [newExerciseReps, setNewExerciseReps] = useState('10');
 
   // Get week dates
   const weekDates = useMemo(() => {
@@ -182,6 +189,50 @@ const AthleteTrainingView: React.FC = () => {
       loadWorkouts();
     } catch (error) {
       console.error('Error adding custom workout:', error);
+    }
+  };
+
+  const addBlockToWorkout = async (workoutId: string) => {
+    if (!user || !newBlockName.trim() || !newExerciseName.trim()) return;
+    
+    try {
+      // Find the workout in state
+      const dayWorkouts = workouts[selectedDateKey] || [];
+      const workout = dayWorkouts.find(w => w.id === workoutId);
+      if (!workout) return;
+
+      // Create new block with exercise
+      const newBlock: WorkoutBlock = {
+        id: `block-${Date.now()}`,
+        name: newBlockName,
+        exercises: [{
+          id: `ex-${Date.now()}`,
+          name: newExerciseName,
+          sets: Array.from({ length: parseInt(newExerciseSets) || 3 }, (_, i) => ({
+            id: `set-${Date.now()}-${i}`,
+            reps: newExerciseReps || '10',
+            weight: '',
+          }))
+        }]
+      };
+
+      const updatedWorkoutData = [...(workout.workoutData || []), newBlock];
+
+      const { error } = await supabase
+        .from('athlete_schedule')
+        .update({ workout_data: updatedWorkoutData })
+        .eq('id', workoutId);
+
+      if (error) throw error;
+
+      setShowAddBlockModal(null);
+      setNewBlockName('');
+      setNewExerciseName('');
+      setNewExerciseSets('3');
+      setNewExerciseReps('10');
+      loadWorkouts();
+    } catch (error) {
+      console.error('Error adding block:', error);
     }
   };
 
@@ -468,15 +519,20 @@ const AthleteTrainingView: React.FC = () => {
                   );
                 })}
 
-                {/* Empty workout - show add block option */}
-                {(!workout.workoutData || workout.workoutData.length === 0) && (
+                {/* Add block button for custom workouts */}
+                {workout.isCustom && (
+                  <button 
+                    onClick={() => setShowAddBlockModal(workout.id)}
+                    className="w-full p-4 border-t border-zinc-800 text-[#00FF00] text-sm font-medium hover:bg-zinc-800/50 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Plus size={16} /> Übung hinzufügen
+                  </button>
+                )}
+
+                {/* Empty workout message */}
+                {(!workout.workoutData || workout.workoutData.length === 0) && !workout.isCustom && (
                   <div className="p-6 text-center text-zinc-500">
-                    <p className="mb-2">Keine Übungen definiert</p>
-                    {workout.isCustom && (
-                      <button className="text-[#00FF00] text-sm font-medium">
-                        + Block hinzufügen
-                      </button>
-                    )}
+                    <p>Keine Übungen definiert</p>
                   </div>
                 )}
               </div>
@@ -509,6 +565,73 @@ const AthleteTrainingView: React.FC = () => {
               </div>
               <Button onClick={addCustomWorkout} fullWidth disabled={!customWorkoutName.trim()}>
                 Hinzufügen
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Block/Exercise Modal */}
+      {showAddBlockModal && (
+        <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl w-full max-w-sm overflow-hidden">
+            <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
+              <h3 className="font-bold text-white">Übung hinzufügen</h3>
+              <button onClick={() => setShowAddBlockModal(null)} className="text-zinc-500 hover:text-white">
+                <X size={24} />
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">Block Name</label>
+                <input
+                  type="text"
+                  value={newBlockName}
+                  onChange={(e) => setNewBlockName(e.target.value)}
+                  placeholder="z.B. Block A, Warm-up, ..."
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-white focus:border-[#00FF00] outline-none"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">Übung</label>
+                <input
+                  type="text"
+                  value={newExerciseName}
+                  onChange={(e) => setNewExerciseName(e.target.value)}
+                  placeholder="z.B. Bankdrücken, Kniebeugen, ..."
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-white focus:border-[#00FF00] outline-none"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">Sätze</label>
+                  <input
+                    type="number"
+                    value={newExerciseSets}
+                    onChange={(e) => setNewExerciseSets(e.target.value)}
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-white focus:border-[#00FF00] outline-none text-center"
+                    min="1"
+                    max="10"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">Wdh.</label>
+                  <input
+                    type="text"
+                    value={newExerciseReps}
+                    onChange={(e) => setNewExerciseReps(e.target.value)}
+                    placeholder="10"
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-white focus:border-[#00FF00] outline-none text-center"
+                  />
+                </div>
+              </div>
+              <Button 
+                onClick={() => showAddBlockModal && addBlockToWorkout(showAddBlockModal)} 
+                fullWidth 
+                disabled={!newBlockName.trim() || !newExerciseName.trim()}
+              >
+                Übung hinzufügen
               </Button>
             </div>
           </div>
