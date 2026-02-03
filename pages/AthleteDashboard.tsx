@@ -301,9 +301,9 @@ const AthleteDashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-black text-white pb-24">
-      {/* Week Stats Header - Same design as Training View */}
+      {/* Week Stats Header - Premium Style (Green) */}
       <div className="p-4">
-        <div className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl p-4">
+        <div className="bg-gradient-to-r from-[#00FF00]/10 to-transparent border border-[#00FF00]/20 rounded-2xl p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-[#00FF00]/20 rounded-xl flex items-center justify-center">
@@ -345,9 +345,12 @@ const AthleteDashboard: React.FC = () => {
               </div>
             </div>
             {!todayWellness && (
-              <Button variant="primary" onClick={() => setShowWellnessModal(true)}>
+              <button 
+                onClick={() => setShowWellnessModal(true)}
+                className="px-4 py-2 bg-purple-500 text-white font-bold rounded-xl text-sm flex items-center shadow-[0_0_15px_rgba(168,85,247,0.3)] hover:shadow-[0_0_20px_rgba(168,85,247,0.5)] transition-all"
+              >
                 <Plus size={16} className="mr-1" /> Eintragen
-              </Button>
+              </button>
             )}
           </div>
 
