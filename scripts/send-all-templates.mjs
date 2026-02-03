@@ -225,7 +225,7 @@ const templates = [
       </div>
     </div>
     <div style="text-align: center; margin: 32px 0;">
-      <a href="https://app.greenlight-fitness.de" style="display: inline-block; background: ${accentColor}; color: #000000; padding: 16px 40px; border-radius: 12px; text-decoration: none; font-size: 16px; font-weight: bold; box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);">
+      <a href="https://dev.greenlight-fitness.de" style="display: inline-block; background: ${accentColor}; color: #000000; padding: 16px 40px; border-radius: 12px; text-decoration: none; font-size: 16px; font-weight: bold; box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);">
         Jetzt starten →
       </a>
     </div>
@@ -407,7 +407,7 @@ const templates = [
       </div>
     </div>
     <div style="text-align: center; margin: 32px 0;">
-      <a href="https://app.greenlight-fitness.de/coach/dashboard" style="display: inline-block; background: ${accentColor}; color: #000000; padding: 14px 32px; border-radius: 12px; text-decoration: none; font-size: 14px; font-weight: bold;">
+      <a href="https://dev.greenlight-fitness.de/coach/dashboard" style="display: inline-block; background: ${accentColor}; color: #000000; padding: 14px 32px; border-radius: 12px; text-decoration: none; font-size: 14px; font-weight: bold;">
         Zum Dashboard →
       </a>
     </div>
@@ -478,7 +478,7 @@ const templates = [
       </div>
     </div>
     <div style="text-align: center; margin: 32px 0;">
-      <a href="https://app.greenlight-fitness.de/dashboard" style="display: inline-block; background: ${accentColor}; color: #000000; padding: 14px 32px; border-radius: 12px; text-decoration: none; font-size: 14px; font-weight: bold;">
+      <a href="https://dev.greenlight-fitness.de/dashboard" style="display: inline-block; background: ${accentColor}; color: #000000; padding: 14px 32px; border-radius: 12px; text-decoration: none; font-size: 14px; font-weight: bold;">
         Zum Dashboard →
       </a>
     </div>

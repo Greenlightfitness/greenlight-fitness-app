@@ -125,7 +125,7 @@ const templates: Record<EmailType, (data: EmailRequest) => { subject: string; ht
             </ul>
           </div>
           <p>Die vollständige Datenschutzerklärung finden Sie in der App oder unter:</p>
-          <p><a href="https://app.greenlight-fitness.de/legal/privacy" style="color: #00FF00;">Datenschutzerklärung lesen →</a></p>
+          <p><a href="https://dev.greenlight-fitness.de/legal/privacy" style="color: #00FF00;">Datenschutzerklärung lesen →</a></p>
         </div>
         <div style="padding: 16px 24px; background: #000; color: #666; font-size: 12px; text-align: center;">
           <p>${COMPANY.name} | ${COMPANY.address}</p>
@@ -156,16 +156,16 @@ const templates: Record<EmailType, (data: EmailRequest) => { subject: string; ht
           </div>
           <p style="color: #666; font-size: 14px;">
             <strong>Datenschutz:</strong> Mit der Registrierung hast du unserer 
-            <a href="https://app.greenlight-fitness.de/legal/privacy" style="color: #00FF00;">Datenschutzerklärung</a> 
-            und den <a href="https://app.greenlight-fitness.de/legal/terms" style="color: #00FF00;">AGB</a> zugestimmt.
+            <a href="https://dev.greenlight-fitness.de/legal/privacy" style="color: #00FF00;">Datenschutzerklärung</a> 
+            und den <a href="https://dev.greenlight-fitness.de/legal/terms" style="color: #00FF00;">AGB</a> zugestimmt.
           </p>
           <p>Stay hard,<br/>Dein Greenlight Team</p>
         </div>
         <div style="padding: 16px 24px; background: #000; color: #666; font-size: 12px; text-align: center;">
           <p>${COMPANY.name} | ${COMPANY.address}</p>
           <p>
-            <a href="https://app.greenlight-fitness.de/legal/imprint" style="color: #666;">Impressum</a> | 
-            <a href="https://app.greenlight-fitness.de/legal/privacy" style="color: #666;">Datenschutz</a>
+            <a href="https://dev.greenlight-fitness.de/legal/imprint" style="color: #666;">Impressum</a> | 
+            <a href="https://dev.greenlight-fitness.de/legal/privacy" style="color: #666;">Datenschutz</a>
           </p>
         </div>
       </div>

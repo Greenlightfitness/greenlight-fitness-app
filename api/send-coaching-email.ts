@@ -212,7 +212,7 @@ const coachingApprovedTemplate = (data: CoachingApprovedData) => ({
           <table cellpadding="0" cellspacing="0" border="0">
             <tr>
               <td align="center" style="background: ${accentColor}; border-radius: 12px;">
-                <a href="https://app.greenlight-fitness.de" target="_blank" style="display: inline-block; padding: 16px 40px; color: #000000; font-size: 16px; font-weight: bold; text-decoration: none;">Zum Dashboard →</a>
+                <a href="https://dev.greenlight-fitness.de" target="_blank" style="display: inline-block; padding: 16px 40px; color: #000000; font-size: 16px; font-weight: bold; text-decoration: none;">Zum Dashboard →</a>
               </td>
             </tr>
           </table>
@@ -392,7 +392,7 @@ const coachingRequestTemplate = (data: CoachingRequestData) => ({
           <table cellpadding="0" cellspacing="0" border="0">
             <tr>
               <td align="center" style="background: ${accentColor}; border-radius: 12px;">
-                <a href="https://app.greenlight-fitness.de" target="_blank" style="display: inline-block; padding: 16px 40px; color: #000000; font-size: 16px; font-weight: bold; text-decoration: none;">Zum Dashboard →</a>
+                <a href="https://dev.greenlight-fitness.de" target="_blank" style="display: inline-block; padding: 16px 40px; color: #000000; font-size: 16px; font-weight: bold; text-decoration: none;">Zum Dashboard →</a>
               </td>
             </tr>
           </table>
