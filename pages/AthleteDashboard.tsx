@@ -331,17 +331,17 @@ const AthleteDashboard: React.FC = () => {
       </div>
 
       
-      {/* Daily Wellness Card */}
+      {/* Daily Wellness Card - Premium Style */}
       <div className="px-4 mt-4">
-        <div className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-purple-500/10 rounded-lg flex items-center justify-center">
-                <Heart size={16} className="text-purple-500" />
+        <div className="bg-gradient-to-r from-purple-500/10 to-transparent border border-purple-500/20 rounded-2xl p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center">
+                <Heart size={24} className="text-purple-500" />
               </div>
               <div>
-                <h3 className="font-bold text-white">Daily Wellness</h3>
-                <p className="text-xs text-zinc-500">Wie fühlst du dich heute?</p>
+                <p className="text-white font-bold">Daily Wellness</p>
+                <p className="text-sm text-zinc-400">Wie fühlst du dich heute?</p>
               </div>
             </div>
             {!todayWellness && (
@@ -351,8 +351,8 @@ const AthleteDashboard: React.FC = () => {
             )}
           </div>
 
-          {todayWellness ? (
-            <div className="grid grid-cols-3 gap-3">
+          {todayWellness && (
+            <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-purple-500/10">
               <div className="text-center">
                 <Moon size={16} className="mx-auto text-blue-400 mb-1" />
                 <p className="text-xs text-zinc-500">Schlaf</p>
@@ -369,99 +369,98 @@ const AthleteDashboard: React.FC = () => {
                 <WellnessDots value={6 - todayWellness.muscleSoreness} />
               </div>
             </div>
-          ) : (
-            <div className="mt-2">
+          )}
+        </div>
+      </div>
+
+      {/* Volume Chart - Premium Feature - Premium Style */}
+      <div className="px-4 mt-4">
+        <div 
+          className={`bg-gradient-to-r from-blue-500/10 to-transparent border border-blue-500/20 rounded-2xl p-4 relative ${!hasPremium ? 'cursor-pointer' : ''}`}
+          onClick={() => !hasPremium && setShowPremiumModal(true)}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
+                <BarChart3 size={24} className="text-blue-500" />
+              </div>
+              <div>
+                <p className="text-white font-bold flex items-center gap-2">
+                  Trainingsvolumen
+                  {!hasPremium && <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded">PRO</span>}
+                </p>
+                <p className="text-sm text-zinc-400">Push / Pull / Legs Analyse</p>
+              </div>
+            </div>
+            {!hasPremium && (
+              <div className="w-8 h-8 bg-yellow-500/20 rounded-full flex items-center justify-center">
+                <Lock size={14} className="text-yellow-500" />
+              </div>
+            )}
+          </div>
+          
+          <div className={`mt-4 pt-4 border-t border-blue-500/10 ${!hasPremium ? 'blur-sm pointer-events-none' : ''}`}>
+            <div className="h-24">
               <MiniBarChart 
-                data={wellnessData.slice(-14).map(w => (w.energyLevel + w.mood) / 2)} 
-                color="#A855F7" 
-                height={32}
+                data={volumeData.map(d => d.volume)} 
+                color="#3B82F6" 
+                height={96}
               />
-              <p className="text-xs text-zinc-600 text-center mt-2">Letzte 14 Tage</p>
             </div>
-          )}
-        </div>
-      </div>
 
-      {/* Volume Chart - Premium Feature */}
-      <div className="px-4 mt-4">
-        <div 
-          className={`bg-[#1C1C1E] border border-zinc-800 rounded-2xl p-4 relative ${!hasPremium ? 'cursor-pointer' : ''}`}
-          onClick={() => !hasPremium && setShowPremiumModal(true)}
-        >
-          {/* Lock Overlay for non-premium users */}
-          {!hasPremium && (
-            <div className="absolute top-3 right-3 z-10">
-              <div className="w-6 h-6 bg-yellow-500/20 rounded-full flex items-center justify-center">
-                <Lock size={12} className="text-yellow-500" />
-              </div>
-            </div>
-          )}
-          
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-white flex items-center gap-2">
-              Trainingsvolumen
-              {!hasPremium && <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded">PRO</span>}
-            </h3>
-          </div>
-          
-          <div className={`h-32 ${!hasPremium ? 'blur-sm pointer-events-none' : ''}`}>
-            <MiniBarChart 
-              data={volumeData.map(d => d.volume)} 
-              color="#00FF00" 
-              height={128}
-            />
-          </div>
-
-          {/* Push/Pull/Legs Distribution */}
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            {[
-              { label: 'Push', value: volumeData.reduce((s, d) => s + d.push, 0), color: 'bg-blue-500' },
-              { label: 'Pull', value: volumeData.reduce((s, d) => s + d.pull, 0), color: 'bg-green-500' },
-              { label: 'Legs', value: volumeData.reduce((s, d) => s + d.legs, 0), color: 'bg-purple-500' }
-            ].map(item => {
-              const total = volumeData.reduce((s, d) => s + d.push + d.pull + d.legs, 0) || 1;
-              const pct = Math.round((item.value / total) * 100);
-              return (
-                <div key={item.label} className="text-center">
-                  <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden mb-1">
-                    <div className={`h-full ${item.color} rounded-full`} style={{ width: `${pct}%` }} />
+            {/* Push/Pull/Legs Distribution */}
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              {[
+                { label: 'Push', value: volumeData.reduce((s, d) => s + d.push, 0), color: 'bg-blue-500' },
+                { label: 'Pull', value: volumeData.reduce((s, d) => s + d.pull, 0), color: 'bg-green-500' },
+                { label: 'Legs', value: volumeData.reduce((s, d) => s + d.legs, 0), color: 'bg-purple-500' }
+              ].map(item => {
+                const total = volumeData.reduce((s, d) => s + d.push + d.pull + d.legs, 0) || 1;
+                const pct = Math.round((item.value / total) * 100);
+                return (
+                  <div key={item.label} className="text-center">
+                    <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden mb-1">
+                      <div className={`h-full ${item.color} rounded-full`} style={{ width: `${pct}%` }} />
+                    </div>
+                    <p className="text-xs text-zinc-500">{item.label}</p>
+                    <p className="text-sm font-bold">{pct}%</p>
                   </div>
-                  <p className="text-xs text-zinc-500">{item.label}</p>
-                  <p className="text-sm font-bold">{pct}%</p>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Personal Bests - Premium Feature */}
-      <div className="px-4 mt-4">
+      {/* Personal Bests - Premium Feature - Premium Style */}
+      <div className="px-4 mt-4 mb-8">
         <div 
-          className={`bg-[#1C1C1E] border border-zinc-800 rounded-2xl p-4 relative ${!hasPremium ? 'cursor-pointer' : ''}`}
+          className={`bg-gradient-to-r from-yellow-500/10 to-transparent border border-yellow-500/20 rounded-2xl p-4 ${!hasPremium ? 'cursor-pointer' : ''}`}
           onClick={() => !hasPremium && setShowPremiumModal(true)}
         >
-          {/* Lock Overlay for non-premium users */}
-          {!hasPremium && (
-            <div className="absolute top-3 right-3 z-10">
-              <div className="w-6 h-6 bg-yellow-500/20 rounded-full flex items-center justify-center">
-                <Lock size={12} className="text-yellow-500" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-yellow-500/20 rounded-xl flex items-center justify-center">
+                <Trophy size={24} className="text-yellow-500" />
+              </div>
+              <div>
+                <p className="text-white font-bold flex items-center gap-2">
+                  Persönliche Rekorde
+                  {!hasPremium && <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded">PRO</span>}
+                </p>
+                <p className="text-sm text-zinc-400">Deine besten Leistungen</p>
               </div>
             </div>
-          )}
-          
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-bold text-white flex items-center gap-2">
-              <Trophy size={16} className="text-yellow-500" />
-              Persönliche Rekorde
-              {!hasPremium && <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded">PRO</span>}
-            </h3>
-            <ChevronRight size={16} className="text-zinc-500" />
+            {!hasPremium && (
+              <div className="w-8 h-8 bg-yellow-500/20 rounded-full flex items-center justify-center">
+                <Lock size={14} className="text-yellow-500" />
+              </div>
+            )}
           </div>
 
-          <div className={!hasPremium ? 'blur-sm pointer-events-none' : ''}>
+          <div className={`mt-4 pt-4 border-t border-yellow-500/10 ${!hasPremium ? 'blur-sm pointer-events-none' : ''}`}>
             {personalBests.length === 0 ? (
-              <p className="text-zinc-500 text-sm text-center py-4">
+              <p className="text-zinc-500 text-sm text-center py-2">
                 Noch keine PRs - trainiere weiter!
               </p>
             ) : (
@@ -470,7 +469,7 @@ const AthleteDashboard: React.FC = () => {
                   <div 
                     key={idx}
                     className={`flex items-center justify-between p-2 rounded-lg ${
-                      pb.isRecent ? 'bg-yellow-500/10 border border-yellow-500/20' : 'bg-zinc-900'
+                      pb.isRecent ? 'bg-yellow-500/10 border border-yellow-500/20' : 'bg-black/30'
                     }`}
                   >
                     <div className="flex items-center gap-2">

@@ -843,35 +843,6 @@ const AthleteTrainingView: React.FC = () => {
 
   return (
     <div className="space-y-4 animate-in fade-in">
-      {/* Week Stats Summary */}
-      {weeklyStats.completedSessions > 0 && (
-        <div className="bg-gradient-to-r from-[#00FF00]/10 to-transparent border border-[#00FF00]/20 rounded-2xl p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-[#00FF00]/20 rounded-xl flex items-center justify-center">
-                <Check size={24} className="text-[#00FF00]" />
-              </div>
-              <div>
-                <p className="text-white font-bold">Diese Woche</p>
-                <p className="text-sm text-zinc-400">
-                  {weeklyStats.completedSessions} von {weeklyStats.totalSessions} Sessions
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-4 text-right">
-              <div>
-                <p className="text-lg font-bold text-white">{formatTime(weeklyStats.totalDuration)}</p>
-                <p className="text-xs text-zinc-500">Trainingszeit</p>
-              </div>
-              <div>
-                <p className="text-lg font-bold text-[#00FF00]">{weeklyStats.totalSets}</p>
-                <p className="text-xs text-zinc-500">Sätze</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Week Navigation */}
       <div className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl p-4">
         <div className="flex items-center justify-between mb-4">
