@@ -59,7 +59,7 @@ const templates = [
       du hast eine Anfrage zum Zurücksetzen deines Passworts gestellt. Klicke auf den Button unten, um ein neues Passwort zu erstellen.
     </p>
     <div style="text-align: center; margin: 32px 0;">
-      <a href="https://app.greenlight-fitness.de/reset-password?token=example" style="display: inline-block; background: ${accentColor}; color: #000000; padding: 16px 40px; border-radius: 12px; text-decoration: none; font-size: 16px; font-weight: bold; box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);">
+      <a href="https://dev.greenlight-fitness.de/reset-password?token=example" style="display: inline-block; background: ${accentColor}; color: #000000; padding: 16px 40px; border-radius: 12px; text-decoration: none; font-size: 16px; font-weight: bold; box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);">
         Neues Passwort erstellen →
       </a>
     </div>
@@ -106,7 +106,7 @@ const templates = [
       vielen Dank für deine Registrierung! Bitte bestätige deine E-Mail-Adresse, um deinen Account zu aktivieren.
     </p>
     <div style="text-align: center; margin: 32px 0;">
-      <a href="https://app.greenlight-fitness.de/verify-email?token=example" style="display: inline-block; background: ${accentColor}; color: #000000; padding: 16px 40px; border-radius: 12px; text-decoration: none; font-size: 16px; font-weight: bold; box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);">
+      <a href="https://dev.greenlight-fitness.de/verify-email?token=example" style="display: inline-block; background: ${accentColor}; color: #000000; padding: 16px 40px; border-radius: 12px; text-decoration: none; font-size: 16px; font-weight: bold; box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);">
         E-Mail bestätigen →
       </a>
     </div>
@@ -162,7 +162,7 @@ const templates = [
       Starte jetzt mit deinem personalisierten Trainingserlebnis!
     </p>
     <div style="text-align: center; margin: 32px 0;">
-      <a href="https://app.greenlight-fitness.de/invite/ABC123" style="display: inline-block; background: ${accentColor}; color: #000000; padding: 16px 40px; border-radius: 12px; text-decoration: none; font-size: 16px; font-weight: bold; box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);">
+      <a href="https://dev.greenlight-fitness.de/invite/ABC123" style="display: inline-block; background: ${accentColor}; color: #000000; padding: 16px 40px; border-radius: 12px; text-decoration: none; font-size: 16px; font-weight: bold; box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);">
         Einladung annehmen →
       </a>
     </div>
@@ -225,7 +225,7 @@ const templates = [
       </div>
     </div>
     <div style="text-align: center; margin: 32px 0;">
-      <a href="https://app.greenlight-fitness.de/dashboard" style="display: inline-block; background: ${accentColor}; color: #000000; padding: 14px 32px; border-radius: 12px; text-decoration: none; font-size: 14px; font-weight: bold;">
+      <a href="https://dev.greenlight-fitness.de/dashboard" style="display: inline-block; background: ${accentColor}; color: #000000; padding: 14px 32px; border-radius: 12px; text-decoration: none; font-size: 14px; font-weight: bold;">
         Plan ansehen →
       </a>
     </div>
@@ -279,7 +279,7 @@ const templates = [
       </div>
     </div>
     <div style="text-align: center; margin: 32px 0;">
-      <a href="https://app.greenlight-fitness.de/dashboard" style="display: inline-block; background: ${accentColor}; color: #000000; padding: 14px 24px; border-radius: 12px; text-decoration: none; font-size: 14px; font-weight: bold; margin-right: 8px;">
+      <a href="https://dev.greenlight-fitness.de/dashboard" style="display: inline-block; background: ${accentColor}; color: #000000; padding: 14px 24px; border-radius: 12px; text-decoration: none; font-size: 14px; font-weight: bold; margin-right: 8px;">
         Zum Dashboard →
       </a>
       <a href="https://billing.stripe.com/receipt" style="display: inline-block; background: #27272A; color: #FFFFFF; padding: 14px 24px; border-radius: 12px; text-decoration: none; font-size: 14px; font-weight: bold;">

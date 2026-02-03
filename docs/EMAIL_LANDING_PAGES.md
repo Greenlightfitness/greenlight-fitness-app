@@ -28,7 +28,7 @@
 
 **URL-Struktur:**
 ```
-https://app.greenlight-fitness.de/reset-password?token=<RESET_TOKEN>
+https://dev.greenlight-fitness.de/reset-password?token=<RESET_TOKEN>
 ```
 
 **Funktionalität:**
@@ -53,7 +53,7 @@ const { error } = await supabase.auth.updateUser({
 
 **URL-Struktur:**
 ```
-https://app.greenlight-fitness.de/verify-email?token=<VERIFICATION_TOKEN>&type=signup
+https://dev.greenlight-fitness.de/verify-email?token=<VERIFICATION_TOKEN>&type=signup
 ```
 
 **Funktionalität:**
@@ -73,7 +73,7 @@ https://app.greenlight-fitness.de/verify-email?token=<VERIFICATION_TOKEN>&type=s
 
 **URL-Struktur:**
 ```
-https://app.greenlight-fitness.de/invite/ABC123XYZ
+https://dev.greenlight-fitness.de/invite/ABC123XYZ
 ```
 
 **Funktionalität:**
@@ -114,7 +114,7 @@ Für folgende E-Mails brauchen wir dynamische Stripe Portal Links:
 // API Route: /api/create-portal-session.ts (bereits vorhanden!)
 const session = await stripe.billingPortal.sessions.create({
   customer: customerId,
-  return_url: 'https://app.greenlight-fitness.de/profile',
+  return_url: 'https://dev.greenlight-fitness.de/profile',
 });
 ```
 

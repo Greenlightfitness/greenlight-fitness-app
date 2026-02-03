@@ -333,7 +333,7 @@ const templates = [
         ${featureTile('🏆', 'rgba(0, 255, 0, 0.1)', 'Personal Bests', 'Tracke deine Rekorde & Fortschritte')}
       `, accentColor)}
       
-      ${primaryButton('Jetzt starten →', 'https://app.greenlight-fitness.de')}
+      ${primaryButton('Jetzt starten →', 'https://dev.greenlight-fitness.de')}
       ${signature()}
       ${footer()}
     `)
@@ -435,7 +435,7 @@ const templates = [
         </div>
       `, accentColor)}
       
-      ${primaryButton('Zum Dashboard →', 'https://app.greenlight-fitness.de/coach/dashboard')}
+      ${primaryButton('Zum Dashboard →', 'https://dev.greenlight-fitness.de/coach/dashboard')}
       
       ${infoBox('⏰', 'Bitte antworte innerhalb von <strong>48 Stunden</strong>', 'rgba(251, 191, 36, 0.1)', '#FCD34D')}
       
@@ -480,7 +480,7 @@ const templates = [
         </tr>
       </table>
       
-      ${primaryButton('Zum Dashboard →', 'https://app.greenlight-fitness.de/dashboard')}
+      ${primaryButton('Zum Dashboard →', 'https://dev.greenlight-fitness.de/dashboard')}
       ${signature()}
       ${footer()}
     `)
@@ -603,7 +603,7 @@ const templates = [
         du hast eine Anfrage zum Zurücksetzen deines Passworts gestellt. Klicke auf den Button unten, um ein neues Passwort zu erstellen.
       </p>
       
-      ${primaryButton('Neues Passwort erstellen →', 'https://app.greenlight-fitness.de/reset-password?token=example')}
+      ${primaryButton('Neues Passwort erstellen →', 'https://dev.greenlight-fitness.de/reset-password?token=example')}
       
       ${infoBox('⏰', 'Dieser Link ist <strong>1 Stunde</strong> gültig', 'rgba(251, 191, 36, 0.1)', '#FCD34D')}
       
@@ -630,7 +630,7 @@ const templates = [
         vielen Dank für deine Registrierung! Bitte bestätige deine E-Mail-Adresse, um deinen Account zu aktivieren.
       </p>
       
-      ${primaryButton('E-Mail bestätigen →', 'https://app.greenlight-fitness.de/verify-email?token=example')}
+      ${primaryButton('E-Mail bestätigen →', 'https://dev.greenlight-fitness.de/verify-email?token=example')}
       
       ${card(`
         <p style="color: #71717A; font-size: 12px; margin: 0;">
@@ -667,7 +667,7 @@ const templates = [
         Starte jetzt mit deinem personalisierten Trainingserlebnis!
       </p>
       
-      ${primaryButton('Einladung annehmen →', 'https://app.greenlight-fitness.de/invite/ABC123')}
+      ${primaryButton('Einladung annehmen →', 'https://dev.greenlight-fitness.de/invite/ABC123')}
       
       ${infoBox('⏰', 'Diese Einladung ist gültig bis <strong>10.02.2026</strong>', 'rgba(251, 191, 36, 0.1)', '#FCD34D')}
       
@@ -698,7 +698,7 @@ const templates = [
         ])}
       `, accentColor)}
       
-      ${primaryButton('Plan ansehen →', 'https://app.greenlight-fitness.de/dashboard')}
+      ${primaryButton('Plan ansehen →', 'https://dev.greenlight-fitness.de/dashboard')}
       ${signature()}
       ${footer()}
     `)
@@ -741,7 +741,7 @@ const templates = [
                   <table cellpadding="0" cellspacing="0" border="0">
                     <tr>
                       <td align="center" style="background: ${accentColor}; border-radius: 12px;">
-                        <a href="https://app.greenlight-fitness.de/dashboard" target="_blank" style="display: inline-block; padding: 14px 24px; color: #000000; font-size: 14px; font-weight: bold; text-decoration: none;">Zum Dashboard</a>
+                        <a href="https://dev.greenlight-fitness.de/dashboard" target="_blank" style="display: inline-block; padding: 14px 24px; color: #000000; font-size: 14px; font-weight: bold; text-decoration: none;">Zum Dashboard</a>
                       </td>
                     </tr>
                   </table>

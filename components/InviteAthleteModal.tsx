@@ -47,7 +47,7 @@ const InviteAthleteModal: React.FC<InviteAthleteModalProps> = ({ isOpen, onClose
 
       if (insertError) throw insertError;
 
-      const inviteLink = `https://app.greenlight-fitness.de/invite/${data.invitation_code}`;
+      const inviteLink = `https://dev.greenlight-fitness.de/invite/${data.invitation_code}`;
       
       // Send invitation email
       try {
