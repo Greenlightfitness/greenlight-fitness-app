@@ -16,7 +16,11 @@ import {
   ChevronRight,
   Plus,
   BarChart3,
-  Zap
+  Zap,
+  Bookmark,
+  Lock,
+  Layers,
+  Repeat
 } from 'lucide-react';
 import Button from '../components/Button';
 
@@ -66,7 +70,11 @@ const AthleteDashboard: React.FC = () => {
   const [volumeData, setVolumeData] = useState<VolumeData[]>([]);
   const [todayWellness, setTodayWellness] = useState<DailyWellness | null>(null);
   const [showWellnessModal, setShowWellnessModal] = useState(false);
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [currentStreak, setCurrentStreak] = useState(0);
+  
+  // TODO: Replace with actual subscription check
+  const hasPremium = false;
 
   // Load all dashboard data
   useEffect(() => {
@@ -429,15 +437,30 @@ const AthleteDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Volume Chart */}
+      {/* Volume Chart - Premium Feature */}
       <div className="px-4 mt-4">
-        <div className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl p-4">
+        <div 
+          className={`bg-[#1C1C1E] border border-zinc-800 rounded-2xl p-4 relative ${!hasPremium ? 'cursor-pointer' : ''}`}
+          onClick={() => !hasPremium && setShowPremiumModal(true)}
+        >
+          {/* Lock Overlay for non-premium users */}
+          {!hasPremium && (
+            <div className="absolute top-3 right-3 z-10">
+              <div className="w-6 h-6 bg-yellow-500/20 rounded-full flex items-center justify-center">
+                <Lock size={12} className="text-yellow-500" />
+              </div>
+            </div>
+          )}
+          
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-white">Trainingsvolumen</h3>
+            <h3 className="font-bold text-white flex items-center gap-2">
+              Trainingsvolumen
+              {!hasPremium && <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded">PRO</span>}
+            </h3>
             <span className="text-xs text-zinc-500">Letzte 30 Tage</span>
           </div>
           
-          <div className="h-32">
+          <div className={`h-32 ${!hasPremium ? 'blur-sm pointer-events-none' : ''}`}>
             <MiniBarChart 
               data={volumeData.map(d => d.volume)} 
               color="#00FF00" 
@@ -468,49 +491,64 @@ const AthleteDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Personal Bests */}
+      {/* Personal Bests - Premium Feature */}
       <div className="px-4 mt-4">
-        <div className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl p-4">
+        <div 
+          className={`bg-[#1C1C1E] border border-zinc-800 rounded-2xl p-4 relative ${!hasPremium ? 'cursor-pointer' : ''}`}
+          onClick={() => !hasPremium && setShowPremiumModal(true)}
+        >
+          {/* Lock Overlay for non-premium users */}
+          {!hasPremium && (
+            <div className="absolute top-3 right-3 z-10">
+              <div className="w-6 h-6 bg-yellow-500/20 rounded-full flex items-center justify-center">
+                <Lock size={12} className="text-yellow-500" />
+              </div>
+            </div>
+          )}
+          
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-bold text-white flex items-center gap-2">
               <Trophy size={16} className="text-yellow-500" />
               Persönliche Rekorde
+              {!hasPremium && <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded">PRO</span>}
             </h3>
             <ChevronRight size={16} className="text-zinc-500" />
           </div>
 
-          {personalBests.length === 0 ? (
-            <p className="text-zinc-500 text-sm text-center py-4">
-              Noch keine PRs - trainiere weiter!
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {personalBests.slice(0, 5).map((pb, idx) => (
-                <div 
-                  key={idx}
-                  className={`flex items-center justify-between p-2 rounded-lg ${
-                    pb.isRecent ? 'bg-yellow-500/10 border border-yellow-500/20' : 'bg-zinc-900'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    {pb.isRecent && <Zap size={14} className="text-yellow-500" />}
-                    <div>
-                      <p className="font-medium text-white text-sm">{pb.exerciseName}</p>
-                      <p className="text-xs text-zinc-500">{pb.pbType}</p>
+          <div className={!hasPremium ? 'blur-sm pointer-events-none' : ''}>
+            {personalBests.length === 0 ? (
+              <p className="text-zinc-500 text-sm text-center py-4">
+                Noch keine PRs - trainiere weiter!
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {personalBests.slice(0, 5).map((pb, idx) => (
+                  <div 
+                    key={idx}
+                    className={`flex items-center justify-between p-2 rounded-lg ${
+                      pb.isRecent ? 'bg-yellow-500/10 border border-yellow-500/20' : 'bg-zinc-900'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      {pb.isRecent && <Zap size={14} className="text-yellow-500" />}
+                      <div>
+                        <p className="font-medium text-white text-sm">{pb.exerciseName}</p>
+                        <p className="text-xs text-zinc-500">{pb.pbType}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-[#00FF00]">
+                        {pb.weight}kg × {pb.reps}
+                      </p>
+                      {pb.isRecent && (
+                        <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded">NEU</span>
+                      )}
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-bold text-[#00FF00]">
-                      {pb.weight}kg × {pb.reps}
-                    </p>
-                    {pb.isRecent && (
-                      <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded">NEU</span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -636,6 +674,109 @@ const AthleteDashboard: React.FC = () => {
               <Button variant="primary" fullWidth onClick={saveWellness}>
                 Speichern
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Premium Feature Modal */}
+      {showPremiumModal && (
+        <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-4 animate-in fade-in duration-200 overflow-y-auto">
+          <div className="bg-gradient-to-b from-[#1C1C1E] to-black border border-zinc-800 w-full max-w-md rounded-3xl overflow-hidden shadow-2xl my-4">
+            {/* Hero Section */}
+            <div className="relative p-6 pb-4 text-center bg-gradient-to-b from-[#00FF00]/10 to-transparent">
+              <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2220%22%20height%3D%2220%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M0%200h1v1H0z%22%20fill%3D%22%2300FF00%22%20fill-opacity%3D%22.03%22%2F%3E%3C%2Fsvg%3E')] opacity-50"></div>
+              
+              <div className="relative">
+                <div className="w-16 h-16 mx-auto mb-3 bg-gradient-to-br from-[#00FF00]/20 to-[#00FF00]/5 rounded-2xl flex items-center justify-center border border-[#00FF00]/30 shadow-[0_0_30px_rgba(0,255,0,0.2)]">
+                  <Zap size={28} className="text-[#00FF00]" />
+                </div>
+                <h2 className="text-xl font-bold text-white mb-1">Premium freischalten</h2>
+                <p className="text-zinc-400 text-sm">Hol dir Zugang zu allen erweiterten Features</p>
+              </div>
+            </div>
+
+            {/* All Premium Features */}
+            <div className="px-5 py-3">
+              <p className="text-xs text-zinc-500 font-bold uppercase tracking-wider mb-3">Was du freischaltest</p>
+              
+              <div className="grid grid-cols-2 gap-2">
+                {/* Block-Vorlagen */}
+                <div className="p-3 bg-zinc-900/50 rounded-xl border border-zinc-800 text-center">
+                  <div className="w-10 h-10 mx-auto mb-2 bg-blue-500/10 rounded-lg flex items-center justify-center">
+                    <Bookmark size={18} className="text-blue-400" />
+                  </div>
+                  <p className="font-bold text-white text-xs">Block-Vorlagen</p>
+                  <p className="text-[10px] text-zinc-500 mt-0.5">Speichern & wiederverwenden</p>
+                </div>
+
+                {/* Analytics & Tracking */}
+                <div className="p-3 bg-zinc-900/50 rounded-xl border border-zinc-800 text-center">
+                  <div className="w-10 h-10 mx-auto mb-2 bg-purple-500/10 rounded-lg flex items-center justify-center">
+                    <TrendingUp size={18} className="text-purple-400" />
+                  </div>
+                  <p className="font-bold text-white text-xs">Analytics</p>
+                  <p className="text-[10px] text-zinc-500 mt-0.5">Fortschritt & Statistiken</p>
+                </div>
+
+                {/* Personal Records */}
+                <div className="p-3 bg-zinc-900/50 rounded-xl border border-zinc-800 text-center">
+                  <div className="w-10 h-10 mx-auto mb-2 bg-yellow-500/10 rounded-lg flex items-center justify-center">
+                    <Trophy size={18} className="text-yellow-400" />
+                  </div>
+                  <p className="font-bold text-white text-xs">PR-Tracking</p>
+                  <p className="text-[10px] text-zinc-500 mt-0.5">Persönliche Rekorde</p>
+                </div>
+
+                {/* Volumen-Analyse */}
+                <div className="p-3 bg-zinc-900/50 rounded-xl border border-zinc-800 text-center">
+                  <div className="w-10 h-10 mx-auto mb-2 bg-[#00FF00]/10 rounded-lg flex items-center justify-center">
+                    <Layers size={18} className="text-[#00FF00]" />
+                  </div>
+                  <p className="font-bold text-white text-xs">Volumen-Charts</p>
+                  <p className="text-[10px] text-zinc-500 mt-0.5">Push/Pull/Legs Analyse</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Benefits Summary */}
+            <div className="px-5 py-3">
+              <div className="flex items-center gap-3 p-3 bg-zinc-900/30 rounded-xl border border-zinc-800/50">
+                <div className="w-8 h-8 bg-orange-500/10 rounded-lg flex items-center justify-center shrink-0">
+                  <Repeat size={16} className="text-orange-400" />
+                </div>
+                <div>
+                  <p className="font-bold text-white text-xs">Spare Zeit & trainiere smarter</p>
+                  <p className="text-[10px] text-zinc-500">Nutze datenbasierte Insights für bessere Ergebnisse</p>
+                </div>
+              </div>
+            </div>
+
+            {/* CTA Section */}
+            <div className="p-5 pt-2 space-y-3">
+              <div className="bg-gradient-to-r from-[#00FF00]/10 to-transparent p-3 rounded-xl border border-[#00FF00]/20">
+                <p className="text-[10px] text-zinc-400 mb-0.5">Alles inklusive mit einem</p>
+                <p className="text-base font-bold text-white flex items-center gap-2">
+                  <span className="text-[#00FF00]">Coaching</span> oder <span className="text-[#00FF00]">Premium</span> Paket
+                </p>
+              </div>
+
+              <button 
+                onClick={() => {
+                  setShowPremiumModal(false);
+                  window.location.href = '/shop';
+                }}
+                className="w-full py-3.5 bg-[#00FF00] text-black font-bold rounded-xl text-base shadow-[0_0_20px_rgba(0,255,0,0.3)] hover:shadow-[0_0_30px_rgba(0,255,0,0.5)] transition-all active:scale-[0.98]"
+              >
+                Pakete ansehen
+              </button>
+              
+              <button 
+                onClick={() => setShowPremiumModal(false)}
+                className="w-full py-2 text-zinc-500 text-sm hover:text-white transition-colors"
+              >
+                Später
+              </button>
             </div>
           </div>
         </div>

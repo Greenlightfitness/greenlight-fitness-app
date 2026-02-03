@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase, getAssignedPlans, getExercises } from '../services/supabase';
-import { ChevronLeft, ChevronRight, Plus, Check, Play, Dumbbell, X, ChevronDown, ChevronUp, Search, Trash2, Trophy, Repeat, Link, Layers, Timer, Square, Pause, ClipboardList, Pencil, CheckCircle, Bookmark, Lock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Check, Play, Dumbbell, X, ChevronDown, ChevronUp, Search, Trash2, Trophy, Repeat, Link, Layers, Timer, Square, Pause, ClipboardList, Pencil, CheckCircle, Bookmark, Lock, Zap, TrendingUp } from 'lucide-react';
 import Button from './Button';
 import { Exercise, BlockType } from '../types';
 
@@ -1637,64 +1637,86 @@ const AthleteTrainingView: React.FC = () => {
         </div>
       )}
 
-      {/* Premium Feature Modal - Block Templates */}
+      {/* Premium Feature Modal - All Premium Features */}
       {showPremiumModal && (
-        <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-gradient-to-b from-[#1C1C1E] to-black border border-zinc-800 w-full max-w-md rounded-3xl overflow-hidden shadow-2xl">
+        <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-4 animate-in fade-in duration-200 overflow-y-auto">
+          <div className="bg-gradient-to-b from-[#1C1C1E] to-black border border-zinc-800 w-full max-w-md rounded-3xl overflow-hidden shadow-2xl my-4">
             {/* Hero Section */}
-            <div className="relative p-8 pb-6 text-center bg-gradient-to-b from-[#00FF00]/10 to-transparent">
+            <div className="relative p-6 pb-4 text-center bg-gradient-to-b from-[#00FF00]/10 to-transparent">
               <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2220%22%20height%3D%2220%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M0%200h1v1H0z%22%20fill%3D%22%2300FF00%22%20fill-opacity%3D%22.03%22%2F%3E%3C%2Fsvg%3E')] opacity-50"></div>
               
               <div className="relative">
-                <div className="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-[#00FF00]/20 to-[#00FF00]/5 rounded-2xl flex items-center justify-center border border-[#00FF00]/30 shadow-[0_0_30px_rgba(0,255,0,0.2)]">
-                  <Bookmark size={36} className="text-[#00FF00]" />
+                <div className="w-16 h-16 mx-auto mb-3 bg-gradient-to-br from-[#00FF00]/20 to-[#00FF00]/5 rounded-2xl flex items-center justify-center border border-[#00FF00]/30 shadow-[0_0_30px_rgba(0,255,0,0.2)]">
+                  <Zap size={28} className="text-[#00FF00]" />
                 </div>
-                <h2 className="text-2xl font-bold text-white mb-2">Block-Vorlagen</h2>
-                <p className="text-zinc-400 text-sm">Speichere deine Trainingsblöcke als wiederverwendbare Vorlagen</p>
+                <h2 className="text-xl font-bold text-white mb-1">Premium freischalten</h2>
+                <p className="text-zinc-400 text-sm">Hol dir Zugang zu allen erweiterten Features</p>
               </div>
             </div>
 
-            {/* Benefits */}
-            <div className="px-6 py-4 space-y-3">
-              <div className="flex items-start gap-3 p-3 bg-zinc-900/50 rounded-xl border border-zinc-800">
-                <div className="w-10 h-10 bg-blue-500/10 rounded-lg flex items-center justify-center shrink-0">
-                  <Repeat size={18} className="text-blue-400" />
+            {/* All Premium Features */}
+            <div className="px-5 py-3">
+              <p className="text-xs text-zinc-500 font-bold uppercase tracking-wider mb-3">Was du freischaltest</p>
+              
+              <div className="grid grid-cols-2 gap-2">
+                {/* Block-Vorlagen */}
+                <div className="p-3 bg-zinc-900/50 rounded-xl border border-zinc-800 text-center">
+                  <div className="w-10 h-10 mx-auto mb-2 bg-blue-500/10 rounded-lg flex items-center justify-center">
+                    <Bookmark size={18} className="text-blue-400" />
+                  </div>
+                  <p className="font-bold text-white text-xs">Block-Vorlagen</p>
+                  <p className="text-[10px] text-zinc-500 mt-0.5">Speichern & wiederverwenden</p>
                 </div>
-                <div>
-                  <p className="font-bold text-white text-sm">Zeitersparnis</p>
-                  <p className="text-xs text-zinc-500">Erstelle einmal, nutze immer wieder. Keine manuelle Eingabe mehr.</p>
+
+                {/* Analytics & Tracking */}
+                <div className="p-3 bg-zinc-900/50 rounded-xl border border-zinc-800 text-center">
+                  <div className="w-10 h-10 mx-auto mb-2 bg-purple-500/10 rounded-lg flex items-center justify-center">
+                    <TrendingUp size={18} className="text-purple-400" />
+                  </div>
+                  <p className="font-bold text-white text-xs">Analytics</p>
+                  <p className="text-[10px] text-zinc-500 mt-0.5">Fortschritt & Statistiken</p>
+                </div>
+
+                {/* Personal Records */}
+                <div className="p-3 bg-zinc-900/50 rounded-xl border border-zinc-800 text-center">
+                  <div className="w-10 h-10 mx-auto mb-2 bg-yellow-500/10 rounded-lg flex items-center justify-center">
+                    <Trophy size={18} className="text-yellow-400" />
+                  </div>
+                  <p className="font-bold text-white text-xs">PR-Tracking</p>
+                  <p className="text-[10px] text-zinc-500 mt-0.5">Persönliche Rekorde</p>
+                </div>
+
+                {/* Volumen-Analyse */}
+                <div className="p-3 bg-zinc-900/50 rounded-xl border border-zinc-800 text-center">
+                  <div className="w-10 h-10 mx-auto mb-2 bg-[#00FF00]/10 rounded-lg flex items-center justify-center">
+                    <Layers size={18} className="text-[#00FF00]" />
+                  </div>
+                  <p className="font-bold text-white text-xs">Volumen-Charts</p>
+                  <p className="text-[10px] text-zinc-500 mt-0.5">Push/Pull/Legs Analyse</p>
                 </div>
               </div>
-              
-              <div className="flex items-start gap-3 p-3 bg-zinc-900/50 rounded-xl border border-zinc-800">
-                <div className="w-10 h-10 bg-purple-500/10 rounded-lg flex items-center justify-center shrink-0">
-                  <Layers size={18} className="text-purple-400" />
+            </div>
+
+            {/* Benefits Summary */}
+            <div className="px-5 py-3">
+              <div className="flex items-center gap-3 p-3 bg-zinc-900/30 rounded-xl border border-zinc-800/50">
+                <div className="w-8 h-8 bg-orange-500/10 rounded-lg flex items-center justify-center shrink-0">
+                  <Repeat size={16} className="text-orange-400" />
                 </div>
                 <div>
-                  <p className="font-bold text-white text-sm">Perfekte Struktur</p>
-                  <p className="text-xs text-zinc-500">Supersets, Zirkel & mehr – bewahre deine bewährten Kombinationen.</p>
-                </div>
-              </div>
-              
-              <div className="flex items-start gap-3 p-3 bg-zinc-900/50 rounded-xl border border-zinc-800">
-                <div className="w-10 h-10 bg-[#00FF00]/10 rounded-lg flex items-center justify-center shrink-0">
-                  <Trophy size={18} className="text-[#00FF00]" />
-                </div>
-                <div>
-                  <p className="font-bold text-white text-sm">Konsistenz</p>
-                  <p className="text-xs text-zinc-500">Trainiere immer mit den gleichen effektiven Übungen und Reihenfolgen.</p>
+                  <p className="font-bold text-white text-xs">Spare Zeit & trainiere smarter</p>
+                  <p className="text-[10px] text-zinc-500">Nutze datenbasierte Insights für bessere Ergebnisse</p>
                 </div>
               </div>
             </div>
 
             {/* CTA Section */}
-            <div className="p-6 pt-2 space-y-3">
-              <div className="bg-gradient-to-r from-[#00FF00]/10 to-transparent p-4 rounded-xl border border-[#00FF00]/20">
-                <p className="text-xs text-zinc-400 mb-1">Verfügbar mit</p>
-                <p className="text-lg font-bold text-white flex items-center gap-2">
-                  <span className="text-[#00FF00]">Coaching</span> Paket
+            <div className="p-5 pt-2 space-y-3">
+              <div className="bg-gradient-to-r from-[#00FF00]/10 to-transparent p-3 rounded-xl border border-[#00FF00]/20">
+                <p className="text-[10px] text-zinc-400 mb-0.5">Alles inklusive mit einem</p>
+                <p className="text-base font-bold text-white flex items-center gap-2">
+                  <span className="text-[#00FF00]">Coaching</span> oder <span className="text-[#00FF00]">Premium</span> Paket
                 </p>
-                <p className="text-xs text-zinc-500 mt-1">Unlimitierte Vorlagen + persönliche Betreuung</p>
               </div>
 
               <button 
@@ -1702,14 +1724,14 @@ const AthleteTrainingView: React.FC = () => {
                   setShowPremiumModal(false);
                   window.location.href = '/shop';
                 }}
-                className="w-full py-4 bg-[#00FF00] text-black font-bold rounded-xl text-lg shadow-[0_0_20px_rgba(0,255,0,0.3)] hover:shadow-[0_0_30px_rgba(0,255,0,0.5)] transition-all active:scale-[0.98]"
+                className="w-full py-3.5 bg-[#00FF00] text-black font-bold rounded-xl text-base shadow-[0_0_20px_rgba(0,255,0,0.3)] hover:shadow-[0_0_30px_rgba(0,255,0,0.5)] transition-all active:scale-[0.98]"
               >
-                Zum Shop
+                Pakete ansehen
               </button>
               
               <button 
                 onClick={() => setShowPremiumModal(false)}
-                className="w-full py-3 text-zinc-500 text-sm hover:text-white transition-colors"
+                className="w-full py-2 text-zinc-500 text-sm hover:text-white transition-colors"
               >
                 Später
               </button>
