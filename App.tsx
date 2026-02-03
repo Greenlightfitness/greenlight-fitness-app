@@ -1,5 +1,5 @@
 import React from 'react';
-import { HashRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
 import Login from './pages/Login';
@@ -7,7 +7,6 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Exercises from './pages/Exercises';
 import Planner from './pages/Planner';
-import AthleteCalendar from './pages/AthleteCalendar';
 import AdminProducts from './pages/AdminProducts';
 import AdminUsers from './pages/AdminUsers';
 import Shop from './pages/Shop';
@@ -51,7 +50,7 @@ const App: React.FC = () => {
   return (
     <AuthProvider>
       <LanguageProvider>
-        <HashRouter>
+        <BrowserRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
@@ -71,7 +70,6 @@ const App: React.FC = () => {
                  <Route path="/shop" element={<Shop />} />
                  <Route path="/chat" element={<Chat />} />
                  <Route path="/profile" element={<Profile />} />
-                 <Route path="/calendar" element={<AthleteCalendar />} />
               </Route>
               
               {/* Shared Routes (Coach, Admin AND Athlete now for self-planning) */}
@@ -89,7 +87,7 @@ const App: React.FC = () => {
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
-        </HashRouter>
+        </BrowserRouter>
       </LanguageProvider>
     </AuthProvider>
   );

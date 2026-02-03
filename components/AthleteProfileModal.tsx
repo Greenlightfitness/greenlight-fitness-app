@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { doc, getDoc, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore/lite';
 import { db } from '../services/firebase';
+import { supabase } from '../services/supabase';
 import { UserProfile, AssignedPlan, Attention, ActivityFeedItem } from '../types';
-import { X, User, Activity, AlertTriangle, Calendar, ChevronRight, Dumbbell, History, Ruler, Weight } from 'lucide-react';
+import { X, User, Activity, AlertTriangle, Calendar, ChevronRight, Dumbbell, History, Ruler, Weight, TrendingUp, TrendingDown, Heart, Moon, Battery, Trophy, BarChart3, Flame } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { calculateFFMI } from '../utils/formulas';
 
@@ -19,6 +20,10 @@ const AthleteProfileModal: React.FC<AthleteProfileModalProps> = ({ athleteId, is
   const [attentions, setAttentions] = useState<Attention[]>([]);
   const [activities, setActivities] = useState<ActivityFeedItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [wellnessData, setWellnessData] = useState<any[]>([]);
+  const [weeklyStats, setWeeklyStats] = useState<any[]>([]);
+  const [personalBests, setPersonalBests] = useState<any[]>([]);
+  const [volumeData, setVolumeData] = useState<any[]>([]);
 
   useEffect(() => {
     if (isOpen && athleteId) {
@@ -70,12 +75,95 @@ const AthleteProfileModal: React.FC<AthleteProfileModalProps> = ({ athleteId, is
       const actSnap = await getDocs(actQ);
       setActivities(actSnap.docs.map(d => ({id: d.id, ...d.data()} as ActivityFeedItem)));
 
+      // 5. Fetch Wellness Data from Supabase (last 14 days)
+      const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const { data: wellnessRaw } = await supabase
+        .from('daily_wellness')
+        .select('*')
+        .eq('athlete_id', uid)
+        .gte('date', fourteenDaysAgo)
+        .order('date', { ascending: true });
+      
+      if (wellnessRaw) {
+        setWellnessData(wellnessRaw);
+      }
+
+      // 6. Fetch Weekly Stats from Supabase (last 8 weeks)
+      const eightWeeksAgo = new Date(Date.now() - 56 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const { data: weeklyRaw } = await supabase
+        .from('weekly_stats')
+        .select('*')
+        .eq('athlete_id', uid)
+        .gte('week_start', eightWeeksAgo)
+        .order('week_start', { ascending: true });
+      
+      if (weeklyRaw) {
+        setWeeklyStats(weeklyRaw);
+      }
+
+      // 7. Fetch Personal Bests from Supabase
+      const { data: pbsRaw } = await supabase
+        .from('exercise_pbs')
+        .select('*, exercises(name)')
+        .eq('athlete_id', uid)
+        .order('achieved_at', { ascending: false })
+        .limit(5);
+      
+      if (pbsRaw) {
+        setPersonalBests(pbsRaw);
+      }
+
+      // 8. Fetch Daily Stats for volume chart (last 30 days)
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const { data: dailyRaw } = await supabase
+        .from('daily_stats')
+        .select('*')
+        .eq('athlete_id', uid)
+        .gte('date', thirtyDaysAgo)
+        .order('date', { ascending: true });
+      
+      if (dailyRaw) {
+        setVolumeData(dailyRaw);
+      }
+
     } catch (error) {
       console.error("Error fetching athlete card data:", error);
     } finally {
       setLoading(false);
     }
   };
+
+  // Mini bar chart component for coach view
+  const MiniBarChart: React.FC<{ data: number[]; color: string; height?: number }> = ({ data, color, height = 32 }) => {
+    const max = Math.max(...data, 1);
+    return (
+      <div className="flex items-end gap-0.5" style={{ height }}>
+        {data.map((val, i) => (
+          <div
+            key={i}
+            className="flex-1 rounded-t transition-all"
+            style={{ 
+              height: `${(val / max) * 100}%`,
+              backgroundColor: color,
+              minHeight: val > 0 ? 2 : 0
+            }}
+          />
+        ))}
+      </div>
+    );
+  };
+
+  // Wellness indicator dots
+  const WellnessDots: React.FC<{ value: number; max?: number }> = ({ value, max = 5 }) => (
+    <div className="flex gap-0.5">
+      {Array.from({ length: max }).map((_, i) => (
+        <div
+          key={i}
+          className={`w-1.5 h-1.5 rounded-full ${i < value ? 'bg-[#00FF00]' : 'bg-zinc-700'}`}
+        />
+      ))}
+    </div>
+  );
 
   if (!isOpen) return null;
 
@@ -216,7 +304,134 @@ const AthleteProfileModal: React.FC<AthleteProfileModalProps> = ({ athleteId, is
                         )}
                     </div>
 
-                    {/* 4. Activity History */}
+                    {/* 4. Daily Wellness (Coach View) */}
+                    <div>
+                        <h3 className="text-white font-bold text-sm uppercase tracking-wider mb-3 flex items-center gap-2">
+                            <Heart size={16} className="text-purple-400" /> Daily Wellness
+                        </h3>
+                        {wellnessData.length > 0 ? (
+                            <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-2xl">
+                                <div className="mb-3">
+                                    <MiniBarChart 
+                                        data={wellnessData.map(w => ((w.energy_level || 0) + (w.mood || 0) + (6 - (w.stress_level || 3))) / 3)} 
+                                        color="#A855F7" 
+                                        height={40}
+                                    />
+                                    <p className="text-xs text-zinc-600 text-center mt-1">Wellness Score (14 Tage)</p>
+                                </div>
+                                {wellnessData.length > 0 && (
+                                    <div className="grid grid-cols-4 gap-2 pt-3 border-t border-zinc-800">
+                                        <div className="text-center">
+                                            <Moon size={14} className="mx-auto text-blue-400 mb-1" />
+                                            <p className="text-[10px] text-zinc-500">Schlaf</p>
+                                            <WellnessDots value={wellnessData[wellnessData.length - 1]?.sleep_quality || 0} />
+                                        </div>
+                                        <div className="text-center">
+                                            <Battery size={14} className="mx-auto text-yellow-400 mb-1" />
+                                            <p className="text-[10px] text-zinc-500">Energie</p>
+                                            <WellnessDots value={wellnessData[wellnessData.length - 1]?.energy_level || 0} />
+                                        </div>
+                                        <div className="text-center">
+                                            <Activity size={14} className="mx-auto text-red-400 mb-1" />
+                                            <p className="text-[10px] text-zinc-500">Stress</p>
+                                            <WellnessDots value={6 - (wellnessData[wellnessData.length - 1]?.stress_level || 3)} />
+                                        </div>
+                                        <div className="text-center">
+                                            <Heart size={14} className="mx-auto text-pink-400 mb-1" />
+                                            <p className="text-[10px] text-zinc-500">Stimmung</p>
+                                            <WellnessDots value={wellnessData[wellnessData.length - 1]?.mood || 0} />
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="p-4 border-2 border-dashed border-zinc-800 rounded-2xl text-center text-zinc-500 text-sm">
+                                Keine Wellness-Daten vorhanden
+                            </div>
+                        )}
+                    </div>
+
+                    {/* 5. Training Volume & Progress */}
+                    <div>
+                        <h3 className="text-white font-bold text-sm uppercase tracking-wider mb-3 flex items-center gap-2">
+                            <BarChart3 size={16} className="text-blue-400" /> Training Volume
+                        </h3>
+                        {volumeData.length > 0 ? (
+                            <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-2xl">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-xs text-zinc-500">Letzte 30 Tage</span>
+                                    {weeklyStats.length >= 2 && (() => {
+                                        const thisWeek = weeklyStats[weeklyStats.length - 1]?.total_volume || 0;
+                                        const lastWeek = weeklyStats[weeklyStats.length - 2]?.total_volume || 1;
+                                        const change = Math.round(((thisWeek - lastWeek) / lastWeek) * 100);
+                                        return (
+                                            <div className={`flex items-center gap-1 text-xs ${change >= 0 ? 'text-[#00FF00]' : 'text-red-400'}`}>
+                                                {change >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                                                {Math.abs(change)}%
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
+                                <MiniBarChart 
+                                    data={volumeData.map(d => d.total_volume || 0)} 
+                                    color="#00FF00" 
+                                    height={48}
+                                />
+                                <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-zinc-800">
+                                    {[
+                                        { label: 'Push', value: volumeData.reduce((s, d) => s + (d.push_volume || 0), 0), color: 'text-blue-400' },
+                                        { label: 'Pull', value: volumeData.reduce((s, d) => s + (d.pull_volume || 0), 0), color: 'text-green-400' },
+                                        { label: 'Legs', value: volumeData.reduce((s, d) => s + (d.legs_volume || 0), 0), color: 'text-purple-400' }
+                                    ].map(item => (
+                                        <div key={item.label} className="text-center">
+                                            <p className="text-[10px] text-zinc-500">{item.label}</p>
+                                            <p className={`text-sm font-bold ${item.color}`}>{Math.round(item.value / 1000)}k</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="p-4 border-2 border-dashed border-zinc-800 rounded-2xl text-center text-zinc-500 text-sm">
+                                Keine Trainingsdaten vorhanden
+                            </div>
+                        )}
+                    </div>
+
+                    {/* 6. Personal Bests */}
+                    {personalBests.length > 0 && (
+                        <div>
+                            <h3 className="text-white font-bold text-sm uppercase tracking-wider mb-3 flex items-center gap-2">
+                                <Trophy size={16} className="text-yellow-400" /> Personal Records
+                            </h3>
+                            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+                                {personalBests.map((pb, idx) => {
+                                    const isRecent = new Date(pb.achieved_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+                                    return (
+                                        <div 
+                                            key={idx}
+                                            className={`p-3 border-b border-zinc-800 last:border-0 flex items-center justify-between ${isRecent ? 'bg-yellow-500/5' : ''}`}
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                {isRecent && <Flame size={12} className="text-yellow-500" />}
+                                                <div>
+                                                    <p className="text-white text-sm font-medium">{pb.exercises?.name || 'Unknown'}</p>
+                                                    <p className="text-xs text-zinc-500">{pb.pb_type}</p>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="font-bold text-[#00FF00]">{pb.weight}kg × {pb.reps}</p>
+                                                {isRecent && (
+                                                    <span className="text-[9px] bg-yellow-500/20 text-yellow-400 px-1 py-0.5 rounded">NEU</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 7. Activity History */}
                     <div>
                         <h3 className="text-white font-bold text-sm uppercase tracking-wider mb-3 flex items-center gap-2">
                             <History size={16} className="text-zinc-400" /> Recent Activity

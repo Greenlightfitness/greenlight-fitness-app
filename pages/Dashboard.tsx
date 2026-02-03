@@ -11,6 +11,7 @@ import WorkoutTimer from '../components/WorkoutTimer';
 import CalculatorsModal from '../components/CalculatorsModal';
 import AthleteProfileModal from '../components/AthleteProfileModal';
 import AthleteTrainingView from '../components/AthleteTrainingView';
+import AthleteDashboard from './AthleteDashboard';
 import { calculateVolumeLoad } from '../utils/formulas';
 import { useLocation } from 'react-router-dom';
 
@@ -242,6 +243,7 @@ const Dashboard: React.FC = () => {
   const [activePlan, setActivePlan] = useState<AssignedPlan | null>(null);
   const [loadingPlan, setLoadingPlan] = useState(false);
   const [viewMode, setViewMode] = useState<'hub' | 'training'>('hub');
+  const [athleteTab, setAthleteTab] = useState<'training' | 'dashboard'>('training');
   
   // Coach Dashboard Data
   const [attentions, setAttentions] = useState<Attention[]>([]);
@@ -275,7 +277,15 @@ const Dashboard: React.FC = () => {
   const [customSession, setCustomSession] = useState<AssignedSession | null>(null);
 
   useEffect(() => {
-      if (location.state?.view) setViewMode(location.state.view);
+      if (location.state?.view) {
+        setViewMode(location.state.view);
+        // Sync athleteTab with viewMode for consistent navigation
+        if (location.state.view === 'hub') {
+          setAthleteTab('dashboard');
+        } else if (location.state.view === 'training') {
+          setAthleteTab('training');
+        }
+      }
   }, [location.state]);
 
   useEffect(() => {
@@ -812,177 +822,41 @@ const Dashboard: React.FC = () => {
       );
   }
 
-  // === HUB VIEW (Athlete) ===
-  if (viewMode === 'hub') {
-      return (
-          <div className="space-y-8 animate-in fade-in slide-in-from-left-4 duration-500">
-              <ReportIssueModal isOpen={showReportModal} onClose={() => setShowReportModal(false)} />
-              
-              {/* Header Section */}
-              <div className="flex justify-between items-center">
-                  <div className="flex gap-4 items-center">
-                      <div className="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center text-xl font-bold text-[#00FF00] border border-zinc-700">
-                          {userProfile?.nickname?.charAt(0) || userProfile?.email?.charAt(0) || "A"}
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-zinc-500 text-xs uppercase tracking-widest font-bold">{getGreeting()}</span>
-                        <h1 className="text-2xl font-bold text-white tracking-tight">{userProfile?.nickname || "Athlete"}</h1>
-                      </div>
-                  </div>
-                  <div className="flex gap-2">
-                      <button onClick={() => setShowReportModal(true)} className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-red-500 transition-colors" title={t('dashboard.reportIssue')}>
-                          <AlertTriangle size={18} />
-                      </button>
-                  </div>
-              </div>
-
-              {/* Daily Wellness Check-In (New Feature) */}
-              {!wellnessLogged && (
-                  <div className="bg-gradient-to-br from-zinc-900 to-black border border-zinc-800 rounded-[2rem] p-6 relative overflow-hidden">
-                      <div className="flex justify-between items-start relative z-10">
-                          <div>
-                              <h3 className="text-white font-bold text-lg mb-1">Daily Wellness</h3>
-                              <p className="text-zinc-500 text-xs mb-4">How are you feeling today?</p>
-                              
-                              <div className="flex gap-4">
-                                  <button onClick={() => setWellnessLogged(true)} className="flex flex-col items-center gap-2 group">
-                                      <div className="w-12 h-12 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-400 group-hover:bg-[#00FF00] group-hover:text-black transition-all">
-                                          <Zap size={20} />
-                                      </div>
-                                      <span className="text-[10px] font-bold uppercase text-zinc-500 group-hover:text-white">Fresh</span>
-                                  </button>
-                                  <button onClick={() => setWellnessLogged(true)} className="flex flex-col items-center gap-2 group">
-                                      <div className="w-12 h-12 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-400 group-hover:bg-yellow-500 group-hover:text-black transition-all">
-                                          <Circle size={20} />
-                                      </div>
-                                      <span className="text-[10px] font-bold uppercase text-zinc-500 group-hover:text-white">Ok</span>
-                                  </button>
-                                  <button onClick={() => setWellnessLogged(true)} className="flex flex-col items-center gap-2 group">
-                                      <div className="w-12 h-12 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-400 group-hover:bg-red-500 group-hover:text-white transition-all">
-                                          <Moon size={20} />
-                                      </div>
-                                      <span className="text-[10px] font-bold uppercase text-zinc-500 group-hover:text-white">Tired</span>
-                                  </button>
-                              </div>
-                          </div>
-                          <div className="bg-zinc-800/50 p-2 rounded-full text-zinc-600">
-                              <Smile size={24} />
-                          </div>
-                      </div>
-                  </div>
-              )}
-
-              {/* Main Action Area */}
-              <div className="relative group cursor-pointer" onClick={() => setViewMode('training')}>
-                  <div className="absolute inset-0 bg-gradient-to-r from-[#00FF00]/20 to-transparent rounded-[2rem] blur-xl opacity-60 group-hover:opacity-100 transition-opacity duration-500"></div>
-                  <div className="bg-[#1C1C1E] rounded-[2rem] p-8 border border-zinc-800 relative overflow-hidden group-hover:border-[#00FF00]/50 transition-colors">
-                      <div className="relative z-10 flex flex-col gap-6">
-                          <div className="flex justify-between items-start">
-                              <div>
-                                  <div className="text-[#00FF00] text-xs font-bold uppercase tracking-widest mb-2 flex items-center gap-2">
-                                      <span className="w-2 h-2 rounded-full bg-[#00FF00] animate-pulse"></span>
-                                      {customSession ? "Custom Workout" : t('dashboard.todayWorkout')}
-                                  </div>
-                                  <h3 className="text-3xl font-extrabold text-white mb-2 leading-none">
-                                      {nextWorkout ? nextWorkout.title : t('dashboard.restDay')}
-                                  </h3>
-                                  <p className="text-zinc-400 text-sm line-clamp-1 max-w-[250px]">
-                                      {nextWorkout ? (nextWorkout.description || "Get ready to train.") : t('dashboard.enjoyRest')}
-                                  </p>
-                              </div>
-                              
-                          </div>
-                          
-                          <div className="flex items-center justify-between mt-2">
-                              <div className="flex -space-x-2">
-                                  {/* Visual decoration representing workout blocks */}
-                                  {[1,2,3].map(i => (
-                                      <div key={i} className="w-8 h-8 rounded-full bg-zinc-800 border-2 border-[#1C1C1E] flex items-center justify-center text-[10px] font-bold text-zinc-500">
-                                          {i}
-                                      </div>
-                                  ))}
-                              </div>
-                              <div className="h-12 px-6 rounded-full bg-[#00FF00] flex items-center justify-center text-black font-bold shadow-[0_0_15px_rgba(0,255,0,0.4)] group-hover:scale-105 transition-transform gap-2">
-                                  Start <Play size={18} fill="currentColor" />
-                              </div>
-                          </div>
-                      </div>
-                  </div>
-              </div>
-
-              {/* Active Plan Progress Card */}
-              {activePlan && analytics && (
-                  <div className="grid grid-cols-2 gap-4">
-                      <div className="col-span-2 bg-[#1C1C1E] border border-zinc-800 rounded-[2rem] p-6 relative overflow-hidden shadow-lg">
-                          <div className="flex justify-between items-start mb-6">
-                              <div>
-                                  <div className="text-zinc-500 text-xs font-bold uppercase tracking-widest mb-1">{t('dashboard.activePlan')}</div>
-                                  <h2 className="text-xl font-bold text-white tracking-tight leading-none mb-1">{activePlan.planName}</h2>
-                              </div>
-                          </div>
-                          
-                          <div className="space-y-2">
-                              <div className="flex justify-between items-end">
-                                  <span className="text-xs text-zinc-400 font-bold uppercase tracking-wider">{t('dashboard.progress')}</span>
-                                  <span className="text-xl font-bold text-white">{analytics.completionRate}%</span>
-                              </div>
-                              <div className="h-3 w-full bg-zinc-950 rounded-full overflow-hidden border border-zinc-800/50">
-                                  <div 
-                                      className="h-full bg-gradient-to-r from-[#00FF00] to-[#00CC00] shadow-[0_0_15px_rgba(0,255,0,0.3)] transition-all duration-1000 ease-out rounded-full" 
-                                      style={{ width: `${analytics.completionRate}%` }}
-                                  ></div>
-                              </div>
-                          </div>
-                      </div>
-
-                      <div className="bg-[#1C1C1E] rounded-[1.5rem] p-5 border border-zinc-800 flex flex-col justify-between h-32">
-                           <div className="flex justify-between items-start">
-                               <Zap size={20} className="text-yellow-500" />
-                               <span className="text-[10px] text-zinc-500 font-bold uppercase">{t('dashboard.completionRate')}</span>
-                           </div>
-                           <div>
-                               <span className="text-2xl font-bold text-white">{analytics.completionRate}%</span>
-                           </div>
-                      </div>
-                      <div className="bg-[#1C1C1E] rounded-[1.5rem] p-5 border border-zinc-800 flex flex-col justify-between h-32">
-                           <div className="flex justify-between items-start">
-                               <Flame size={20} className="text-orange-500" />
-                               <span className="text-[10px] text-zinc-500 font-bold uppercase">{t('dashboard.sessionsDone')}</span>
-                           </div>
-                           <div>
-                               <span className="text-2xl font-bold text-white">{analytics.completedSessionsCount}</span>
-                               <span className="text-sm text-zinc-500 ml-1">/ {analytics.totalSessions}</span>
-                           </div>
-                      </div>
-                  </div>
-              )}
-
-              {analytics && (
-                  <div className="bg-[#1C1C1E] rounded-[2rem] p-6 border border-zinc-800 shadow-xl relative overflow-hidden">
-                      <div className="flex justify-between items-start mb-6 relative z-10">
-                          <div>
-                              <h3 className="text-white font-bold text-lg mb-1">{t('dashboard.volumeTrend')}</h3>
-                              <div className="flex items-baseline gap-2">
-                                  <span className="text-4xl font-bold text-white tracking-tighter">{analytics.totalVolumeTons}</span>
-                                  <span className="text-sm text-zinc-500 font-medium">tons</span>
-                              </div>
-                          </div>
-                          <div className="bg-zinc-800/50 p-2 rounded-full">
-                              <Activity size={20} className="text-[#00FF00]" />
-                          </div>
-                      </div>
-                      
-                      <div className="h-32 w-full relative z-10">
-                          <ModernLineChart data={analytics.weeklyVolume} />
-                      </div>
-                  </div>
-              )}
-          </div>
-      );
-  }
-
-  // === TRAINING VIEW (Athlete) - New unified view ===
-  return <AthleteTrainingView />;
+  // === ATHLETE VIEW - Tab navigation between Training and Dashboard ===
+  return (
+    <div className="min-h-screen bg-black">
+      {/* Tab Navigation */}
+      <div className="sticky top-0 z-40 bg-black/95 backdrop-blur-sm border-b border-zinc-800">
+        <div className="flex">
+          <button
+            onClick={() => setAthleteTab('training')}
+            className={`flex-1 py-3 text-sm font-bold transition-colors flex items-center justify-center gap-2 ${
+              athleteTab === 'training'
+                ? 'text-[#00FF00] border-b-2 border-[#00FF00]'
+                : 'text-zinc-500 hover:text-zinc-300'
+            }`}
+          >
+            <Dumbbell size={16} />
+            Training
+          </button>
+          <button
+            onClick={() => setAthleteTab('dashboard')}
+            className={`flex-1 py-3 text-sm font-bold transition-colors flex items-center justify-center gap-2 ${
+              athleteTab === 'dashboard'
+                ? 'text-[#00FF00] border-b-2 border-[#00FF00]'
+                : 'text-zinc-500 hover:text-zinc-300'
+            }`}
+          >
+            <Activity size={16} />
+            Dashboard
+          </button>
+        </div>
+      </div>
+      
+      {/* Content */}
+      {athleteTab === 'training' ? <AthleteTrainingView /> : <AthleteDashboard />}
+    </div>
+  );
 };
 
 export default Dashboard;

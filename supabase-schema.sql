@@ -310,8 +310,179 @@ CREATE POLICY "Users can view own export requests" ON public.data_export_request
 CREATE POLICY "Users can create export requests" ON public.data_export_requests FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 -- ============================================
+-- 15. ATHLETE SCHEDULE (Tagesplanung)
+-- ============================================
+CREATE TABLE IF NOT EXISTS public.athlete_schedule (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  athlete_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  date DATE NOT NULL,
+  plan_id UUID REFERENCES public.plans(id),
+  plan_name TEXT,
+  week_number INTEGER,
+  day_number INTEGER,
+  session_title TEXT,
+  workout_data JSONB,
+  completed BOOLEAN DEFAULT FALSE,
+  duration_seconds INTEGER,
+  completed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================
+-- 16. WORKOUT LOGS (Training-Protokolle)
+-- ============================================
+CREATE TABLE IF NOT EXISTS public.workout_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  athlete_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  exercise_id UUID REFERENCES public.exercises(id),
+  exercise_name TEXT NOT NULL,
+  workout_date DATE DEFAULT CURRENT_DATE,
+  sets JSONB NOT NULL,
+  total_volume NUMERIC,
+  duration_seconds INTEGER,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================
+-- 17. EXERCISE PERSONAL BESTS (PRs)
+-- ============================================
+CREATE TABLE IF NOT EXISTS public.exercise_pbs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  athlete_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  exercise_id UUID REFERENCES public.exercises(id) ON DELETE CASCADE NOT NULL,
+  pb_type TEXT CHECK (pb_type IN ('1RM', 'MAX_WEIGHT', 'MAX_REPS', 'MAX_VOLUME')) NOT NULL,
+  value NUMERIC NOT NULL,
+  reps INTEGER,
+  weight NUMERIC,
+  achieved_at TIMESTAMPTZ DEFAULT NOW(),
+  workout_log_id UUID REFERENCES public.workout_logs(id),
+  UNIQUE(athlete_id, exercise_id, pb_type)
+);
+
+-- ============================================
+-- 18. DAILY WELLNESS (Tägliches Wohlbefinden)
+-- ============================================
+CREATE TABLE IF NOT EXISTS public.daily_wellness (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  athlete_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  date DATE NOT NULL,
+  sleep_quality INTEGER CHECK (sleep_quality >= 1 AND sleep_quality <= 5),
+  sleep_hours NUMERIC,
+  energy_level INTEGER CHECK (energy_level >= 1 AND energy_level <= 5),
+  stress_level INTEGER CHECK (stress_level >= 1 AND stress_level <= 5),
+  muscle_soreness INTEGER CHECK (muscle_soreness >= 1 AND muscle_soreness <= 5),
+  mood INTEGER CHECK (mood >= 1 AND mood <= 5),
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(athlete_id, date)
+);
+
+-- ============================================
+-- 19. DAILY STATS (Tagesstatistiken)
+-- ============================================
+CREATE TABLE IF NOT EXISTS public.daily_stats (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  athlete_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  date DATE NOT NULL,
+  total_volume NUMERIC DEFAULT 0,
+  total_reps INTEGER DEFAULT 0,
+  total_sets INTEGER DEFAULT 0,
+  total_exercises INTEGER DEFAULT 0,
+  training_duration_seconds INTEGER DEFAULT 0,
+  push_volume NUMERIC DEFAULT 0,
+  pull_volume NUMERIC DEFAULT 0,
+  legs_volume NUMERIC DEFAULT 0,
+  muscle_groups JSONB,
+  prs_hit INTEGER DEFAULT 0,
+  UNIQUE(athlete_id, date)
+);
+
+-- ============================================
+-- 20. WEEKLY STATS (Wochenstatistiken)
+-- ============================================
+CREATE TABLE IF NOT EXISTS public.weekly_stats (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  athlete_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  week_start DATE NOT NULL,
+  sessions_completed INTEGER DEFAULT 0,
+  sessions_planned INTEGER DEFAULT 0,
+  total_volume NUMERIC DEFAULT 0,
+  avg_session_duration INTEGER DEFAULT 0,
+  push_pull_ratio NUMERIC,
+  prs_hit INTEGER DEFAULT 0,
+  consistency_score NUMERIC,
+  UNIQUE(athlete_id, week_start)
+);
+
+-- ============================================
+-- 21. BLOCK TEMPLATES (Wiederverwendbare Blöcke)
+-- ============================================
+CREATE TABLE IF NOT EXISTS public.block_templates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  athlete_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+  coach_id UUID REFERENCES public.profiles(id),
+  name TEXT NOT NULL,
+  block_data JSONB NOT NULL,
+  is_public BOOLEAN DEFAULT FALSE,
+  is_premium BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- RLS for Analytics tables
+ALTER TABLE public.athlete_schedule ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.workout_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.exercise_pbs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.daily_wellness ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.daily_stats ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.weekly_stats ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.block_templates ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Athletes manage own schedule" ON public.athlete_schedule FOR ALL USING (auth.uid() = athlete_id);
+CREATE POLICY "Coaches view athlete schedule" ON public.athlete_schedule FOR SELECT USING (
+  EXISTS (SELECT 1 FROM public.assigned_plans WHERE athlete_id = athlete_schedule.athlete_id AND coach_id = auth.uid())
+);
+
+CREATE POLICY "Athletes manage own workout logs" ON public.workout_logs FOR ALL USING (auth.uid() = athlete_id);
+CREATE POLICY "Coaches view athlete logs" ON public.workout_logs FOR SELECT USING (
+  EXISTS (SELECT 1 FROM public.assigned_plans WHERE athlete_id = workout_logs.athlete_id AND coach_id = auth.uid())
+);
+
+CREATE POLICY "Athletes manage own pbs" ON public.exercise_pbs FOR ALL USING (auth.uid() = athlete_id);
+CREATE POLICY "Coaches view athlete pbs" ON public.exercise_pbs FOR SELECT USING (
+  EXISTS (SELECT 1 FROM public.assigned_plans WHERE athlete_id = exercise_pbs.athlete_id AND coach_id = auth.uid())
+);
+
+CREATE POLICY "Athletes manage own wellness" ON public.daily_wellness FOR ALL USING (auth.uid() = athlete_id);
+CREATE POLICY "Coaches view athlete wellness" ON public.daily_wellness FOR SELECT USING (
+  EXISTS (SELECT 1 FROM public.assigned_plans WHERE athlete_id = daily_wellness.athlete_id AND coach_id = auth.uid())
+);
+
+CREATE POLICY "Athletes view own daily stats" ON public.daily_stats FOR ALL USING (auth.uid() = athlete_id);
+CREATE POLICY "Coaches view athlete daily stats" ON public.daily_stats FOR SELECT USING (
+  EXISTS (SELECT 1 FROM public.assigned_plans WHERE athlete_id = daily_stats.athlete_id AND coach_id = auth.uid())
+);
+
+CREATE POLICY "Athletes view own weekly stats" ON public.weekly_stats FOR ALL USING (auth.uid() = athlete_id);
+CREATE POLICY "Coaches view athlete weekly stats" ON public.weekly_stats FOR SELECT USING (
+  EXISTS (SELECT 1 FROM public.assigned_plans WHERE athlete_id = weekly_stats.athlete_id AND coach_id = auth.uid())
+);
+
+CREATE POLICY "Users manage own block templates" ON public.block_templates FOR ALL USING (auth.uid() = athlete_id OR auth.uid() = coach_id);
+CREATE POLICY "View public block templates" ON public.block_templates FOR SELECT USING (is_public = true);
+
+-- ============================================
 -- INDEXES for Performance
 -- ============================================
+
+CREATE INDEX IF NOT EXISTS idx_athlete_schedule_athlete_date ON public.athlete_schedule(athlete_id, date);
+CREATE INDEX IF NOT EXISTS idx_workout_logs_athlete ON public.workout_logs(athlete_id);
+CREATE INDEX IF NOT EXISTS idx_workout_logs_exercise ON public.workout_logs(exercise_id);
+CREATE INDEX IF NOT EXISTS idx_workout_logs_date ON public.workout_logs(workout_date);
+CREATE INDEX IF NOT EXISTS idx_daily_wellness_athlete_date ON public.daily_wellness(athlete_id, date);
+CREATE INDEX IF NOT EXISTS idx_daily_stats_athlete_date ON public.daily_stats(athlete_id, date);
+CREATE INDEX IF NOT EXISTS idx_weekly_stats_athlete ON public.weekly_stats(athlete_id, week_start);
+CREATE INDEX IF NOT EXISTS idx_exercise_pbs_athlete ON public.exercise_pbs(athlete_id);
 
 CREATE INDEX IF NOT EXISTS idx_exercises_author ON public.exercises(author_id);
 CREATE INDEX IF NOT EXISTS idx_plans_coach ON public.plans(coach_id);
