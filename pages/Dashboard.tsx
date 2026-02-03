@@ -822,41 +822,14 @@ const Dashboard: React.FC = () => {
       );
   }
 
-  // === ATHLETE VIEW - Tab navigation between Training and Dashboard ===
-  return (
-    <div className="min-h-screen bg-black">
-      {/* Tab Navigation */}
-      <div className="sticky top-0 z-40 bg-black/95 backdrop-blur-sm border-b border-zinc-800">
-        <div className="flex">
-          <button
-            onClick={() => setAthleteTab('training')}
-            className={`flex-1 py-3 text-sm font-bold transition-colors flex items-center justify-center gap-2 ${
-              athleteTab === 'training'
-                ? 'text-[#00FF00] border-b-2 border-[#00FF00]'
-                : 'text-zinc-500 hover:text-zinc-300'
-            }`}
-          >
-            <Dumbbell size={16} />
-            Training
-          </button>
-          <button
-            onClick={() => setAthleteTab('dashboard')}
-            className={`flex-1 py-3 text-sm font-bold transition-colors flex items-center justify-center gap-2 ${
-              athleteTab === 'dashboard'
-                ? 'text-[#00FF00] border-b-2 border-[#00FF00]'
-                : 'text-zinc-500 hover:text-zinc-300'
-            }`}
-          >
-            <Activity size={16} />
-            Dashboard
-          </button>
-        </div>
-      </div>
-      
-      {/* Content */}
-      {athleteTab === 'training' ? <AthleteTrainingView /> : <AthleteDashboard />}
-    </div>
-  );
+  // === ATHLETE VIEW - Controlled by Bottom Navigation (viewMode from Layout) ===
+  // viewMode: 'hub' = Dashboard, 'training' = Training View
+  if (viewMode === 'training') {
+    return <AthleteTrainingView />;
+  }
+  
+  // Default: Dashboard/Hub view
+  return <AthleteDashboard />;
 };
 
 export default Dashboard;

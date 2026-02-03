@@ -301,91 +301,36 @@ const AthleteDashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-black text-white pb-24">
-      {/* Header */}
-      <div className="p-4 pt-6">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <p className="text-zinc-500 text-sm">Dein Fortschritt auf einen Blick</p>
-      </div>
-
-      {/* Quick Stats Grid */}
-      <div className="px-4 grid grid-cols-2 gap-3">
-        {/* Sessions This Week */}
+      {/* Week Stats Header - Same design as Training View */}
+      <div className="p-4">
         <div className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 bg-[#00FF00]/10 rounded-lg flex items-center justify-center">
-              <Calendar size={16} className="text-[#00FF00]" />
-            </div>
-            <span className="text-xs text-zinc-500">Diese Woche</span>
-          </div>
-          <div className="flex items-baseline gap-1">
-            <span className="text-3xl font-bold">{stats.thisWeekSessions}</span>
-            <span className="text-zinc-500 text-sm">/ {stats.thisWeekPlanned}</span>
-          </div>
-          <div className="mt-2 bg-zinc-800 rounded-full h-1.5 overflow-hidden">
-            <div 
-              className="h-full bg-[#00FF00] rounded-full transition-all"
-              style={{ width: `${Math.min(100, (stats.thisWeekSessions / stats.thisWeekPlanned) * 100)}%` }}
-            />
-          </div>
-        </div>
-
-        {/* Streak */}
-        <div className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 bg-orange-500/10 rounded-lg flex items-center justify-center">
-              <Flame size={16} className="text-orange-500" />
-            </div>
-            <span className="text-xs text-zinc-500">Streak</span>
-          </div>
-          <div className="flex items-baseline gap-1">
-            <span className="text-3xl font-bold">{currentStreak}</span>
-            <span className="text-zinc-500 text-sm">Tage</span>
-          </div>
-          <p className="text-xs text-zinc-600 mt-1">
-            {currentStreak > 0 ? 'Weiter so!' : 'Starte heute!'}
-          </p>
-        </div>
-
-        {/* Volume Trend */}
-        <div className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 bg-blue-500/10 rounded-lg flex items-center justify-center">
-              <BarChart3 size={16} className="text-blue-500" />
-            </div>
-            <span className="text-xs text-zinc-500">Volumen</span>
-          </div>
-          <div className="flex items-center gap-2">
-            {stats.volumeChange !== 0 && (
-              <div className={`flex items-center gap-0.5 text-xs ${stats.volumeChange > 0 ? 'text-[#00FF00]' : 'text-red-400'}`}>
-                {stats.volumeChange > 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                {Math.abs(stats.volumeChange)}%
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-[#00FF00]/20 rounded-xl flex items-center justify-center">
+                <Calendar size={24} className="text-[#00FF00]" />
               </div>
-            )}
-          </div>
-          <div className="mt-2">
-            <MiniBarChart 
-              data={volumeData.slice(-7).map(d => d.volume)} 
-              color="#3B82F6" 
-              height={24}
-            />
-          </div>
-        </div>
-
-        {/* PRs */}
-        <div className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 bg-yellow-500/10 rounded-lg flex items-center justify-center">
-              <Trophy size={16} className="text-yellow-500" />
+              <div>
+                <p className="text-white font-bold">Diese Woche</p>
+                <p className="text-sm text-zinc-400">
+                  {stats.thisWeekSessions} von {stats.thisWeekPlanned} Sessions
+                </p>
+              </div>
             </div>
-            <span className="text-xs text-zinc-500">Neue PRs</span>
-          </div>
-          <div className="flex items-baseline gap-1">
-            <span className="text-3xl font-bold">{stats.totalPRs}</span>
-            <span className="text-zinc-500 text-sm">diese Woche</span>
+            <div className="flex gap-4 text-right">
+              <div>
+                <p className="text-lg font-bold text-orange-500">{currentStreak}</p>
+                <p className="text-xs text-zinc-500">Streak</p>
+              </div>
+              <div>
+                <p className="text-lg font-bold text-[#00FF00]">{stats.totalPRs}</p>
+                <p className="text-xs text-zinc-500">PRs</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
+      
       {/* Daily Wellness Card */}
       <div className="px-4 mt-4">
         <div className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl p-4">
@@ -457,7 +402,6 @@ const AthleteDashboard: React.FC = () => {
               Trainingsvolumen
               {!hasPremium && <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded">PRO</span>}
             </h3>
-            <span className="text-xs text-zinc-500">Letzte 30 Tage</span>
           </div>
           
           <div className={`h-32 ${!hasPremium ? 'blur-sm pointer-events-none' : ''}`}>
