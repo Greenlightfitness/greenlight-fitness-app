@@ -495,5 +495,185 @@ CREATE INDEX IF NOT EXISTS idx_attentions_athlete ON public.attentions(athlete_i
 CREATE INDEX IF NOT EXISTS idx_activities_athlete ON public.activities(athlete_id);
 
 -- ============================================
+-- 22. COACHING APPROVALS (Vorabgespräch + Freischaltung)
+-- ============================================
+CREATE TABLE IF NOT EXISTS public.coaching_approvals (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  athlete_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  product_id UUID REFERENCES public.products(id) ON DELETE CASCADE NOT NULL,
+  
+  -- Consultation Status
+  consultation_completed BOOLEAN DEFAULT FALSE,
+  consultation_appointment_id UUID REFERENCES public.appointments(id),
+  
+  -- Approval Status
+  approved BOOLEAN DEFAULT FALSE,
+  approved_by UUID REFERENCES public.profiles(id),
+  approved_at TIMESTAMPTZ,
+  rejected_at TIMESTAMPTZ,
+  rejection_reason TEXT,
+  
+  -- Manual Override (Bonus/Gratis)
+  is_manual_grant BOOLEAN DEFAULT FALSE,
+  grant_reason TEXT,
+  
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(athlete_id, product_id)
+);
+
+-- ============================================
+-- 23. COACHING RELATIONSHIPS (Aktive 1:1 Beziehungen)
+-- ============================================
+CREATE TABLE IF NOT EXISTS public.coaching_relationships (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  athlete_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  coach_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  product_id UUID REFERENCES public.products(id),
+  
+  -- Status
+  status TEXT CHECK (status IN ('ACTIVE', 'PAUSED', 'ENDED')) DEFAULT 'ACTIVE',
+  started_at TIMESTAMPTZ DEFAULT NOW(),
+  ended_at TIMESTAMPTZ,
+  
+  -- Subscription Tracking
+  stripe_subscription_id TEXT,
+  current_period_end TIMESTAMPTZ,
+  
+  -- Manual grant info
+  is_manual_grant BOOLEAN DEFAULT FALSE,
+  grant_reason TEXT,
+  
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(athlete_id, coach_id)
+);
+
+-- ============================================
+-- 24. GOALS (Zielvorhaben)
+-- ============================================
+CREATE TABLE IF NOT EXISTS public.goals (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  athlete_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  coach_id UUID REFERENCES public.profiles(id),
+  
+  -- Goal Definition
+  title TEXT NOT NULL,
+  description TEXT,
+  goal_type TEXT CHECK (goal_type IN ('STRENGTH', 'ENDURANCE', 'BODY_COMP', 'CONSISTENCY', 'CUSTOM')) NOT NULL,
+  
+  -- Target & Progress
+  target_value NUMERIC NOT NULL,
+  target_unit TEXT NOT NULL,
+  start_value NUMERIC,
+  current_value NUMERIC DEFAULT 0,
+  
+  -- Timing
+  start_date DATE NOT NULL,
+  target_date DATE NOT NULL,
+  
+  -- Tracking Reference
+  exercise_id UUID REFERENCES public.exercises(id),
+  metric_key TEXT,
+  
+  -- Status
+  status TEXT CHECK (status IN ('ACTIVE', 'ACHIEVED', 'FAILED', 'PAUSED')) DEFAULT 'ACTIVE',
+  achieved_at TIMESTAMPTZ,
+  
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================
+-- 25. GOAL CHECKPOINTS (Progress-Tracking)
+-- ============================================
+CREATE TABLE IF NOT EXISTS public.goal_checkpoints (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  goal_id UUID REFERENCES public.goals(id) ON DELETE CASCADE NOT NULL,
+  recorded_at DATE NOT NULL,
+  value NUMERIC NOT NULL,
+  notes TEXT,
+  source TEXT CHECK (source IN ('WORKOUT', 'MANUAL', 'PROFILE_UPDATE')),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================
+-- 26. INVITATIONS (E-Mail Einladungen)
+-- ============================================
+CREATE TABLE IF NOT EXISTS public.invitations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  
+  -- Invitation Details
+  email TEXT NOT NULL,
+  invited_by UUID REFERENCES public.profiles(id) NOT NULL,
+  invitation_code TEXT UNIQUE NOT NULL,
+  personal_message TEXT,
+  
+  -- Pre-configured Status
+  role TEXT CHECK (role IN ('ATHLETE', 'COACH')) DEFAULT 'ATHLETE',
+  auto_approve_coaching BOOLEAN DEFAULT FALSE,
+  auto_assign_product_id UUID REFERENCES public.products(id),
+  auto_assign_plan_id UUID REFERENCES public.plans(id),
+  
+  -- Bonus/Gratis
+  is_bonus_grant BOOLEAN DEFAULT FALSE,
+  bonus_product_id UUID REFERENCES public.products(id),
+  bonus_reason TEXT,
+  
+  -- Status
+  status TEXT CHECK (status IN ('PENDING', 'ACCEPTED', 'EXPIRED', 'REVOKED')) DEFAULT 'PENDING',
+  expires_at TIMESTAMPTZ,
+  accepted_at TIMESTAMPTZ,
+  accepted_by_user_id UUID REFERENCES public.profiles(id),
+  
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- RLS for new tables
+ALTER TABLE public.coaching_approvals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.coaching_relationships ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.goals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.goal_checkpoints ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.invitations ENABLE ROW LEVEL SECURITY;
+
+-- COACHING APPROVALS: Athletes can view own, Coaches can manage
+CREATE POLICY "Athletes view own approvals" ON public.coaching_approvals FOR SELECT USING (auth.uid() = athlete_id);
+CREATE POLICY "Coaches manage approvals" ON public.coaching_approvals FOR ALL USING (
+  EXISTS (SELECT 1 FROM public.products WHERE products.id = coaching_approvals.product_id AND products.coach_id = auth.uid())
+);
+CREATE POLICY "System can insert approvals" ON public.coaching_approvals FOR INSERT WITH CHECK (true);
+
+-- COACHING RELATIONSHIPS: Athletes and Coaches can view
+CREATE POLICY "Users view own relationships" ON public.coaching_relationships FOR SELECT USING (
+  auth.uid() = athlete_id OR auth.uid() = coach_id
+);
+CREATE POLICY "Coaches can manage relationships" ON public.coaching_relationships FOR ALL USING (auth.uid() = coach_id);
+CREATE POLICY "System can insert relationships" ON public.coaching_relationships FOR INSERT WITH CHECK (true);
+
+-- GOALS: Athletes own, Coaches can view/create for their athletes
+CREATE POLICY "Athletes manage own goals" ON public.goals FOR ALL USING (auth.uid() = athlete_id);
+CREATE POLICY "Coaches manage athlete goals" ON public.goals FOR ALL USING (auth.uid() = coach_id);
+CREATE POLICY "Coaches view athlete goals" ON public.goals FOR SELECT USING (
+  EXISTS (SELECT 1 FROM public.coaching_relationships WHERE athlete_id = goals.athlete_id AND coach_id = auth.uid() AND status = 'ACTIVE')
+);
+
+-- GOAL CHECKPOINTS: Based on goal ownership
+CREATE POLICY "Users manage goal checkpoints" ON public.goal_checkpoints FOR ALL USING (
+  EXISTS (SELECT 1 FROM public.goals WHERE goals.id = goal_checkpoints.goal_id AND (goals.athlete_id = auth.uid() OR goals.coach_id = auth.uid()))
+);
+
+-- INVITATIONS: Coaches can manage their invitations
+CREATE POLICY "Coaches manage own invitations" ON public.invitations FOR ALL USING (auth.uid() = invited_by);
+CREATE POLICY "Anyone can view invitation by code" ON public.invitations FOR SELECT USING (true);
+
+-- Indexes for new tables
+CREATE INDEX IF NOT EXISTS idx_coaching_approvals_athlete ON public.coaching_approvals(athlete_id);
+CREATE INDEX IF NOT EXISTS idx_coaching_approvals_product ON public.coaching_approvals(product_id);
+CREATE INDEX IF NOT EXISTS idx_coaching_relationships_athlete ON public.coaching_relationships(athlete_id);
+CREATE INDEX IF NOT EXISTS idx_coaching_relationships_coach ON public.coaching_relationships(coach_id);
+CREATE INDEX IF NOT EXISTS idx_goals_athlete ON public.goals(athlete_id);
+CREATE INDEX IF NOT EXISTS idx_goals_coach ON public.goals(coach_id);
+CREATE INDEX IF NOT EXISTS idx_goal_checkpoints_goal ON public.goal_checkpoints(goal_id);
+CREATE INDEX IF NOT EXISTS idx_invitations_code ON public.invitations(invitation_code);
+CREATE INDEX IF NOT EXISTS idx_invitations_email ON public.invitations(email);
+
+-- ============================================
 -- DONE! Schema ready for Greenlight Fitness
 -- ============================================

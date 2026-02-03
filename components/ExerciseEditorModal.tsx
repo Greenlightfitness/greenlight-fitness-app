@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Exercise, WorkoutSet } from '../types';
+import { Exercise, WorkoutSet, ExerciseTrackingType } from '../types';
 import Input from './Input';
 import Button from './Button';
 import { useLanguage } from '../context/LanguageContext';
-import { X, Save, Wand2, Image as ImageIcon, Layers, Plus, Trash2 } from 'lucide-react';
+import { X, Save, Wand2, Image as ImageIcon, Layers, Plus, Trash2, Dumbbell, Timer, Route, Repeat } from 'lucide-react';
 import { generateExerciseIllustration, generateExerciseDescription, generateExerciseSequence } from '../services/ai';
 import { supabase, createExercise, updateExercise, uploadFile, getPublicUrl } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -31,11 +31,21 @@ const ExerciseEditorModal: React.FC<ExerciseEditorModalProps> = ({ isOpen, onClo
     { key: 'tempo', label: t('editor.metric_tempo') },
   ];
 
+  const TRACKING_TYPE_OPTIONS: { value: ExerciseTrackingType; label: string; icon: React.ReactNode; metrics: string[] }[] = [
+    { value: 'WEIGHT_REPS', label: 'Gewicht + Wdh.', icon: <Dumbbell size={16} />, metrics: ['reps', 'weight', 'rpe'] },
+    { value: 'BODYWEIGHT_REPS', label: 'Bodyweight (nur Wdh.)', icon: <Repeat size={16} />, metrics: ['reps', 'rpe'] },
+    { value: 'TIME', label: 'Zeit (Dauer)', icon: <Timer size={16} />, metrics: ['time'] },
+    { value: 'DISTANCE', label: 'Distanz', icon: <Route size={16} />, metrics: ['distance'] },
+    { value: 'TIME_DISTANCE', label: 'Zeit + Distanz', icon: <Route size={16} />, metrics: ['time', 'distance'] },
+    { value: 'REPS_ONLY', label: 'Nur Wiederholungen', icon: <Repeat size={16} />, metrics: ['reps'] },
+  ];
+
   const [formData, setFormData] = useState<{
     name: string;
     category: string;
     description: string;
     difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
+    trackingType: ExerciseTrackingType;
     videoUrl: string;
     thumbnailUrl: string;
     sequenceUrl: string;
@@ -46,6 +56,7 @@ const ExerciseEditorModal: React.FC<ExerciseEditorModalProps> = ({ isOpen, onClo
     category: '',
     description: '',
     difficulty: 'Beginner',
+    trackingType: 'WEIGHT_REPS',
     videoUrl: '',
     thumbnailUrl: '',
     sequenceUrl: '',
@@ -66,6 +77,7 @@ const ExerciseEditorModal: React.FC<ExerciseEditorModalProps> = ({ isOpen, onClo
           category: exerciseToEdit.category,
           description: exerciseToEdit.description,
           difficulty: exerciseToEdit.difficulty,
+          trackingType: exerciseToEdit.trackingType || 'WEIGHT_REPS',
           videoUrl: exerciseToEdit.videoUrl || '',
           thumbnailUrl: exerciseToEdit.thumbnailUrl || '',
           sequenceUrl: exerciseToEdit.sequenceUrl || '',
@@ -80,6 +92,7 @@ const ExerciseEditorModal: React.FC<ExerciseEditorModalProps> = ({ isOpen, onClo
           category: '',
           description: '',
           difficulty: 'Beginner',
+          trackingType: 'WEIGHT_REPS',
           videoUrl: '',
           thumbnailUrl: '',
           sequenceUrl: '',
@@ -91,6 +104,16 @@ const ExerciseEditorModal: React.FC<ExerciseEditorModalProps> = ({ isOpen, onClo
       }
     }
   }, [isOpen, exerciseToEdit]);
+
+  // Auto-set metrics when tracking type changes
+  const handleTrackingTypeChange = (type: ExerciseTrackingType) => {
+    const option = TRACKING_TYPE_OPTIONS.find(o => o.value === type);
+    setFormData(prev => ({
+      ...prev,
+      trackingType: type,
+      defaultVisibleMetrics: option?.metrics || ['reps', 'weight', 'rpe']
+    }));
+  };
 
   // Helper to ensure API key is selected
   const ensureApiKey = async () => {
@@ -240,6 +263,7 @@ const ExerciseEditorModal: React.FC<ExerciseEditorModalProps> = ({ isOpen, onClo
         description: formData.description,
         category: formData.category,
         difficulty: formData.difficulty,
+        tracking_type: formData.trackingType,
         video_url: formData.videoUrl,
         thumbnail_url: formData.thumbnailUrl,
         sequence_url: formData.sequenceUrl,
@@ -325,6 +349,28 @@ const ExerciseEditorModal: React.FC<ExerciseEditorModalProps> = ({ isOpen, onClo
                         onChange={e => setFormData({...formData, videoUrl: e.target.value})}
                         placeholder="https://youtube.com/..."
                     />
+                </div>
+
+                {/* Exercise Tracking Type */}
+                <div className="flex flex-col gap-2">
+                    <label className="text-sm font-medium text-zinc-400">Übungstyp (Was wird getrackt?)</label>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                        {TRACKING_TYPE_OPTIONS.map(option => (
+                            <button
+                                key={option.value}
+                                type="button"
+                                onClick={() => handleTrackingTypeChange(option.value)}
+                                className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-all ${
+                                    formData.trackingType === option.value
+                                        ? 'bg-[#00FF00]/10 border-[#00FF00] text-[#00FF00]'
+                                        : 'bg-zinc-900 border-zinc-700 text-zinc-400 hover:border-zinc-500'
+                                }`}
+                            >
+                                {option.icon}
+                                <span className="truncate">{option.label}</span>
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
                 <div>

@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { supabase, getProducts, getAssignedPlans, getWeeksByPlan, getSessionsByWeek, createAssignedPlan, createAppointment, getUserPurchases } from '../services/supabase';
+import { supabase, getProducts, getAssignedPlans, getWeeksByPlan, getSessionsByWeek, createAssignedPlan, createAppointment, getUserPurchases, getCoachingApproval, createCoachingApproval, createCoachingRelationship, getAppointments } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { Product, AssignedPlan, TrainingWeek, TrainingSession, TrainingPlan, ProductCategory, ProductType, Appointment } from '../types';
+import { Product, AssignedPlan, TrainingWeek, TrainingSession, TrainingPlan, ProductCategory, ProductType, Appointment, CoachingApproval } from '../types';
 import Button from '../components/Button';
-import { ShoppingBag, Check, ShieldCheck, Lock, Unlock, ArrowRight, X, Calendar, Phone } from 'lucide-react';
+import { ShoppingBag, Check, ShieldCheck, Lock, Unlock, ArrowRight, X, Calendar, Phone, Clock, CheckCircle2 } from 'lucide-react';
 
 const CATEGORIES: { id: ProductCategory | 'ALL'; label: string }[] = [
     { id: 'ALL', label: 'All' },
@@ -32,14 +32,69 @@ const Shop: React.FC = () => {
   const [bookingMode, setBookingMode] = useState(false);
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState('');
+  
+  // Coaching Approval State
+  const [coachingApprovals, setCoachingApprovals] = useState<Map<string, CoachingApproval>>(new Map());
+  const [pendingConsultations, setPendingConsultations] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if(user) {
         fetchProducts();
         fetchOwnedPlans();
         fetchPurchases();
+        fetchCoachingApprovals();
     }
   }, [user]);
+
+  const fetchCoachingApprovals = async () => {
+    if (!user) return;
+    try {
+      // Fetch all COACHING_1ON1 products and check approval status
+      const productsData = await getProducts(undefined, true);
+      const coachingProducts = productsData.filter((p: any) => p.type === 'COACHING_1ON1');
+      
+      const approvalsMap = new Map<string, CoachingApproval>();
+      const pendingSet = new Set<string>();
+      
+      for (const product of coachingProducts) {
+        const approval = await getCoachingApproval(user.id, product.id);
+        if (approval) {
+          approvalsMap.set(product.id, {
+            id: approval.id,
+            athleteId: approval.athlete_id,
+            productId: approval.product_id,
+            consultationCompleted: approval.consultation_completed,
+            consultationAppointmentId: approval.consultation_appointment_id,
+            approved: approval.approved,
+            approvedBy: approval.approved_by,
+            approvedAt: approval.approved_at,
+            rejectedAt: approval.rejected_at,
+            rejectionReason: approval.rejection_reason,
+            isManualGrant: approval.is_manual_grant,
+            grantReason: approval.grant_reason,
+            createdAt: approval.created_at,
+          });
+        }
+      }
+      
+      // Check for pending appointments (consultation booked but not completed)
+      const appointments = await getAppointments(undefined, user.id);
+      appointments.forEach((apt: any) => {
+        if (apt.type === 'CONSULTATION' && apt.status !== 'COMPLETED') {
+          // Find the product this consultation is for
+          const product = coachingProducts.find((p: any) => p.coach_id === apt.coach_id);
+          if (product) {
+            pendingSet.add(product.id);
+          }
+        }
+      });
+      
+      setCoachingApprovals(approvalsMap);
+      setPendingConsultations(pendingSet);
+    } catch (error) {
+      console.error('Error fetching coaching approvals:', error);
+    }
+  };
 
   const fetchPurchases = async () => {
     if (!user?.email) return;
@@ -150,13 +205,34 @@ const Shop: React.FC = () => {
     }
   };
 
-  // Nach erfolgreicher Zahlung: Plan zuweisen
+  // Nach erfolgreicher Zahlung: Plan zuweisen ODER Coaching Relationship erstellen
   const handlePurchaseSuccess = async (product: Product) => {
     if (!user) return;
     setPurchasing(product.id);
     
     try {
+        // COACHING_1ON1: Create relationship, NO plan assignment
+        if (product.type === 'COACHING_1ON1') {
+            await createCoachingRelationship({
+                athlete_id: user.id,
+                coach_id: product.coachId,
+                product_id: product.id,
+            });
+            
+            alert("Coaching erfolgreich gebucht! Dein Coach wird sich bei dir melden, um deinen individuellen Plan zu erstellen.");
+            setSelectedProduct(null);
+            fetchCoachingApprovals();
+            return;
+        }
+        
+        // PLAN product: Assign the plan
         const planId = product.planId;
+        if (!planId) {
+            alert("Kauf erfolgreich!");
+            setSelectedProduct(null);
+            return;
+        }
+        
         const weeksRaw = await getWeeksByPlan(planId);
         
         const weeksData = await Promise.all(weeksRaw.map(async (w: any) => {
@@ -197,8 +273,8 @@ const Shop: React.FC = () => {
         fetchOwnedPlans();
         
     } catch (error) {
-        console.error("Plan assignment failed:", error);
-        alert("Fehler beim Zuweisen des Plans. Bitte kontaktiere den Support.");
+        console.error("Purchase processing failed:", error);
+        alert("Fehler beim Verarbeiten des Kaufs. Bitte kontaktiere den Support.");
     } finally {
         setPurchasing(null);
     }
@@ -237,7 +313,8 @@ const Shop: React.FC = () => {
       setPurchasing('booking');
       
       try {
-          await createAppointment({
+          // Create the appointment
+          const appointment = await createAppointment({
               athlete_id: user.id,
               athlete_name: user.email || 'Athlete',
               coach_id: selectedProduct.coachId,
@@ -247,12 +324,24 @@ const Shop: React.FC = () => {
               type: 'CONSULTATION',
           });
           
-          alert("Appointment request sent! Your coach will confirm shortly.");
+          // For COACHING_1ON1: Also create a coaching approval entry
+          if (selectedProduct.type === 'COACHING_1ON1') {
+              await createCoachingApproval({
+                  athlete_id: user.id,
+                  product_id: selectedProduct.id,
+                  consultation_appointment_id: appointment.id,
+              });
+              
+              // Refresh approvals
+              await fetchCoachingApprovals();
+          }
+          
+          alert("Vorabgespräch angefragt! Dein Coach wird sich bei dir melden.");
           setSelectedProduct(null);
           setBookingMode(false);
       } catch (error) {
           console.error("Booking failed:", error);
-          alert("Booking failed.");
+          alert("Buchung fehlgeschlagen.");
       } finally {
           setPurchasing(null);
       }
@@ -438,27 +527,95 @@ const Shop: React.FC = () => {
               {/* Sticky Footer Action */}
               {!bookingMode && (
                   <div className="p-4 border-t border-zinc-800 bg-[#1C1C1E]/90 backdrop-blur safe-area-bottom">
-                      <div className="max-w-3xl mx-auto flex gap-4">
-                          {selectedProduct.type === 'COACHING_1ON1' && (
-                              <Button 
-                                  onClick={() => setBookingMode(true)} 
-                                  variant="secondary"
-                                  className="flex-1 border-zinc-700"
-                              >
-                                  <Phone size={18} className="mr-2" /> Book Call
-                              </Button>
-                          )}
-                          
+                      <div className="max-w-3xl mx-auto">
+                          {/* Already owned */}
                           {(ownedPlanIds.has(selectedProduct.planId) || purchasedProductIds.has(selectedProduct.id) || activeSubscriptionIds.has(selectedProduct.title)) ? (
                               <Button disabled fullWidth className="opacity-50 cursor-not-allowed bg-[#00FF00]/20 border-[#00FF00]/30">
                                   <Check size={18} className="mr-2" /> Bereits gekauft
                               </Button>
+                          ) : selectedProduct.type === 'COACHING_1ON1' ? (
+                              // GATED PURCHASE FLOW for 1:1 Coaching
+                              (() => {
+                                  const approval = coachingApprovals.get(selectedProduct.id);
+                                  const hasPendingConsultation = pendingConsultations.has(selectedProduct.id);
+                                  const isApproved = approval?.approved === true;
+                                  const isRejected = !!approval?.rejectedAt;
+                                  
+                                  // Case 1: Approved - Can purchase
+                                  if (isApproved) {
+                                      return (
+                                          <div className="space-y-3">
+                                              <div className="bg-[#00FF00]/10 border border-[#00FF00]/30 rounded-xl p-3 flex items-center gap-3">
+                                                  <CheckCircle2 size={20} className="text-[#00FF00]" />
+                                                  <span className="text-sm text-[#00FF00] font-medium">Du bist freigeschaltet! Jetzt kannst du buchen.</span>
+                                              </div>
+                                              <Button 
+                                                  onClick={() => handlePurchase(selectedProduct)} 
+                                                  disabled={!!purchasing} 
+                                                  fullWidth
+                                                  className="shadow-[0_0_20px_rgba(0,255,0,0.3)]"
+                                              >
+                                                  {purchasing === selectedProduct.id ? "Processing..." : `Jetzt buchen • ${selectedProduct.price} ${selectedProduct.currency}`}
+                                              </Button>
+                                          </div>
+                                      );
+                                  }
+                                  
+                                  // Case 2: Rejected
+                                  if (isRejected) {
+                                      return (
+                                          <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-center">
+                                              <p className="text-red-400 font-medium">Leider wurde deine Anfrage abgelehnt.</p>
+                                              {approval?.rejectionReason && (
+                                                  <p className="text-zinc-500 text-sm mt-1">{approval.rejectionReason}</p>
+                                              )}
+                                          </div>
+                                      );
+                                  }
+                                  
+                                  // Case 3: Consultation booked, waiting
+                                  if (hasPendingConsultation || (approval && !approval.approved)) {
+                                      return (
+                                          <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 text-center space-y-2">
+                                              <div className="flex items-center justify-center gap-2">
+                                                  <Clock size={20} className="text-blue-400" />
+                                                  <span className="text-blue-400 font-medium">Vorabgespräch gebucht</span>
+                                              </div>
+                                              <p className="text-zinc-400 text-sm">
+                                                  Nach dem Gespräch wirst du freigeschaltet und kannst das Coaching buchen.
+                                              </p>
+                                          </div>
+                                      );
+                                  }
+                                  
+                                  // Case 4: No consultation yet - Show booking button only
+                                  return (
+                                      <div className="space-y-3">
+                                          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-center">
+                                              <p className="text-zinc-300 text-sm font-medium mb-1">
+                                                  Für 1:1 Coaching ist ein kostenloses Vorabgespräch erforderlich.
+                                              </p>
+                                              <p className="text-zinc-500 text-xs">
+                                                  Buche jetzt einen Termin – danach wirst du für den Kauf freigeschaltet.
+                                              </p>
+                                          </div>
+                                          <Button 
+                                              onClick={() => setBookingMode(true)} 
+                                              fullWidth
+                                              className="shadow-[0_0_20px_rgba(0,255,0,0.3)]"
+                                          >
+                                              <Phone size={18} className="mr-2" /> Kostenloses Vorabgespräch buchen
+                                          </Button>
+                                      </div>
+                                  );
+                              })()
                           ) : (
+                              // Normal product - Direct purchase
                               <Button 
                                   onClick={() => handlePurchase(selectedProduct)} 
                                   disabled={!!purchasing} 
-                                  fullWidth={selectedProduct.type !== 'COACHING_1ON1'}
-                                  className="flex-1 shadow-[0_0_20px_rgba(0,255,0,0.3)]"
+                                  fullWidth
+                                  className="shadow-[0_0_20px_rgba(0,255,0,0.3)]"
                               >
                                   {purchasing === selectedProduct.id ? "Processing..." : `Get Access • ${selectedProduct.price} ${selectedProduct.currency}`}
                               </Button>

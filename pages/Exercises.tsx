@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { supabase, getExercises, createExercise, updateExercise, deleteExercise, getUsersByRoles } from '../services/supabase';
 import { Exercise, INITIAL_EXERCISES, UserRole, UserProfile } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -7,7 +7,9 @@ import Button from '../components/Button';
 import ConfirmationModal from '../components/ConfirmationModal';
 import ExerciseEditorModal from '../components/ExerciseEditorModal';
 import { useLanguage } from '../context/LanguageContext';
-import { Plus, Search, Dumbbell, Trash2, Pencil, Box, Video, Layers, X, Archive, Undo2, ShieldCheck, User } from 'lucide-react';
+import { Plus, Search, Dumbbell, Trash2, Pencil, Box, Video, Layers, X, Archive, Undo2, ShieldCheck, User, Lock, Zap, Crown } from 'lucide-react';
+
+const ATHLETE_FREE_EXERCISE_LIMIT = 5;
 
 const Exercises: React.FC = () => {
   const { user, userProfile } = useAuth();
@@ -24,6 +26,19 @@ const Exercises: React.FC = () => {
   // Modal States
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [exerciseToEdit, setExerciseToEdit] = useState<Exercise | null>(null);
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
+
+  // Athlete-specific: Check if user is athlete and count their exercises
+  const isAthlete = userProfile?.role === UserRole.ATHLETE;
+  // TODO: Replace with actual premium check
+  const hasPremium = false;
+  
+  const myExerciseCount = useMemo(() => {
+    if (!isAthlete || !user) return 0;
+    return exercises.filter(ex => ex.authorId === user.id && !ex.isArchived).length;
+  }, [exercises, user, isAthlete]);
+
+  const canCreateExercise = !isAthlete || hasPremium || myExerciseCount < ATHLETE_FREE_EXERCISE_LIMIT;
 
   // Lightbox State
   const [viewImage, setViewImage] = useState<{ url: string; title: string } | null>(null);
@@ -42,16 +57,19 @@ const Exercises: React.FC = () => {
       const fetched: Exercise[] = data.map((ex: any) => ({
         id: ex.id,
         authorId: ex.author_id,
+        authorRole: ex.author_role,
         name: ex.name,
         description: ex.description,
         category: ex.category,
         difficulty: ex.difficulty,
+        trackingType: ex.tracking_type,
         videoUrl: ex.video_url,
         thumbnailUrl: ex.thumbnail_url,
         sequenceUrl: ex.sequence_url,
         defaultSets: ex.default_sets,
         defaultVisibleMetrics: ex.default_visible_metrics,
         isArchived: ex.is_archived,
+        isPublic: ex.is_public,
       }));
       setExercises(fetched);
       
@@ -104,6 +122,10 @@ const Exercises: React.FC = () => {
 
   // --- ACTIONS ---
   const handleOpenCreate = () => {
+    if (!canCreateExercise) {
+      setShowPremiumModal(true);
+      return;
+    }
     setExerciseToEdit(null);
     setIsEditorOpen(true);
   };
@@ -158,22 +180,27 @@ const Exercises: React.FC = () => {
     const isArchived = !!ex.isArchived;
     const matchesView = viewMode === 'active' ? !isArchived : isArchived;
 
-    // 3. Admin Filter
-    let matchesFilter = true;
+    // 3. Role-based visibility
+    let matchesRoleFilter = true;
+    
+    // Athletes see: public exercises OR their own exercises
+    if (isAthlete) {
+      matchesRoleFilter = ex.isPublic !== false || ex.authorId === user?.id;
+    }
+    
+    // 4. Admin Filter (only for admin view)
+    let matchesAdminFilter = true;
     if (userProfile?.role === UserRole.ADMIN) {
         if (filterMode === 'SYSTEM') {
-            // Check if author is admin (simple check: author matches user ID if user is admin, or we rely on map)
-            // For now, assuming current User is Admin:
-            // "System" means created by an Admin. 
             const author = userMap[ex.authorId || ''];
-            matchesFilter = author?.role === UserRole.ADMIN || ex.authorId === user?.uid;
+            matchesAdminFilter = author?.role === UserRole.ADMIN || ex.authorId === user?.uid;
         } else if (filterMode === 'COACH') {
             const author = userMap[ex.authorId || ''];
-            matchesFilter = author?.role !== UserRole.ADMIN && ex.authorId !== user?.uid;
+            matchesAdminFilter = author?.role !== UserRole.ADMIN && ex.authorId !== user?.uid;
         }
     }
 
-    return matchesSearch && matchesView && matchesFilter;
+    return matchesSearch && matchesView && matchesRoleFilter && matchesAdminFilter;
   });
 
   return (
@@ -222,13 +249,30 @@ const Exercises: React.FC = () => {
         <div>
           <h1 className="text-4xl font-bold text-white tracking-tight">{t('exercises.title')}</h1>
           <p className="text-zinc-400 mt-2 max-w-md text-lg">{t('exercises.subtitle')}</p>
+          {/* Athlete exercise limit indicator */}
+          {isAthlete && !hasPremium && (
+            <div className="mt-3 flex items-center gap-2">
+              <div className="h-1.5 w-24 bg-zinc-800 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full rounded-full transition-all ${myExerciseCount >= ATHLETE_FREE_EXERCISE_LIMIT ? 'bg-orange-500' : 'bg-[#00FF00]'}`}
+                  style={{ width: `${Math.min(100, (myExerciseCount / ATHLETE_FREE_EXERCISE_LIMIT) * 100)}%` }}
+                />
+              </div>
+              <span className="text-xs text-zinc-500">
+                {myExerciseCount}/{ATHLETE_FREE_EXERCISE_LIMIT} eigene Übungen
+              </span>
+              {myExerciseCount >= ATHLETE_FREE_EXERCISE_LIMIT && (
+                <span className="text-[10px] bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded">Limit erreicht</span>
+              )}
+            </div>
+          )}
         </div>
         <div className="flex gap-3 w-full md:w-auto">
-          {exercises.length === 0 && !loading && (
+          {exercises.length === 0 && !loading && !isAthlete && (
              <Button variant="secondary" onClick={handleSeedData}>{t('exercises.loadSample')}</Button>
           )}
           <Button onClick={handleOpenCreate} className="flex items-center justify-center gap-2 h-12 px-6 text-base w-full md:w-auto rounded-xl">
-            <Plus size={20} /> {t('exercises.addExercise')}
+            <Plus size={20} /> {isAthlete ? 'Eigene Übung' : t('exercises.addExercise')}
           </Button>
         </div>
       </div>
@@ -406,6 +450,99 @@ const Exercises: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Premium Modal for Athletes */}
+      {showPremiumModal && (
+        <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-4 animate-in fade-in duration-200 overflow-y-auto">
+          <div className="bg-gradient-to-b from-[#1C1C1E] to-black border border-zinc-800 w-full max-w-md rounded-3xl overflow-hidden shadow-2xl my-4">
+            {/* Hero Section */}
+            <div className="relative p-6 pb-4 text-center bg-gradient-to-b from-[#00FF00]/10 to-transparent">
+              <div className="relative">
+                <div className="w-16 h-16 mx-auto mb-3 bg-gradient-to-br from-[#00FF00]/20 to-[#00FF00]/5 rounded-2xl flex items-center justify-center border border-[#00FF00]/30 shadow-[0_0_30px_rgba(0,255,0,0.2)]">
+                  <Dumbbell size={28} className="text-[#00FF00]" />
+                </div>
+                <h2 className="text-xl font-bold text-white mb-1">Mehr Übungen freischalten</h2>
+                <p className="text-zinc-400 text-sm">Du hast {myExerciseCount} von {ATHLETE_FREE_EXERCISE_LIMIT} kostenlosen Übungen erstellt</p>
+              </div>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="px-6 py-3">
+              <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-[#00FF00] to-[#00FF00]/70 rounded-full"
+                  style={{ width: `${(myExerciseCount / ATHLETE_FREE_EXERCISE_LIMIT) * 100}%` }}
+                />
+              </div>
+              <p className="text-xs text-zinc-500 mt-1 text-center">{myExerciseCount}/{ATHLETE_FREE_EXERCISE_LIMIT} kostenlos</p>
+            </div>
+
+            {/* Benefits */}
+            <div className="px-5 py-3">
+              <p className="text-xs text-zinc-500 font-bold uppercase tracking-wider mb-3">Mit Premium erhältst du</p>
+              
+              <div className="space-y-2">
+                <div className="flex items-center gap-3 p-3 bg-zinc-900/50 rounded-xl border border-zinc-800">
+                  <div className="w-10 h-10 bg-blue-500/10 rounded-lg flex items-center justify-center shrink-0">
+                    <Dumbbell size={18} className="text-blue-400" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-white text-sm">Unbegrenzte Übungen</p>
+                    <p className="text-xs text-zinc-500">Erstelle so viele eigene Übungen wie du willst</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 p-3 bg-zinc-900/50 rounded-xl border border-zinc-800">
+                  <div className="w-10 h-10 bg-purple-500/10 rounded-lg flex items-center justify-center shrink-0">
+                    <Zap size={18} className="text-purple-400" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-white text-sm">KI-generierte Bilder</p>
+                    <p className="text-xs text-zinc-500">Automatische Illustrationen für deine Übungen</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 p-3 bg-zinc-900/50 rounded-xl border border-zinc-800">
+                  <div className="w-10 h-10 bg-yellow-500/10 rounded-lg flex items-center justify-center shrink-0">
+                    <Crown size={18} className="text-yellow-400" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-white text-sm">Alle Premium-Features</p>
+                    <p className="text-xs text-zinc-500">Analytics, PR-Tracking, Volumen-Charts & mehr</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* CTA Section */}
+            <div className="p-5 pt-2 space-y-3">
+              <div className="bg-gradient-to-r from-[#00FF00]/10 to-transparent p-3 rounded-xl border border-[#00FF00]/20">
+                <p className="text-[10px] text-zinc-400 mb-0.5">Schalte alles frei mit einem</p>
+                <p className="text-base font-bold text-white flex items-center gap-2">
+                  <span className="text-[#00FF00]">Premium</span> Paket
+                </p>
+              </div>
+
+              <button 
+                onClick={() => {
+                  setShowPremiumModal(false);
+                  window.location.href = '/shop';
+                }}
+                className="w-full py-3.5 bg-[#00FF00] text-black font-bold rounded-xl text-base shadow-[0_0_20px_rgba(0,255,0,0.3)] hover:shadow-[0_0_30px_rgba(0,255,0,0.5)] transition-all active:scale-[0.98]"
+              >
+                Pakete ansehen
+              </button>
+              
+              <button 
+                onClick={() => setShowPremiumModal(false)}
+                className="w-full py-2 text-zinc-500 text-sm hover:text-white transition-colors"
+              >
+                Später
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

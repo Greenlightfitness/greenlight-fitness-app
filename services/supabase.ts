@@ -992,3 +992,530 @@ export const getStripeCustomerId = async (userId: string) => {
   if (error) throw error;
   return data?.stripe_customer_id;
 };
+
+// ============ COACHING APPROVALS ============
+
+export const getCoachingApproval = async (athleteId: string, productId: string) => {
+  try {
+    const { data, error } = await supabase
+      .from('coaching_approvals')
+      .select('*')
+      .eq('athlete_id', athleteId)
+      .eq('product_id', productId)
+      .single();
+    // PGRST116 = no rows found (normal), 42P01 = table doesn't exist
+    if (error && error.code !== 'PGRST116') {
+      console.warn('[Supabase] coaching_approvals query error:', error.code);
+      return null;
+    }
+    return data;
+  } catch (e) {
+    // Table might not exist yet
+    console.debug('[Supabase] coaching_approvals table not available');
+    return null;
+  }
+};
+
+export const getCoachingApprovals = async (coachId?: string) => {
+  let query = supabase
+    .from('coaching_approvals')
+    .select(`
+      *,
+      athlete:profiles!coaching_approvals_athlete_id_fkey(id, email, first_name, last_name, display_name),
+      product:products!coaching_approvals_product_id_fkey(id, title, coach_id),
+      appointment:appointments(id, date, time, status)
+    `);
+  
+  if (coachId) {
+    query = query.eq('product.coach_id', coachId);
+  }
+  
+  const { data, error } = await query.order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+};
+
+export const getPendingCoachingApprovals = async (coachId: string) => {
+  const { data, error } = await supabase
+    .from('coaching_approvals')
+    .select(`
+      *,
+      athlete:profiles!coaching_approvals_athlete_id_fkey(id, email, first_name, last_name, display_name),
+      product:products!coaching_approvals_product_id_fkey(id, title, coach_id),
+      appointment:appointments(id, date, time, status)
+    `)
+    .eq('approved', false)
+    .is('rejected_at', null)
+    .order('created_at', { ascending: false });
+  
+  if (error) throw error;
+  
+  // Filter by coach_id in JS since nested filtering is tricky
+  return (data || []).filter(a => a.product?.coach_id === coachId);
+};
+
+export const createCoachingApproval = async (approval: {
+  athlete_id: string;
+  product_id: string;
+  consultation_appointment_id?: string;
+}) => {
+  const { data, error } = await supabase
+    .from('coaching_approvals')
+    .insert(approval)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const approveCoaching = async (
+  approvalId: string, 
+  approvedBy: string
+) => {
+  const { data, error } = await supabase
+    .from('coaching_approvals')
+    .update({
+      approved: true,
+      approved_by: approvedBy,
+      approved_at: new Date().toISOString(),
+      consultation_completed: true,
+    })
+    .eq('id', approvalId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const rejectCoaching = async (
+  approvalId: string, 
+  reason: string
+) => {
+  const { data, error } = await supabase
+    .from('coaching_approvals')
+    .update({
+      rejected_at: new Date().toISOString(),
+      rejection_reason: reason,
+    })
+    .eq('id', approvalId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const grantCoachingManually = async (
+  athleteId: string,
+  productId: string,
+  approvedBy: string,
+  reason: string
+) => {
+  const { data, error } = await supabase
+    .from('coaching_approvals')
+    .upsert({
+      athlete_id: athleteId,
+      product_id: productId,
+      approved: true,
+      approved_by: approvedBy,
+      approved_at: new Date().toISOString(),
+      is_manual_grant: true,
+      grant_reason: reason,
+      consultation_completed: true,
+    }, { onConflict: 'athlete_id,product_id' })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+// ============ COACHING RELATIONSHIPS ============
+
+export const getCoachingRelationship = async (athleteId: string, coachId?: string) => {
+  let query = supabase
+    .from('coaching_relationships')
+    .select('*')
+    .eq('athlete_id', athleteId)
+    .eq('status', 'ACTIVE');
+  
+  if (coachId) {
+    query = query.eq('coach_id', coachId);
+  }
+  
+  const { data, error } = await query.single();
+  if (error && error.code !== 'PGRST116') throw error;
+  return data;
+};
+
+export const getActiveCoachingRelationships = async (coachId: string) => {
+  const { data, error } = await supabase
+    .from('coaching_relationships')
+    .select(`
+      *,
+      athlete:profiles!coaching_relationships_athlete_id_fkey(id, email, first_name, last_name, last_name, display_name, height, weight, body_fat),
+      product:products(id, title)
+    `)
+    .eq('coach_id', coachId)
+    .eq('status', 'ACTIVE')
+    .order('started_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+};
+
+// Get all athletes (Admin only)
+export const getAllAthletes = async () => {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, email, first_name, last_name, display_name, role, height, weight, body_fat, created_at')
+    .eq('role', 'ATHLETE')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+};
+
+// Get athletes with their coaching relationships (for assignment)
+export const getAthletesWithCoaching = async () => {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select(`
+      id, email, first_name, last_name, display_name, role, created_at,
+      coaching_relationships!coaching_relationships_athlete_id_fkey(
+        id, coach_id, status, started_at,
+        coach:profiles!coaching_relationships_coach_id_fkey(id, email, first_name, last_name)
+      )
+    `)
+    .eq('role', 'ATHLETE')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+};
+
+// Assign athlete to coach (Admin function)
+export const assignAthleteToCoach = async (athleteId: string, coachId: string, reason?: string) => {
+  const { data, error } = await supabase
+    .from('coaching_relationships')
+    .insert({
+      athlete_id: athleteId,
+      coach_id: coachId,
+      status: 'ACTIVE',
+      is_manual_grant: true,
+      grant_reason: reason || 'Admin-Zuweisung',
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const createCoachingRelationship = async (relationship: {
+  athlete_id: string;
+  coach_id: string;
+  product_id?: string;
+  stripe_subscription_id?: string;
+  current_period_end?: string;
+  is_manual_grant?: boolean;
+  grant_reason?: string;
+}) => {
+  const { data, error } = await supabase
+    .from('coaching_relationships')
+    .insert(relationship)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const updateCoachingRelationship = async (id: string, updates: any) => {
+  const { data, error } = await supabase
+    .from('coaching_relationships')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const endCoachingRelationship = async (id: string) => {
+  const { data, error } = await supabase
+    .from('coaching_relationships')
+    .update({
+      status: 'ENDED',
+      ended_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+// ============ GOALS ============
+
+export const getGoals = async (athleteId: string, status?: string) => {
+  let query = supabase
+    .from('goals')
+    .select(`
+      *,
+      exercise:exercises(id, name)
+    `)
+    .eq('athlete_id', athleteId);
+  
+  if (status) {
+    query = query.eq('status', status);
+  }
+  
+  const { data, error } = await query.order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+};
+
+export const getActiveGoals = async (athleteId: string) => {
+  return getGoals(athleteId, 'ACTIVE');
+};
+
+export const getGoalsByCoach = async (coachId: string) => {
+  const { data, error } = await supabase
+    .from('goals')
+    .select(`
+      *,
+      athlete:profiles!goals_athlete_id_fkey(id, email, first_name, last_name),
+      exercise:exercises(id, name)
+    `)
+    .eq('coach_id', coachId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+};
+
+export const createGoal = async (goal: {
+  athlete_id: string;
+  coach_id?: string | null;
+  title: string;
+  description?: string | null;
+  goal_type: string;
+  target_value: number;
+  target_unit: string;
+  start_value?: number | null;
+  start_date: string;
+  target_date: string;
+  exercise_id?: string | null;
+  metric_key?: string | null;
+}) => {
+  // Clean up undefined values to null for Supabase
+  const cleanGoal = {
+    athlete_id: goal.athlete_id,
+    coach_id: goal.coach_id || null,
+    title: goal.title,
+    description: goal.description || null,
+    goal_type: goal.goal_type,
+    target_value: goal.target_value,
+    target_unit: goal.target_unit,
+    start_value: goal.start_value ?? 0,
+    current_value: goal.start_value ?? 0,
+    start_date: goal.start_date,
+    target_date: goal.target_date,
+    exercise_id: goal.exercise_id || null,
+    metric_key: goal.metric_key || null,
+    status: 'ACTIVE',
+  };
+  
+  const { data, error } = await supabase
+    .from('goals')
+    .insert(cleanGoal)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const updateGoal = async (id: string, updates: any) => {
+  const { data, error } = await supabase
+    .from('goals')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const updateGoalProgress = async (id: string, currentValue: number) => {
+  const { data: goal } = await supabase
+    .from('goals')
+    .select('target_value, start_value')
+    .eq('id', id)
+    .single();
+  
+  const updates: any = { current_value: currentValue };
+  
+  // Check if goal achieved
+  if (goal && currentValue >= goal.target_value) {
+    updates.status = 'ACHIEVED';
+    updates.achieved_at = new Date().toISOString();
+  }
+  
+  const { data, error } = await supabase
+    .from('goals')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const deleteGoal = async (id: string) => {
+  const { error } = await supabase
+    .from('goals')
+    .delete()
+    .eq('id', id);
+  if (error) throw error;
+};
+
+// ============ GOAL CHECKPOINTS ============
+
+export const getGoalCheckpoints = async (goalId: string) => {
+  const { data, error } = await supabase
+    .from('goal_checkpoints')
+    .select('*')
+    .eq('goal_id', goalId)
+    .order('recorded_at', { ascending: true });
+  if (error) throw error;
+  return data || [];
+};
+
+export const createGoalCheckpoint = async (checkpoint: {
+  goal_id: string;
+  value: number;
+  recorded_at?: string;
+  notes?: string;
+  source: 'WORKOUT' | 'MANUAL' | 'PROFILE_UPDATE';
+}) => {
+  const { data, error } = await supabase
+    .from('goal_checkpoints')
+    .insert({
+      ...checkpoint,
+      recorded_at: checkpoint.recorded_at || new Date().toISOString().split('T')[0],
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  
+  // Also update the goal's current value
+  await updateGoalProgress(checkpoint.goal_id, checkpoint.value);
+  
+  return data;
+};
+
+// ============ INVITATIONS ============
+
+export const getInvitations = async (invitedBy: string) => {
+  const { data, error } = await supabase
+    .from('invitations')
+    .select('*')
+    .eq('invited_by', invitedBy)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+};
+
+export const getInvitationByCode = async (code: string) => {
+  const { data, error } = await supabase
+    .from('invitations')
+    .select('*')
+    .eq('invitation_code', code)
+    .single();
+  if (error && error.code !== 'PGRST116') throw error;
+  return data;
+};
+
+export const createInvitation = async (invitation: {
+  email: string;
+  invited_by: string;
+  personal_message?: string;
+  role?: string;
+  auto_approve_coaching?: boolean;
+  auto_assign_product_id?: string;
+  auto_assign_plan_id?: string;
+  is_bonus_grant?: boolean;
+  bonus_product_id?: string;
+  bonus_reason?: string;
+}) => {
+  // Generate unique invitation code
+  const code = 'INV-' + Math.random().toString(36).substring(2, 10).toUpperCase();
+  
+  const { data, error } = await supabase
+    .from('invitations')
+    .insert({
+      ...invitation,
+      invitation_code: code,
+      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const acceptInvitation = async (invitationId: string, userId: string) => {
+  const { data, error } = await supabase
+    .from('invitations')
+    .update({
+      status: 'ACCEPTED',
+      accepted_at: new Date().toISOString(),
+      accepted_by_user_id: userId,
+    })
+    .eq('id', invitationId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const revokeInvitation = async (invitationId: string) => {
+  const { data, error } = await supabase
+    .from('invitations')
+    .update({ status: 'REVOKED' })
+    .eq('id', invitationId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const processInvitation = async (invitationId: string, userId: string) => {
+  const invitation = await getInvitationByCode(invitationId);
+  if (!invitation || invitation.status !== 'PENDING') return null;
+  
+  // 1. Auto-approve coaching if set
+  if (invitation.auto_approve_coaching && invitation.auto_assign_product_id) {
+    await grantCoachingManually(
+      userId,
+      invitation.auto_assign_product_id,
+      invitation.invited_by,
+      'Einladung'
+    );
+  }
+  
+  // 2. Create coaching relationship for bonus
+  if (invitation.is_bonus_grant && invitation.bonus_product_id) {
+    const product = await supabase
+      .from('products')
+      .select('coach_id')
+      .eq('id', invitation.bonus_product_id)
+      .single();
+    
+    if (product.data) {
+      await createCoachingRelationship({
+        athlete_id: userId,
+        coach_id: product.data.coach_id,
+        product_id: invitation.bonus_product_id,
+        is_manual_grant: true,
+        grant_reason: invitation.bonus_reason || 'Einladungs-Bonus',
+      });
+    }
+  }
+  
+  // 3. Mark invitation as accepted
+  return acceptInvitation(invitation.id, userId);
+};

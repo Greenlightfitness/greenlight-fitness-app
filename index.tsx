@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import { registerServiceWorker } from './services/notifications';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -13,3 +14,14 @@ root.render(
     <App />
   </React.StrictMode>
 );
+
+// Register Service Worker for PWA
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    registerServiceWorker().then((registration) => {
+      if (registration) {
+        console.log('PWA ready');
+      }
+    });
+  });
+}

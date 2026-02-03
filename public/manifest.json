@@ -1,0 +1,43 @@
+{
+  "name": "Greenlight Fitness",
+  "short_name": "Greenlight",
+  "description": "Professionelles Personal Training und Coaching",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#00FF00",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "de",
+  "categories": ["fitness", "health", "sports"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-192x192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "Öffne dein Dashboard",
+      "url": "/"
+    },
+    {
+      "name": "Training",
+      "short_name": "Training",
+      "description": "Starte dein Training",
+      "url": "/planner"
+    }
+  ],
+  "related_applications": [],
+  "prefer_related_applications": false
+}

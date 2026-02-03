@@ -8,8 +8,9 @@ import Input from '../components/Input';
 import { 
   Package, Plus, Trash2, Edit, X, Image as ImageIcon, Upload, Loader2,
   ChevronLeft, DollarSign, Tag, FileText, Layers, CheckCircle, 
-  AlertCircle, Eye, EyeOff, Link2, Sparkles, Save, Info
+  AlertCircle, Eye, EyeOff, Link2, Sparkles, Save, Info, AlertTriangle, Scale
 } from 'lucide-react';
+import PriceChangeChecklist from '../components/PriceChangeChecklist';
 
 type ViewMode = 'list' | 'create' | 'edit';
 
@@ -44,6 +45,8 @@ const AdminProducts: React.FC = () => {
 
   const [currentFeature, setCurrentFeature] = useState('');
   const [creatingStripe, setCreatingStripe] = useState(false);
+  const [showPriceChangeWarning, setShowPriceChangeWarning] = useState(false);
+  const [pendingFormSubmit, setPendingFormSubmit] = useState<React.FormEvent | null>(null);
 
   useEffect(() => {
     if (user) fetchData();
@@ -199,6 +202,16 @@ const AdminProducts: React.FC = () => {
     }
   };
 
+  // Check if price or important details changed for existing subscribers
+  const hasSignificantChanges = (original: Product | null, updated: Partial<Product>) => {
+    if (!original) return false;
+    return (
+      original.price !== updated.price ||
+      original.interval !== updated.interval ||
+      original.title !== updated.title
+    );
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) {
@@ -220,8 +233,16 @@ const AdminProducts: React.FC = () => {
       return;
     }
 
+    // Show warning for significant changes to existing products
+    if (editingProduct && hasSignificantChanges(editingProduct, formData) && !showPriceChangeWarning) {
+      setPendingFormSubmit(e);
+      setShowPriceChangeWarning(true);
+      return;
+    }
+
     setSaving(true);
     setError(null);
+    setShowPriceChangeWarning(false);
     
     try {
       // 1. Try to create in Stripe first (optional - won't fail if Stripe not configured)
@@ -809,6 +830,45 @@ const AdminProducts: React.FC = () => {
           </Button>
         </div>
       </form>
+
+      {/* Price Change Checklist Modal */}
+      {showPriceChangeWarning && editingProduct && (
+        <PriceChangeChecklist
+          isOpen={showPriceChangeWarning}
+          onClose={() => {
+            setShowPriceChangeWarning(false);
+            setPendingFormSubmit(null);
+          }}
+          onConfirm={() => {
+            if (pendingFormSubmit) {
+              handleSave(pendingFormSubmit);
+            }
+          }}
+          changeType={
+            editingProduct.price !== formData.price 
+              ? (Number(formData.price) > Number(editingProduct.price) ? 'price_increase' : 'price_decrease')
+              : editingProduct.interval !== formData.interval
+                ? 'interval_change'
+                : 'name_change'
+          }
+          oldValue={
+            editingProduct.price !== formData.price 
+              ? `${editingProduct.price} ${editingProduct.currency}`
+              : editingProduct.interval !== formData.interval
+                ? editingProduct.interval || ''
+                : editingProduct.title || ''
+          }
+          newValue={
+            editingProduct.price !== formData.price 
+              ? `${formData.price} ${formData.currency}`
+              : editingProduct.interval !== formData.interval
+                ? formData.interval || ''
+                : formData.title || ''
+          }
+          productTitle={editingProduct.title || ''}
+          hasActiveSubscriptions={formData.interval !== 'onetime'}
+        />
+      )}
     </div>
   );
 };

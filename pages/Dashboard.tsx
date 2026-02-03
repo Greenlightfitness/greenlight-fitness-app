@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { supabase, getAssignedPlans, updateAssignedPlan, getAttentions, getActivities, getAppointments, createAttention, createActivity, getPlans, getWeeksByPlan, getSessionsByWeek } from '../services/supabase';
+import { supabase, getAssignedPlans, updateAssignedPlan, getAttentions, getActivities, getAppointments, createAttention, createActivity, getPlans, getWeeksByPlan, getSessionsByWeek, getPendingCoachingApprovals, approveCoaching, rejectCoaching, updateAppointment, getActiveCoachingRelationships, getAllAthletes } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { UserRole, AssignedPlan, AssignedSession, WorkoutSet, Attention, ActivityFeedItem, AttentionType, AttentionSeverity, Appointment, TrainingPlan, TrainingWeek, TrainingSession } from '../types';
-import { Clock, CheckCircle2, Circle, ChevronLeft, ChevronRight, Calendar as CalendarDays, Flame, Bell, Activity, ChevronDown, ChevronUp, ExternalLink, Zap, Layers, Repeat, Play, Square, Timer, Calculator, Dumbbell, AlertCircle, TrendingUp, User, Moon, Smile, X, MessageSquare, AlertTriangle, Phone, Plus, List } from 'lucide-react';
+import { UserRole, AssignedPlan, AssignedSession, WorkoutSet, Attention, ActivityFeedItem, AttentionType, AttentionSeverity, Appointment, TrainingPlan, TrainingWeek, TrainingSession, CoachingApproval } from '../types';
+import { Clock, CheckCircle2, Circle, ChevronLeft, ChevronRight, Calendar as CalendarDays, Flame, Bell, Activity, ChevronDown, ChevronUp, ExternalLink, Zap, Layers, Repeat, Play, Square, Timer, Calculator, Dumbbell, AlertCircle, TrendingUp, User, Moon, Smile, X, MessageSquare, AlertTriangle, Phone, Plus, List, UserCheck, UserX } from 'lucide-react';
 import Button from '../components/Button';
 import Input from '../components/Input';
 import ProfileSetupWizard from '../components/ProfileSetupWizard';
@@ -250,6 +250,10 @@ const Dashboard: React.FC = () => {
   const [activityFeed, setActivityFeed] = useState<ActivityFeedItem[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(null);
+  const [coachingApprovals, setCoachingApprovals] = useState<any[]>([]);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [myAthletes, setMyAthletes] = useState<any[]>([]);
+  const [allAthletes, setAllAthletes] = useState<any[]>([]);
   
   // UI State
   const [expandedBlockIds, setExpandedBlockIds] = useState<Set<string>>(new Set());
@@ -351,8 +355,117 @@ const Dashboard: React.FC = () => {
               createdAt: d.created_at,
             } as Appointment)));
 
+          // Fetch Pending Coaching Approvals
+          if (user) {
+              const approvals = await getPendingCoachingApprovals(user.id);
+              setCoachingApprovals(approvals);
+          }
+
+          // Fetch My Athletes (Coach's assigned athletes)
+          if (user) {
+              const relationships = await getActiveCoachingRelationships(user.id);
+              setMyAthletes(relationships);
+          }
+
+          // Admin: Fetch all athletes
+          if (userProfile?.role === UserRole.ADMIN) {
+              const athletes = await getAllAthletes();
+              setAllAthletes(athletes);
+          }
+
       } catch (error) {
           console.error("Error fetching coach dashboard:", error);
+      }
+  };
+
+  // Handle coaching approval
+  const handleApproveCoaching = async (approvalId: string) => {
+      if (!user || !userProfile) return;
+      setApprovingId(approvalId);
+      try {
+          const result = await approveCoaching(approvalId, user.id);
+          
+          // Send approval email to athlete
+          const approval = coachingApprovals.find(a => a.id === approvalId);
+          if (approval) {
+            try {
+              await fetch('/api/send-coaching-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  type: 'approved',
+                  data: {
+                    athleteName: approval.athleteName || 'Athlet',
+                    athleteEmail: approval.athleteEmail,
+                    coachName: userProfile.nickname || userProfile.firstName || 'Coach',
+                    productName: approval.productName || 'Coaching-Paket',
+                  }
+                })
+              });
+              console.log('✅ Approval email sent');
+            } catch (emailError) {
+              console.error('Email send error:', emailError);
+            }
+          }
+          
+          // Refresh data
+          await fetchCoachDashboardData();
+      } catch (error) {
+          console.error("Error approving coaching:", error);
+          alert("Fehler beim Freischalten.");
+      } finally {
+          setApprovingId(null);
+      }
+  };
+
+  // Handle coaching rejection
+  const handleRejectCoaching = async (approvalId: string) => {
+      if (!user || !userProfile) return;
+      const reason = prompt("Grund für die Ablehnung (optional):");
+      setApprovingId(approvalId);
+      try {
+          await rejectCoaching(approvalId, reason || "Keine Angabe");
+          
+          // Send rejection email to athlete
+          const approval = coachingApprovals.find(a => a.id === approvalId);
+          if (approval) {
+            try {
+              await fetch('/api/send-coaching-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  type: 'rejected',
+                  data: {
+                    athleteName: approval.athleteName || 'Athlet',
+                    athleteEmail: approval.athleteEmail,
+                    coachName: userProfile.nickname || userProfile.firstName || 'Coach',
+                    productName: approval.productName || 'Coaching-Paket',
+                    reason: reason || 'Keine Angabe',
+                  }
+                })
+              });
+              console.log('✅ Rejection email sent');
+            } catch (emailError) {
+              console.error('Email send error:', emailError);
+            }
+          }
+          
+          await fetchCoachDashboardData();
+      } catch (error) {
+          console.error("Error rejecting coaching:", error);
+          alert("Fehler beim Ablehnen.");
+      } finally {
+          setApprovingId(null);
+      }
+  };
+
+  // Mark appointment as completed
+  const handleCompleteAppointment = async (appointmentId: string) => {
+      try {
+          await updateAppointment(appointmentId, { status: 'COMPLETED' });
+          await fetchCoachDashboardData();
+      } catch (error) {
+          console.error("Error completing appointment:", error);
       }
   };
 
@@ -748,20 +861,78 @@ const Dashboard: React.FC = () => {
                         <Activity size={18} className="text-[#00FF00]" /> Recent Activity
                     </h3>
                     <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
+                        {/* Coaching Approvals - Athletes waiting for approval */}
+                        {coachingApprovals.length > 0 && (
+                            <div className="mb-4 space-y-2">
+                                <h4 className="text-xs text-[#00FF00] uppercase font-bold tracking-wider flex items-center gap-2">
+                                    <UserCheck size={14} /> Coaching-Anfragen freischalten
+                                </h4>
+                                {coachingApprovals.map(approval => (
+                                    <div key={approval.id} className="p-4 bg-[#00FF00]/5 border border-[#00FF00]/30 rounded-xl">
+                                        <div className="flex items-start justify-between gap-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-full bg-[#00FF00]/20 text-[#00FF00] flex items-center justify-center font-bold">
+                                                    {(approval.athlete?.first_name?.[0] || approval.athlete?.email?.[0] || '?').toUpperCase()}
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-bold text-white">
+                                                        {approval.athlete?.first_name ? `${approval.athlete.first_name} ${approval.athlete.last_name || ''}` : approval.athlete?.email}
+                                                    </p>
+                                                    <p className="text-xs text-zinc-400">{approval.product?.title}</p>
+                                                    {approval.consultation_completed ? (
+                                                        <span className="text-xs text-[#00FF00] flex items-center gap-1 mt-1">
+                                                            <CheckCircle2 size={12} /> Gespräch abgeschlossen
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-xs text-yellow-500 flex items-center gap-1 mt-1">
+                                                            <Clock size={12} /> Gespräch ausstehend
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <button 
+                                                    onClick={() => handleApproveCoaching(approval.id)}
+                                                    disabled={approvingId === approval.id}
+                                                    className="p-2 bg-[#00FF00] text-black rounded-lg hover:bg-[#00FF00]/80 transition-colors disabled:opacity-50"
+                                                    title="Freischalten"
+                                                >
+                                                    <UserCheck size={16} />
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleRejectCoaching(approval.id)}
+                                                    disabled={approvingId === approval.id}
+                                                    className="p-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors disabled:opacity-50"
+                                                    title="Ablehnen"
+                                                >
+                                                    <UserX size={16} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
                         {/* Show Appointments in feed as well */}
                         {appointments.length > 0 && (
                             <div className="mb-4 space-y-2">
-                                <h4 className="text-xs text-zinc-500 uppercase font-bold tracking-wider">New Appointments</h4>
+                                <h4 className="text-xs text-zinc-500 uppercase font-bold tracking-wider">Neue Termin-Anfragen</h4>
                                 {appointments.map(app => (
                                     <div key={app.id} className="flex gap-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-xl items-center">
                                         <div className="w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold">
                                             <Phone size={14} />
                                         </div>
                                         <div className="flex-1">
-                                            <p className="text-sm text-white"><span className="font-bold">{app.athleteName}</span> requested a call.</p>
-                                            <p className="text-xs text-zinc-400">{app.date} at {app.time}</p>
+                                            <p className="text-sm text-white"><span className="font-bold">{app.athleteName}</span> möchte ein Gespräch.</p>
+                                            <p className="text-xs text-zinc-400">{app.date} um {app.time}</p>
                                         </div>
-                                        <button className="text-xs bg-blue-500 text-white px-3 py-1 rounded font-bold hover:bg-blue-600 transition-colors">Review</button>
+                                        <button 
+                                            onClick={() => handleCompleteAppointment(app.id)}
+                                            className="text-xs bg-[#00FF00] text-black px-3 py-1.5 rounded font-bold hover:bg-[#00FF00]/80 transition-colors"
+                                        >
+                                            Abgeschlossen
+                                        </button>
                                     </div>
                                 ))}
                             </div>
@@ -787,6 +958,94 @@ const Dashboard: React.FC = () => {
                             ))
                         )}
                     </div>
+                </div>
+            </div>
+
+            {/* MY ATHLETES Section - Coach sees assigned athletes, Admin sees all */}
+            <div className="bg-[#1C1C1E] border border-zinc-800 rounded-[2rem] p-6">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                        <User size={18} className="text-[#00FF00]" /> 
+                        {userProfile?.role === UserRole.ADMIN ? 'Alle Athleten' : 'Meine Athleten'}
+                    </h3>
+                    <span className="text-xs bg-zinc-800 px-2 py-1 rounded text-zinc-400">
+                        {userProfile?.role === UserRole.ADMIN ? allAthletes.length : myAthletes.length} Athleten
+                    </span>
+                </div>
+
+                {/* Athletes Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {(userProfile?.role === UserRole.ADMIN ? allAthletes : myAthletes).length === 0 ? (
+                        <div className="col-span-full text-center py-8 text-zinc-500">
+                            <User size={32} className="mx-auto mb-2 text-zinc-700" />
+                            <p className="text-sm">
+                                {userProfile?.role === UserRole.ADMIN 
+                                    ? 'Noch keine Athleten registriert.' 
+                                    : 'Du hast noch keine zugeordneten Athleten.'}
+                            </p>
+                        </div>
+                    ) : (
+                        (userProfile?.role === UserRole.ADMIN ? allAthletes : myAthletes).map((item: any) => {
+                            // For Admin: item is athlete profile directly
+                            // For Coach: item is coaching_relationship with nested athlete
+                            const athlete = userProfile?.role === UserRole.ADMIN ? item : item.athlete;
+                            const relationshipInfo = userProfile?.role === UserRole.ADMIN ? null : item;
+                            
+                            if (!athlete) return null;
+                            
+                            return (
+                                <div 
+                                    key={athlete.id}
+                                    onClick={() => setSelectedAthleteId(athlete.id)}
+                                    className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-4 hover:border-[#00FF00]/50 hover:bg-zinc-900 transition-all cursor-pointer group"
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-12 h-12 rounded-full bg-[#00FF00]/10 border border-[#00FF00]/20 flex items-center justify-center text-[#00FF00] font-bold text-lg group-hover:scale-110 transition-transform">
+                                            {(athlete.first_name?.[0] || athlete.email?.[0] || '?').toUpperCase()}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-bold text-white truncate group-hover:text-[#00FF00] transition-colors">
+                                                {athlete.first_name 
+                                                    ? `${athlete.first_name} ${athlete.last_name || ''}` 
+                                                    : athlete.email?.split('@')[0]}
+                                            </p>
+                                            <p className="text-xs text-zinc-500 truncate">{athlete.email}</p>
+                                            {relationshipInfo && (
+                                                <p className="text-[10px] text-zinc-600 mt-1">
+                                                    Seit {new Date(relationshipInfo.started_at).toLocaleDateString('de-DE')}
+                                                </p>
+                                            )}
+                                        </div>
+                                        <ChevronRight size={16} className="text-zinc-600 group-hover:text-[#00FF00] transition-colors" />
+                                    </div>
+                                    
+                                    {/* Quick Stats Preview */}
+                                    {(athlete.weight || athlete.height) && (
+                                        <div className="flex gap-3 mt-3 pt-3 border-t border-zinc-800">
+                                            {athlete.height && (
+                                                <div className="text-center">
+                                                    <p className="text-[10px] text-zinc-500">Größe</p>
+                                                    <p className="text-xs text-white font-bold">{athlete.height} cm</p>
+                                                </div>
+                                            )}
+                                            {athlete.weight && (
+                                                <div className="text-center">
+                                                    <p className="text-[10px] text-zinc-500">Gewicht</p>
+                                                    <p className="text-xs text-white font-bold">{athlete.weight} kg</p>
+                                                </div>
+                                            )}
+                                            {athlete.body_fat && (
+                                                <div className="text-center">
+                                                    <p className="text-[10px] text-zinc-500">KFA</p>
+                                                    <p className="text-xs text-[#00FF00] font-bold">{athlete.body_fat}%</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })
+                    )}
                 </div>
             </div>
         </div>

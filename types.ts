@@ -75,18 +75,30 @@ export interface Appointment {
 
 // --- EXERCISES ---
 
+// Exercise Tracking Types - defines what metrics this exercise uses
+export type ExerciseTrackingType = 
+  | 'WEIGHT_REPS'     // Standard: Weight (kg) + Reps (e.g. Bench Press)
+  | 'BODYWEIGHT_REPS' // No weight: Just Reps (e.g. Pull-ups, Push-ups)
+  | 'TIME'            // Duration: Time in seconds/minutes (e.g. Plank, Run)
+  | 'DISTANCE'        // Distance: Meters/km (e.g. Running, Rowing)
+  | 'TIME_DISTANCE'   // Both: Time + Distance (e.g. 5km Run)
+  | 'REPS_ONLY';      // Just counting reps (e.g. Jumping Jacks)
+
 export interface Exercise {
   id: string;
-  authorId?: string; // New: Who created this?
+  authorId?: string; // Who created this exercise
+  authorRole?: 'ADMIN' | 'COACH' | 'ATHLETE'; // Role of creator
   name: string;
   description: string;
   category: string;
   difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
+  trackingType?: ExerciseTrackingType; // NEW: What type of exercise is this?
   videoUrl?: string;
   thumbnailUrl?: string; // AI Generated Illustration (16:9)
   animationUrl?: string; // Deprecated: AI Generated Video URL (Veo)
   sequenceUrl?: string; // New: AI Generated Vertical Sequence Image (9:16)
   isArchived?: boolean;
+  isPublic?: boolean; // Can other users see/use this exercise?
   // Template configurations
   defaultSets?: WorkoutSet[];
   defaultVisibleMetrics?: string[];
@@ -310,6 +322,102 @@ export interface AssignedPlan {
     completedSessions?: number;      // Progress tracking
     totalSessions?: number;
     progressPercentage?: number;
+}
+
+// --- COACHING APPROVALS (Vorabgespräch + Freischaltung) ---
+
+export interface CoachingApproval {
+  id: string;
+  athleteId: string;
+  productId: string;
+  consultationCompleted: boolean;
+  consultationAppointmentId?: string;
+  approved: boolean;
+  approvedBy?: string;
+  approvedAt?: string;
+  rejectedAt?: string;
+  rejectionReason?: string;
+  isManualGrant: boolean;
+  grantReason?: string;
+  createdAt: any;
+}
+
+// --- COACHING RELATIONSHIPS (Aktive 1:1 Beziehungen) ---
+
+export interface CoachingRelationship {
+  id: string;
+  athleteId: string;
+  coachId: string;
+  productId?: string;
+  status: 'ACTIVE' | 'PAUSED' | 'ENDED';
+  startedAt: string;
+  endedAt?: string;
+  stripeSubscriptionId?: string;
+  currentPeriodEnd?: string;
+  isManualGrant: boolean;
+  grantReason?: string;
+  createdAt: any;
+}
+
+// --- GOALS (Zielvorhaben) ---
+
+export type GoalType = 'STRENGTH' | 'ENDURANCE' | 'BODY_COMP' | 'CONSISTENCY' | 'CUSTOM';
+export type GoalStatus = 'ACTIVE' | 'ACHIEVED' | 'FAILED' | 'PAUSED';
+
+export interface Goal {
+  id: string;
+  athleteId: string;
+  coachId?: string;
+  title: string;
+  description?: string;
+  goalType: GoalType;
+  targetValue: number;
+  targetUnit: string;
+  startValue?: number;
+  currentValue: number;
+  startDate: string;
+  targetDate: string;
+  exerciseId?: string;
+  metricKey?: string;
+  status: GoalStatus;
+  achievedAt?: string;
+  createdAt: any;
+  // Computed
+  progressPercentage?: number;
+}
+
+export interface GoalCheckpoint {
+  id: string;
+  goalId: string;
+  recordedAt: string;
+  value: number;
+  notes?: string;
+  source: 'WORKOUT' | 'MANUAL' | 'PROFILE_UPDATE';
+  createdAt: any;
+}
+
+// --- INVITATIONS (E-Mail Einladungen) ---
+
+export type InvitationStatus = 'PENDING' | 'ACCEPTED' | 'EXPIRED' | 'REVOKED';
+
+export interface Invitation {
+  id: string;
+  email: string;
+  invitedBy: string;
+  invitationCode: string;
+  personalMessage?: string;
+  role: 'ATHLETE' | 'COACH';
+  autoApproveCoaching: boolean;
+  autoAssignProductId?: string;
+  autoAssignPlanId?: string;
+  isBonusGrant: boolean;
+  bonusProductId?: string;
+  bonusReason?: string;
+  status: InvitationStatus;
+  expiresAt?: string;
+  acceptedAt?: string;
+  acceptedByUserId?: string;
+  createdAt: any;
 }
 
 // Initial seed data for the request

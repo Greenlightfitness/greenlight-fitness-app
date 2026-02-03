@@ -4,6 +4,9 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ResetPassword from './pages/ResetPassword';
+import VerifyEmail from './pages/VerifyEmail';
+import AcceptInvite from './pages/AcceptInvite';
 import Dashboard from './pages/Dashboard';
 import Exercises from './pages/Exercises';
 import Planner from './pages/Planner';
@@ -14,6 +17,7 @@ import Profile from './pages/Profile';
 import Chat from './pages/Chat';
 import Legal from './pages/Legal';
 import Layout from './components/Layout';
+import PWAInstallPrompt from './components/PWAInstallPrompt';
 import { UserRole } from './types';
 
 // Protected Route Wrapper
@@ -51,9 +55,13 @@ const App: React.FC = () => {
     <AuthProvider>
       <LanguageProvider>
         <BrowserRouter>
+          <PWAInstallPrompt />
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/verify-email" element={<VerifyEmail />} />
+            <Route path="/invite/:code" element={<AcceptInvite />} />
             
             {/* Legal Pages (Public) */}
             <Route path="/legal/imprint" element={<Legal />} />

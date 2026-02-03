@@ -3,17 +3,20 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { signOut, requestDataDeletion, requestDataExport, exportUserData, createAuditLog, getUserPurchases, getUserSubscriptions, getStripeCustomerId, getAssignedPlans } from '../services/supabase';
-import { User, Settings, LogOut, Globe, Calculator, UserCog, Mail, Shield, Download, Trash2, FileText, AlertTriangle, RefreshCw, CreditCard, Receipt, ExternalLink } from 'lucide-react';
+import { User, Settings, LogOut, Globe, Calculator, UserCog, Mail, Shield, Download, Trash2, FileText, AlertTriangle, RefreshCw, CreditCard, Receipt, ExternalLink, Heart } from 'lucide-react';
 import { UserRole } from '../types';
 import Button from '../components/Button';
 import CalculatorsModal from '../components/CalculatorsModal';
+import HealthDataModal from '../components/HealthDataModal';
 import ProfileSetupWizard from '../components/ProfileSetupWizard';
+import NotificationSettings from '../components/NotificationSettings';
 
 const Profile: React.FC = () => {
   const { userProfile, user, activeRole, setActiveRole, canSwitchRole } = useAuth();
   const { t, language, setLanguage } = useLanguage();
   const navigate = useNavigate();
   const [showTools, setShowTools] = useState(false);
+  const [showHealthData, setShowHealthData] = useState(false);
   const [showEditWizard, setShowEditWizard] = useState(false);
   const [showPrivacySettings, setShowPrivacySettings] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
@@ -166,6 +169,7 @@ const Profile: React.FC = () => {
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
       <CalculatorsModal isOpen={showTools} onClose={() => setShowTools(false)} />
+      <HealthDataModal isOpen={showHealthData} onClose={() => setShowHealthData(false)} />
 
       {/* Header Profile Card */}
       <div className="bg-gradient-to-br from-[#1C1C1E] to-black border border-zinc-800 rounded-[2rem] p-6 text-center relative overflow-hidden">
@@ -193,15 +197,15 @@ const Profile: React.FC = () => {
       {/* Main Actions */}
       <div className="grid gap-4">
           <button 
-            onClick={() => setShowTools(true)}
+            onClick={() => setShowHealthData(true)}
             className="flex items-center gap-4 p-5 bg-[#1C1C1E] border border-zinc-800 rounded-2xl hover:bg-zinc-900 transition-all group"
           >
               <div className="w-12 h-12 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-[#00FF00] group-hover:scale-110 transition-transform">
-                  <Calculator size={24} />
+                  <Heart size={24} />
               </div>
               <div className="text-left flex-1">
-                  <h3 className="text-white font-bold text-lg">{t('tools.title')}</h3>
-                  <p className="text-zinc-500 text-sm">1RM, FFMI, Macros, Zones</p>
+                  <h3 className="text-white font-bold text-lg">Gesundheitsdaten</h3>
+                  <p className="text-zinc-500 text-sm">Biometrie, FFMI, TDEE, HR-Zonen</p>
               </div>
           </button>
 
@@ -257,6 +261,12 @@ const Profile: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Notifications */}
+      <div className="space-y-4 pt-4">
+        <h3 className="text-zinc-500 text-xs font-bold uppercase tracking-widest px-2">Benachrichtigungen</h3>
+        <NotificationSettings />
+      </div>
 
       {/* Membership & Subscriptions - Always visible for athletes */}
       <div className="space-y-4 pt-4">

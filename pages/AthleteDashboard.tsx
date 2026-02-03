@@ -23,6 +23,7 @@ import {
   Repeat
 } from 'lucide-react';
 import Button from '../components/Button';
+import GoalWidget from '../components/GoalWidget';
 
 interface WeeklyStats {
   weekStart: string;
@@ -330,8 +331,12 @@ const AthleteDashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* Goals Widget - Now at top! */}
+      <div className="px-4 mt-4">
+        <GoalWidget compact />
+      </div>
       
-      {/* Daily Wellness Card - Premium Style */}
+      {/* Daily Wellness Card - Premium Style with Week Chart */}
       <div className="px-4 mt-4">
         <div className="bg-gradient-to-r from-purple-500/10 to-transparent border border-purple-500/20 rounded-2xl p-4">
           <div className="flex items-center justify-between">
@@ -341,34 +346,78 @@ const AthleteDashboard: React.FC = () => {
               </div>
               <div>
                 <p className="text-white font-bold">Daily Wellness</p>
-                <p className="text-sm text-zinc-400">Wie fühlst du dich heute?</p>
+                <p className="text-sm text-zinc-400">
+                  {todayWellness ? 'Heute eingetragen' : 'Wie fühlst du dich heute?'}
+                </p>
               </div>
             </div>
-            {!todayWellness && (
+            {!todayWellness ? (
               <button 
                 onClick={() => setShowWellnessModal(true)}
                 className="px-4 py-2 bg-purple-500 text-white font-bold rounded-xl text-sm flex items-center shadow-[0_0_15px_rgba(168,85,247,0.3)] hover:shadow-[0_0_20px_rgba(168,85,247,0.5)] transition-all"
               >
                 <Plus size={16} className="mr-1" /> Eintragen
               </button>
+            ) : (
+              <button 
+                onClick={() => setShowWellnessModal(true)}
+                className="p-2 bg-purple-500/20 border border-purple-500/30 rounded-xl text-purple-400 hover:bg-purple-500/30 transition-all"
+              >
+                <Plus size={16} />
+              </button>
             )}
           </div>
 
+          {/* Wellness Week Chart */}
+          {wellnessData.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-purple-500/10">
+              <p className="text-xs text-zinc-500 mb-2">Letzte 7 Tage</p>
+              <div className="flex items-end gap-1 h-16">
+                {(() => {
+                  // Get last 7 days of wellness data
+                  const last7Days = [];
+                  for (let i = 6; i >= 0; i--) {
+                    const date = new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                    const dayData = wellnessData.find(w => w.date === date);
+                    const avgScore = dayData 
+                      ? Math.round(((dayData.sleepQuality + dayData.energyLevel + dayData.mood + (6 - dayData.stressLevel)) / 4) * 20)
+                      : 0;
+                    last7Days.push({ date, score: avgScore, hasData: !!dayData });
+                  }
+                  const maxScore = Math.max(...last7Days.map(d => d.score), 1);
+                  
+                  return last7Days.map((day, idx) => (
+                    <div key={idx} className="flex-1 flex flex-col items-center gap-1">
+                      <div 
+                        className={`w-full rounded-t transition-all ${day.hasData ? 'bg-purple-500' : 'bg-zinc-800'}`}
+                        style={{ height: `${day.hasData ? (day.score / maxScore) * 100 : 10}%`, minHeight: '4px' }}
+                      />
+                      <span className="text-[9px] text-zinc-600">
+                        {['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'][new Date(day.date).getDay()]}
+                      </span>
+                    </div>
+                  ));
+                })()}
+              </div>
+            </div>
+          )}
+
+          {/* Today's Wellness Details */}
           {todayWellness && (
-            <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-purple-500/10">
+            <div className="grid grid-cols-3 gap-3 mt-3 pt-3 border-t border-purple-500/10">
               <div className="text-center">
-                <Moon size={16} className="mx-auto text-blue-400 mb-1" />
-                <p className="text-xs text-zinc-500">Schlaf</p>
+                <Moon size={14} className="mx-auto text-blue-400 mb-1" />
+                <p className="text-[10px] text-zinc-500">Schlaf</p>
                 <WellnessDots value={todayWellness.sleepQuality} />
               </div>
               <div className="text-center">
-                <Battery size={16} className="mx-auto text-yellow-400 mb-1" />
-                <p className="text-xs text-zinc-500">Energie</p>
+                <Battery size={14} className="mx-auto text-yellow-400 mb-1" />
+                <p className="text-[10px] text-zinc-500">Energie</p>
                 <WellnessDots value={todayWellness.energyLevel} />
               </div>
               <div className="text-center">
-                <Activity size={16} className="mx-auto text-red-400 mb-1" />
-                <p className="text-xs text-zinc-500">Muskelkater</p>
+                <Activity size={14} className="mx-auto text-red-400 mb-1" />
+                <p className="text-[10px] text-zinc-500">Muskelkater</p>
                 <WellnessDots value={6 - todayWellness.muscleSoreness} />
               </div>
             </div>
