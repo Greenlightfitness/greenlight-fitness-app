@@ -1189,6 +1189,27 @@ export const getAthletesWithCoaching = async () => {
   return data || [];
 };
 
+// CRM: Get ALL users with coaching relationships + coached athletes
+export const getAllUsersForCRM = async () => {
+  // Fetch all profiles with their coaching relationships as athlete
+  const { data, error } = await supabase
+    .from('profiles')
+    .select(`
+      id, email, first_name, last_name, display_name, role, created_at,
+      coaching_as_athlete:coaching_relationships!coaching_relationships_athlete_id_fkey(
+        id, coach_id, product_id, status, started_at,
+        coach:profiles!coaching_relationships_coach_id_fkey(id, email, first_name, last_name, role)
+      ),
+      coaching_as_coach:coaching_relationships!coaching_relationships_coach_id_fkey(
+        id, athlete_id, product_id, status, started_at,
+        athlete:profiles!coaching_relationships_athlete_id_fkey(id, email, first_name, last_name, role)
+      )
+    `)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+};
+
 // Assign athlete to coach (Admin function)
 export const assignAthleteToCoach = async (athleteId: string, coachId: string, reason?: string) => {
   const { data, error } = await supabase

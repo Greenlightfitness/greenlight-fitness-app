@@ -42,7 +42,7 @@ const Layout: React.FC = () => {
 
   // Add consolidated CRM for Admins (merged Users + Assignments)
   if (isAdmin) {
-      desktopNavItems.push({ label: 'CRM', path: '/admin/assignments', icon: <Users size={20} /> });
+      desktopNavItems.push({ label: 'CRM', path: '/admin/crm', icon: <Users size={20} /> });
   }
 
   const handleAthleteNav = (view: 'hub' | 'training') => {
