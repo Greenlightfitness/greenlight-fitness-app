@@ -16,8 +16,10 @@ import ConfirmActionModal, { ConfirmActionConfig } from '../components/ConfirmAc
 type ViewMode = 'list' | 'create' | 'edit';
 
 const AdminProducts: React.FC = () => {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const { t } = useLanguage();
+  const isAdmin = userProfile?.role === 'ADMIN';
+  const isReadOnly = !isAdmin;
   const [products, setProducts] = useState<Product[]>([]);
   const [plans, setPlans] = useState<TrainingPlan[]>([]);
   const [loading, setLoading] = useState(true);
@@ -463,13 +465,15 @@ const AdminProducts: React.FC = () => {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-extrabold text-white flex items-center gap-3">
-              Produkte <span className="text-xs bg-[#00FF00]/10 text-[#00FF00] px-2 py-1 rounded border border-[#00FF00]/20">Admin</span>
+              Produkte <span className={`text-xs px-2 py-1 rounded border ${isAdmin ? 'bg-[#00FF00]/10 text-[#00FF00] border-[#00FF00]/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'}`}>{isAdmin ? 'Admin' : 'Ansicht'}</span>
             </h1>
-            <p className="text-zinc-400 mt-2">Verwalte deine Shop-Produkte und Trainingspläne</p>
+            <p className="text-zinc-400 mt-2">{isAdmin ? 'Verwalte deine Shop-Produkte und Trainingspläne' : 'Übersicht aller aktiven Produkte'}</p>
           </div>
-          <Button onClick={handleCreate} className="flex items-center gap-2 shadow-lg shadow-[#00FF00]/10">
-            <Plus size={20} /> Neues Produkt
-          </Button>
+          {isAdmin && (
+            <Button onClick={handleCreate} className="flex items-center gap-2 shadow-lg shadow-[#00FF00]/10">
+              <Plus size={20} /> Neues Produkt
+            </Button>
+          )}
         </div>
 
         {/* Product Grid */}
@@ -488,7 +492,7 @@ const AdminProducts: React.FC = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {products.map(product => (
+            {(isReadOnly ? products.filter(p => p.isActive) : products).map(product => (
               <div key={product.id} className={`bg-[#1C1C1E] border rounded-2xl overflow-hidden group transition-all shadow-lg hover:-translate-y-1 ${
                 product.isActive ? 'border-zinc-800 hover:border-[#00FF00]/30' : 'border-zinc-800/50 opacity-60'
               }`}>
@@ -510,14 +514,16 @@ const AdminProducts: React.FC = () => {
                       </span>
                     )}
                   </div>
-                  <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => handleEdit(product)} className="bg-black/80 p-2 rounded-lg text-white hover:text-[#00FF00] transition-colors">
-                      <Edit size={16} />
-                    </button>
-                    <button onClick={() => handleDelete(product.id)} className="bg-black/80 p-2 rounded-lg text-white hover:text-red-500 transition-colors">
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
+                  {isAdmin && (
+                    <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => handleEdit(product)} className="bg-black/80 p-2 rounded-lg text-white hover:text-[#00FF00] transition-colors">
+                        <Edit size={16} />
+                      </button>
+                      <button onClick={() => handleDelete(product.id)} className="bg-black/80 p-2 rounded-lg text-white hover:text-red-500 transition-colors">
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className="p-5">
                   <h3 className="text-lg font-bold text-white mb-2 line-clamp-1">{product.title}</h3>
@@ -529,27 +535,33 @@ const AdminProducts: React.FC = () => {
                   </div>
                   <p className="text-zinc-500 text-sm line-clamp-2 mb-4">{product.description}</p>
 
-                  {/* Always-visible status toggle */}
-                  <button
-                    onClick={() => handleToggleActive(product)}
-                    className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wide transition-all ${
-                      product.isActive
-                        ? 'bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 hover:border-amber-500/40'
-                        : 'bg-[#00FF00]/10 border border-[#00FF00]/20 text-[#00FF00] hover:bg-[#00FF00]/20 hover:border-[#00FF00]/40'
-                    }`}
-                  >
-                    {product.isActive ? (
-                      <>
-                        <EyeOff size={14} />
-                        Produkt deaktivieren
-                      </>
-                    ) : (
-                      <>
-                        <Eye size={14} />
-                        Produkt aktivieren
-                      </>
-                    )}
-                  </button>
+                  {/* Status toggle (admin only) / Status badge (coach) */}
+                  {isAdmin ? (
+                    <button
+                      onClick={() => handleToggleActive(product)}
+                      className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wide transition-all ${
+                        product.isActive
+                          ? 'bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 hover:border-amber-500/40'
+                          : 'bg-[#00FF00]/10 border border-[#00FF00]/20 text-[#00FF00] hover:bg-[#00FF00]/20 hover:border-[#00FF00]/40'
+                      }`}
+                    >
+                      {product.isActive ? (
+                        <>
+                          <EyeOff size={14} />
+                          Produkt deaktivieren
+                        </>
+                      ) : (
+                        <>
+                          <Eye size={14} />
+                          Produkt aktivieren
+                        </>
+                      )}
+                    </button>
+                  ) : (
+                    <div className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wide bg-[#00FF00]/10 border border-[#00FF00]/20 text-[#00FF00]">
+                      <Eye size={14} /> Aktiv
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

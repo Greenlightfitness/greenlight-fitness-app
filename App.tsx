@@ -113,17 +113,17 @@ const App: React.FC = () => {
                 <Route path="/planner" element={<Planner />} />
               </Route>
 
-              {/* Coach & Admin: Calendar + Chat */}
+              {/* Coach & Admin: Calendar, Chat, Products (read-only for Coach), CRM */}
               <Route element={<ProtectedRoute allowedRoles={[UserRole.COACH, UserRole.ADMIN]} />}>
                 <Route path="/calendar" element={<CoachCalendarSetup />} />
                 <Route path="/coach/chat" element={<CoachChatPage />} />
+                <Route path="/admin/products" element={<AdminProducts />} />
+                <Route path="/admin/crm" element={<AdminCRM />} />
               </Route>
 
-              {/* Admin Only (Products & Users) */}
+              {/* Admin Only (User Management) */}
               <Route element={<ProtectedRoute allowedRoles={[UserRole.ADMIN]} />}>
-                <Route path="/admin/products" element={<AdminProducts />} />
                 <Route path="/admin/users" element={<AdminUsers />} />
-                <Route path="/admin/crm" element={<AdminCRM />} />
               </Route>
             </Route>
 

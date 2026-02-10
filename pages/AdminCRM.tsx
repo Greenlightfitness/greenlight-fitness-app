@@ -64,8 +64,10 @@ type SortField = 'name' | 'email' | 'created_at' | 'role';
 type SortDir = 'asc' | 'desc';
 
 const AdminCRM: React.FC = () => {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const { t } = useLanguage();
+  const isAdmin = userProfile?.role === 'ADMIN';
+  const isCoach = userProfile?.role === 'COACH';
 
   const [allUsers, setAllUsers] = useState<CRMUser[]>([]);
   const [coaches, setCoaches] = useState<any[]>([]);
@@ -172,8 +174,27 @@ const AdminCRM: React.FC = () => {
     return u.assigned_plans || [];
   };
 
+  // --- Pre-filter for Coaches (only own athletes + coaches + admins) ---
+  const visibleUsers = isCoach && user ? allUsers.filter(u => {
+    // Always show the coach themselves
+    if (u.id === user.id) return true;
+    // Show their own athletes
+    if (u.role === 'ATHLETE') {
+      const isMyAthlete = u.coaching_as_athlete?.some(r => r.coach_id === user.id && r.status === 'ACTIVE');
+      return !!isMyAthlete;
+    }
+    // Show other coaches and admins
+    return u.role === 'COACH' || u.role === 'ADMIN';
+  }) : allUsers;
+
+  // Helper: check if a user is the coach's own athlete
+  const isOwnAthlete = (u: CRMUser) => {
+    if (!isCoach || !user) return false;
+    return u.coaching_as_athlete?.some(r => r.coach_id === user.id && r.status === 'ACTIVE') || false;
+  };
+
   // --- Filtering + Sorting ---
-  const filteredUsers = allUsers
+  const filteredUsers = visibleUsers
     .filter(u => {
       // Search
       const term = searchTerm.toLowerCase();
@@ -216,11 +237,11 @@ const AdminCRM: React.FC = () => {
     });
 
   // --- Stats ---
-  const totalUsers = allUsers.length;
-  const totalAthletes = allUsers.filter(u => u.role === 'ATHLETE').length;
-  const totalCoaches = allUsers.filter(u => u.role === 'COACH').length;
-  const totalAdmins = allUsers.filter(u => u.role === 'ADMIN').length;
-  const assignedAthletes = allUsers.filter(u => u.role === 'ATHLETE' && getActiveCoach(u)).length;
+  const totalUsers = visibleUsers.length;
+  const totalAthletes = visibleUsers.filter(u => u.role === 'ATHLETE').length;
+  const totalCoaches = visibleUsers.filter(u => u.role === 'COACH').length;
+  const totalAdmins = visibleUsers.filter(u => u.role === 'ADMIN').length;
+  const assignedAthletes = visibleUsers.filter(u => u.role === 'ATHLETE' && getActiveCoach(u)).length;
   const unassignedAthletes = totalAthletes - assignedAthletes;
 
   // --- Actions ---
@@ -370,20 +391,28 @@ const AdminCRM: React.FC = () => {
         <div>
           <h1 className="text-3xl font-extrabold text-white tracking-tight">
             CRM <span className="text-[#00FF00]">.</span>
+            {isCoach && <span className="ml-2 text-xs bg-blue-500/10 text-blue-400 px-2 py-1 rounded border border-blue-500/20 align-middle">Coach</span>}
           </h1>
-          <p className="text-zinc-500 text-sm mt-1">Alle User, Coaches & Athleten zentral verwalten</p>
+          <p className="text-zinc-500 text-sm mt-1">{isCoach ? 'Deine Athleten, Coaches & Admins im Überblick' : 'Alle User, Coaches & Athleten zentral verwalten'}</p>
         </div>
       </div>
 
       {/* Stats Row */}
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+      <div className={`grid grid-cols-2 ${isCoach ? 'md:grid-cols-4' : 'md:grid-cols-6'} gap-3`}>
         {[
-          { label: 'Gesamt', value: totalUsers, color: 'text-white' },
-          { label: 'Athleten', value: totalAthletes, color: 'text-zinc-300' },
-          { label: 'Coaches', value: totalCoaches, color: 'text-blue-400' },
-          { label: 'Admins', value: totalAdmins, color: 'text-purple-400' },
-          { label: 'Mit Coach', value: assignedAthletes, color: 'text-[#00FF00]' },
-          { label: 'Ohne Coach', value: unassignedAthletes, color: 'text-amber-400' },
+          ...(isCoach ? [
+            { label: 'Meine Athleten', value: totalAthletes, color: 'text-[#00FF00]' },
+            { label: 'Coaches', value: totalCoaches, color: 'text-blue-400' },
+            { label: 'Admins', value: totalAdmins, color: 'text-purple-400' },
+            { label: 'Gesamt', value: totalUsers, color: 'text-white' },
+          ] : [
+            { label: 'Gesamt', value: totalUsers, color: 'text-white' },
+            { label: 'Athleten', value: totalAthletes, color: 'text-zinc-300' },
+            { label: 'Coaches', value: totalCoaches, color: 'text-blue-400' },
+            { label: 'Admins', value: totalAdmins, color: 'text-purple-400' },
+            { label: 'Mit Coach', value: assignedAthletes, color: 'text-[#00FF00]' },
+            { label: 'Ohne Coach', value: unassignedAthletes, color: 'text-amber-400' },
+          ]),
         ].map(stat => (
           <div key={stat.label} className="bg-[#1C1C1E] border border-zinc-800 rounded-xl p-4">
             <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-600 mb-1">{stat.label}</div>
@@ -532,21 +561,23 @@ const AdminCRM: React.FC = () => {
                           <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-1 rounded-lg border ${badge.color}`}>
                             {badge.icon} {badge.label}
                           </span>
-                          {/* Role change dropdown on hover */}
-                          <div className="absolute left-0 top-full mt-1 hidden group-hover/role:block z-20">
-                            <div className="bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl p-1 min-w-[120px]">
-                              {['ATHLETE', 'COACH', 'ADMIN'].filter(r => r !== u.role).map(r => (
-                                <button
-                                  key={r}
-                                  onClick={() => handleRoleChange(u.id, r)}
-                                  disabled={changingRole === u.id}
-                                  className="w-full text-left text-xs px-3 py-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded transition-colors"
-                                >
-                                  → {r}
-                                </button>
-                              ))}
+                          {/* Role change dropdown on hover (admin only) */}
+                          {isAdmin && (
+                            <div className="absolute left-0 top-full mt-1 hidden group-hover/role:block z-20">
+                              <div className="bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl p-1 min-w-[120px]">
+                                {['ATHLETE', 'COACH', 'ADMIN'].filter(r => r !== u.role).map(r => (
+                                  <button
+                                    key={r}
+                                    onClick={() => handleRoleChange(u.id, r)}
+                                    disabled={changingRole === u.id}
+                                    className="w-full text-left text-xs px-3 py-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded transition-colors"
+                                  >
+                                    → {r}
+                                  </button>
+                                ))}
+                              </div>
                             </div>
-                          </div>
+                          )}
                         </div>
                       </td>
 
@@ -607,7 +638,7 @@ const AdminCRM: React.FC = () => {
                       {/* Actions */}
                       <td className="p-4 text-right">
                         <div className="flex items-center justify-end gap-1.5 opacity-50 group-hover:opacity-100 transition-opacity">
-                          {/* Detail */}
+                          {/* Detail — coaches can only view own athletes fully */}
                           <button
                             onClick={() => setDetailUser(u)}
                             className="p-2 rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors"
@@ -616,7 +647,8 @@ const AdminCRM: React.FC = () => {
                             <Eye size={14} />
                           </button>
 
-                          {u.role === 'ATHLETE' && !activeCoaching && (
+                          {/* Admin-only: assign / unassign */}
+                          {isAdmin && u.role === 'ATHLETE' && !activeCoaching && (
                             <button
                               onClick={() => openAssignModal(u)}
                               className="flex items-center gap-1.5 px-3 py-1.5 bg-[#00FF00]/10 text-[#00FF00] rounded-lg hover:bg-[#00FF00]/20 transition-colors text-xs font-bold"
@@ -625,7 +657,7 @@ const AdminCRM: React.FC = () => {
                             </button>
                           )}
 
-                          {u.role === 'ATHLETE' && activeCoaching && (
+                          {isAdmin && u.role === 'ATHLETE' && activeCoaching && (
                             <>
                               <button
                                 onClick={() => openAssignModal(u)}
@@ -686,7 +718,10 @@ const AdminCRM: React.FC = () => {
                 </div>
                 <div>
                   <div className="text-lg font-bold text-white">{getUserName(detailUser)}</div>
-                  <div className="text-sm text-zinc-500">{detailUser.email}</div>
+                  {/* Hide email for admins when coach is viewing */}
+                  {(isAdmin || detailUser.role !== 'ADMIN') && (
+                    <div className="text-sm text-zinc-500">{detailUser.email}</div>
+                  )}
                   <div className="mt-1">
                     <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${getRoleBadge(detailUser.role).color}`}>
                       {getRoleBadge(detailUser.role).icon} {getRoleBadge(detailUser.role).label}
@@ -695,9 +730,18 @@ const AdminCRM: React.FC = () => {
                 </div>
               </div>
 
-              <div className="text-xs text-zinc-600">
-                Registriert am {new Date(detailUser.created_at).toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' })}
-              </div>
+              {(isAdmin || detailUser.role !== 'ADMIN') && (
+                <div className="text-xs text-zinc-600">
+                  Registriert am {new Date(detailUser.created_at).toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' })}
+                </div>
+              )}
+
+              {/* Limited view notice for coaches viewing admins */}
+              {isCoach && detailUser.role === 'ADMIN' && (
+                <div className="p-3 bg-purple-500/5 border border-purple-500/20 rounded-xl">
+                  <p className="text-xs text-purple-400">Beschränkte Ansicht — Admin-Details sind nicht vollständig einsehbar.</p>
+                </div>
+              )}
 
               {/* Coaching as Athlete */}
               {detailUser.coaching_as_athlete && detailUser.coaching_as_athlete.length > 0 && (
@@ -717,7 +761,7 @@ const AdminCRM: React.FC = () => {
                               <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${rel.status === 'ACTIVE' ? 'bg-[#00FF00]/10 text-[#00FF00]' : 'bg-zinc-800 text-zinc-500'}`}>
                                 {rel.status}
                               </span>
-                              {rel.status === 'ACTIVE' && (
+                              {isAdmin && rel.status === 'ACTIVE' && (
                                 <button
                                   onClick={() => handleUnassign(rel.id, getUserName(detailUser), getUserName(rel.coach))}
                                   className="p-1 text-red-400/60 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
@@ -756,7 +800,7 @@ const AdminCRM: React.FC = () => {
                               <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${rel.status === 'ACTIVE' ? 'bg-blue-500/10 text-blue-400' : 'bg-zinc-800 text-zinc-500'}`}>
                                 {rel.status}
                               </span>
-                              {rel.status === 'ACTIVE' && (
+                              {isAdmin && rel.status === 'ACTIVE' && (
                                 <button
                                   onClick={() => handleUnassign(rel.id, getUserName(rel.athlete), getUserName(detailUser))}
                                   className="p-1 text-red-400/60 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
@@ -801,7 +845,7 @@ const AdminCRM: React.FC = () => {
                               }`}>
                                 {purchase.status === 'completed' ? 'Aktiv' : purchase.status === 'revoked' ? 'Widerrufen' : purchase.status}
                               </span>
-                              {isActive && (
+                              {isAdmin && isActive && (
                                 <button
                                   onClick={() => handleRevokePurchase(purchase.id, productName, getUserName(detailUser))}
                                   className="p-1 text-red-400/60 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
@@ -846,13 +890,15 @@ const AdminCRM: React.FC = () => {
                             <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-zinc-800 text-zinc-400">
                               {plan.schedule_status}
                             </span>
-                            <button
-                              onClick={() => handleRevokeAssignedPlan(plan.id, plan.plan_name, getUserName(detailUser))}
-                              className="p-1 text-red-400/60 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
-                              title="Plan entziehen"
-                            >
-                              <Trash2 size={12} />
-                            </button>
+                            {isAdmin && (
+                              <button
+                                onClick={() => handleRevokeAssignedPlan(plan.id, plan.plan_name, getUserName(detailUser))}
+                                className="p-1 text-red-400/60 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
+                                title="Plan entziehen"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            )}
                           </div>
                         </div>
                         <div className="text-xs text-zinc-600 mt-1">Zugewiesen am {new Date(plan.assigned_at).toLocaleDateString('de-DE')}</div>
@@ -867,39 +913,47 @@ const AdminCRM: React.FC = () => {
               </div>
 
               {/* Quick Actions */}
-              <div>
-                <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3">Aktionen</h4>
-                <div className="space-y-2">
-                  {detailUser.role === 'ATHLETE' && !getActiveCoach(detailUser) && (
-                    <button
-                      onClick={() => { setDetailUser(null); openAssignModal(detailUser); }}
-                      className="w-full flex items-center gap-2 px-4 py-3 bg-[#00FF00]/10 text-[#00FF00] rounded-xl hover:bg-[#00FF00]/20 transition-colors text-sm font-bold"
-                    >
-                      <UserPlus size={16} /> Coach zuweisen
-                    </button>
-                  )}
-                  {detailUser.role === 'ATHLETE' && getActiveCoach(detailUser) && (
-                    <button
-                      onClick={() => { setDetailUser(null); openAssignModal(detailUser); }}
-                      className="w-full flex items-center gap-2 px-4 py-3 bg-blue-500/10 text-blue-400 rounded-xl hover:bg-blue-500/20 transition-colors text-sm font-bold"
-                    >
-                      <Link2 size={16} /> Anderen Coach zuweisen
-                    </button>
-                  )}
-                  <div className="flex gap-2">
-                    {['ATHLETE', 'COACH', 'ADMIN'].filter(r => r !== detailUser.role).map(r => (
+              {isAdmin ? (
+                <div>
+                  <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3">Aktionen</h4>
+                  <div className="space-y-2">
+                    {detailUser.role === 'ATHLETE' && !getActiveCoach(detailUser) && (
                       <button
-                        key={r}
-                        onClick={() => handleRoleChange(detailUser.id, r)}
-                        disabled={changingRole === detailUser.id}
-                        className="flex-1 px-3 py-2.5 bg-zinc-900 border border-zinc-800 text-zinc-400 text-xs rounded-xl hover:border-zinc-600 hover:text-white transition-colors"
+                        onClick={() => { setDetailUser(null); openAssignModal(detailUser); }}
+                        className="w-full flex items-center gap-2 px-4 py-3 bg-[#00FF00]/10 text-[#00FF00] rounded-xl hover:bg-[#00FF00]/20 transition-colors text-sm font-bold"
                       >
-                        → {r}
+                        <UserPlus size={16} /> Coach zuweisen
                       </button>
-                    ))}
+                    )}
+                    {detailUser.role === 'ATHLETE' && getActiveCoach(detailUser) && (
+                      <button
+                        onClick={() => { setDetailUser(null); openAssignModal(detailUser); }}
+                        className="w-full flex items-center gap-2 px-4 py-3 bg-blue-500/10 text-blue-400 rounded-xl hover:bg-blue-500/20 transition-colors text-sm font-bold"
+                      >
+                        <Link2 size={16} /> Anderen Coach zuweisen
+                      </button>
+                    )}
+                    <div className="flex gap-2">
+                      {['ATHLETE', 'COACH', 'ADMIN'].filter(r => r !== detailUser.role).map(r => (
+                        <button
+                          key={r}
+                          onClick={() => handleRoleChange(detailUser.id, r)}
+                          disabled={changingRole === detailUser.id}
+                          className="flex-1 px-3 py-2.5 bg-zinc-900 border border-zinc-800 text-zinc-400 text-xs rounded-xl hover:border-zinc-600 hover:text-white transition-colors"
+                        >
+                          → {r}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className="p-4 bg-blue-500/5 border border-blue-500/20 rounded-xl">
+                  <p className="text-xs text-blue-400 flex items-center gap-2">
+                    <Eye size={14} /> Nur-Lesen-Ansicht — Aktionen sind dem Admin vorbehalten.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>

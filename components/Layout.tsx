@@ -41,10 +41,8 @@ const Layout: React.FC = () => {
     { label: 'Chat', path: '/coach/chat', icon: <MessageCircle size={20} /> },
   ];
 
-  // Add consolidated CRM for Admins (merged Users + Assignments)
-  if (isAdmin) {
-      desktopNavItems.push({ label: 'CRM', path: '/admin/crm', icon: <Users size={20} /> });
-  }
+  // CRM for both Coaches and Admins
+  desktopNavItems.push({ label: 'CRM', path: '/admin/crm', icon: <Users size={20} /> });
 
   const handleAthleteNav = (view: 'hub' | 'training') => {
       navigate('/', { state: { view } });
@@ -137,10 +135,7 @@ const Layout: React.FC = () => {
     { label: 'Planner', path: '/planner', icon: <Calendar size={22} /> },
     { label: 'Kalender', path: '/calendar', icon: <CalendarClock size={22} /> },
     { label: 'Chat', path: '/coach/chat', icon: <MessageCircle size={22} /> },
-    ...(isAdmin 
-      ? [{ label: 'CRM', path: '/admin/crm', icon: <Users size={22} /> }]
-      : [{ label: 'Übungen', path: '/exercises', icon: <Dumbbell size={22} /> }]
-    ),
+    { label: 'CRM', path: '/admin/crm', icon: <Users size={22} /> },
   ];
 
   // Secondary items for the "more" menu (accessible via hamburger)
