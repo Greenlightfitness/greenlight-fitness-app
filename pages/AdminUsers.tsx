@@ -5,6 +5,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { UserProfile, UserRole } from '../types';
 import { Users, Search, Shield, User, ShieldCheck, Dumbbell, Gift, Mail, UserPlus, X, Check } from 'lucide-react';
 import Button from '../components/Button';
+import ConfirmActionModal, { ConfirmActionConfig, getRoleChangeConfig } from '../components/ConfirmActionModal';
 
 const AdminUsers: React.FC = () => {
   const { user } = useAuth();
@@ -21,6 +22,11 @@ const AdminUsers: React.FC = () => {
   const [grantReason, setGrantReason] = useState('');
   const [granting, setGranting] = useState(false);
   
+  // Confirmation Modal
+  const [confirmConfig, setConfirmConfig] = useState<ConfirmActionConfig | null>(null);
+  const [confirmAction, setConfirmAction] = useState<(() => Promise<void>) | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
+
   // Invite Modal State
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
@@ -56,16 +62,41 @@ const AdminUsers: React.FC = () => {
     }
   };
 
-  const handleRoleChange = async (userId: string, newRole: UserRole) => {
+  const handleRoleChange = (userId: string, newRole: UserRole) => {
+    const targetUser = users.find(u => u.uid === userId);
+    if (!targetUser) return;
+    const userName = targetUser.firstName
+      ? `${targetUser.firstName} ${targetUser.lastName || ''}`.trim()
+      : targetUser.email?.split('@')[0] || 'User';
+    const fromRole = targetUser.role as string;
+    setConfirmConfig(getRoleChangeConfig(userName, fromRole, newRole));
+    setConfirmAction(() => async () => {
+      try {
+        await updateProfile(userId, { role: newRole });
+        setUsers(users.map(u => u.uid === userId ? { ...u, role: newRole } : u));
+      } catch (error) {
+        console.error("Error updating role:", error);
+        alert("Fehler beim Ändern der Rolle");
+      }
+    });
+  };
+
+  const executeConfirm = async () => {
+    if (!confirmAction) return;
+    setConfirmLoading(true);
     try {
-      await updateProfile(userId, { role: newRole });
-      
-      // Optimistic update
-      setUsers(users.map(u => u.uid === userId ? { ...u, role: newRole } : u));
-    } catch (error) {
-      console.error("Error updating role:", error);
-      alert("Failed to update role");
+      await confirmAction();
+    } finally {
+      setConfirmLoading(false);
+      setConfirmConfig(null);
+      setConfirmAction(null);
     }
+  };
+
+  const cancelConfirm = () => {
+    setConfirmConfig(null);
+    setConfirmAction(null);
+    setConfirmLoading(false);
   };
 
   // Fetch coaching products for grant modal
@@ -434,6 +465,15 @@ const AdminUsers: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+      {/* === CONFIRMATION MODAL === */}
+      {confirmConfig && (
+        <ConfirmActionModal
+          config={confirmConfig}
+          loading={confirmLoading}
+          onConfirm={executeConfirm}
+          onCancel={cancelConfirm}
+        />
       )}
     </div>
   );

@@ -3,7 +3,7 @@ import { Outlet, NavLink, useNavigate, useLocation, Link } from 'react-router-do
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { UserRole } from '../types';
-import { LayoutDashboard, Dumbbell, Calendar, CalendarClock, LogOut, Menu, X, Globe, ShoppingBag, Package, Home, Users, User, MessageCircle, Scale, UserPlus } from 'lucide-react';
+import { LayoutDashboard, Dumbbell, Calendar, CalendarClock, LogOut, Menu, X, Globe, ShoppingBag, Package, Home, Users, User, MessageCircle, Scale, UserPlus, History } from 'lucide-react';
 import { signOut } from '../services/supabase';
 
 const Layout: React.FC = () => {
@@ -56,6 +56,7 @@ const Layout: React.FC = () => {
   const isProfileActive = location.pathname === '/profile';
   const isChatActive = location.pathname === '/chat';
   const isPlannerActive = location.pathname === '/planner';
+  const isHistoryActive = location.pathname === '/history';
   const isDashboardRoute = location.pathname === '/';
 
   const isImmersiveChat = isAthlete && isChatActive;
@@ -110,10 +111,10 @@ const Layout: React.FC = () => {
                         </NavLink>
 
                         <NavLink 
-                            to="/shop"
+                            to="/history"
                             className={({ isActive }) => `flex flex-col items-center gap-1 transition-all duration-300 ${isActive ? 'text-[#00FF00] scale-110' : 'text-zinc-500 hover:text-zinc-300'}`}
                         >
-                            <ShoppingBag size={24} strokeWidth={isShopActive ? 2.5 : 2} />
+                            <History size={24} strokeWidth={isHistoryActive ? 2.5 : 2} />
                         </NavLink>
 
                         <NavLink 
@@ -130,7 +131,24 @@ const Layout: React.FC = () => {
       );
   }
 
-  // --- COACH & ADMIN LAYOUT (Desktop Sidebar + Mobile Header) ---
+  // --- COACH & ADMIN: Mobile bottom tab items (5 max for native feel) ---
+  const mobileTabItems = [
+    { label: 'Dashboard', path: '/', icon: <LayoutDashboard size={22} /> },
+    { label: 'Planner', path: '/planner', icon: <Calendar size={22} /> },
+    { label: 'Kalender', path: '/calendar', icon: <CalendarClock size={22} /> },
+    { label: 'Chat', path: '/coach/chat', icon: <MessageCircle size={22} /> },
+    ...(isAdmin 
+      ? [{ label: 'CRM', path: '/admin/crm', icon: <Users size={22} /> }]
+      : [{ label: 'Übungen', path: '/exercises', icon: <Dumbbell size={22} /> }]
+    ),
+  ];
+
+  // Secondary items for the "more" menu (accessible via hamburger)
+  const mobileOverflowItems = desktopNavItems.filter(
+    item => !mobileTabItems.some(tab => tab.path === item.path)
+  );
+
+  // --- COACH & ADMIN LAYOUT (Desktop Sidebar + Mobile Bottom Tab Bar) ---
   return (
     <div className="min-h-screen flex bg-[#000000] text-zinc-200 font-sans selection:bg-[#00FF00] selection:text-black overflow-x-hidden">
       {/* Sidebar for Desktop */}
@@ -188,57 +206,95 @@ const Layout: React.FC = () => {
         </div>
       </aside>
 
-      {/* Mobile Header (Coach/Admin Only) */}
-      <div className="md:hidden fixed top-0 w-full bg-[#000000]/95 backdrop-blur-md border-b border-zinc-800/50 z-30 px-6 py-4 flex justify-between items-center safe-area-top">
-        <h1 className="text-lg font-bold text-white tracking-tighter">
-          GREENLIGHT<span className="text-[#00FF00]">.</span>
-        </h1>
-        <div className="flex gap-4 items-center">
-            <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="text-white hover:text-[#00FF00] transition-colors p-2 -mr-2">
-            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+      {/* Mobile Top Bar (Coach/Admin) — compact, with overflow menu */}
+      <div className="md:hidden fixed top-0 w-full bg-[#000000]/95 backdrop-blur-md border-b border-zinc-800/50 z-30 safe-area-top">
+        <div className="px-5 py-3 flex justify-between items-center">
+          <h1 className="text-lg font-bold text-white tracking-tighter">
+            GREENLIGHT<span className="text-[#00FF00]">.</span>
+          </h1>
+          <div className="flex gap-2 items-center">
+            <button onClick={toggleLanguage} className="text-zinc-500 hover:text-white text-xs font-bold px-2 py-1.5 rounded-lg bg-zinc-900 transition-colors">
+              {language === 'en' ? 'DE' : 'EN'}
             </button>
+            <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="text-white hover:text-[#00FF00] transition-colors p-2 -mr-2">
+              {isMobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Mobile Menu Overlay (Coach/Admin Only) */}
+      {/* Mobile Overflow Menu (Coach/Admin) — slides over content */}
       {isMobileMenuOpen && (
-        <div className="md:hidden fixed inset-0 bg-[#000000] z-20 pt-24 px-6 animate-in fade-in slide-in-from-top-5 safe-area-top">
-          <nav className="space-y-2">
-             {desktopNavItems.map((item) => (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                onClick={() => setIsMobileMenuOpen(false)}
-                className={({ isActive }) =>
-                  `flex items-center gap-4 px-4 py-4 rounded-2xl transition-all ${
-                    isActive 
-                      ? 'bg-[#00FF00] text-black font-bold' 
-                      : 'text-zinc-400 hover:bg-zinc-900'
-                  }`
-                }
-              >
-                {item.icon}
-                <span className="text-lg">{item.label}</span>
-              </NavLink>
-            ))}
-             <div className="border-t border-zinc-800 my-6 pt-6 flex justify-between px-2">
-                <button onClick={toggleLanguage} className="text-zinc-500 font-medium px-4 py-2">
-                    {language === 'en' ? 'DE' : 'EN'}
-                </button>
-                <button 
-                    onClick={handleLogout}
-                    className="flex items-center gap-2 text-red-500 font-medium px-4 py-2"
+        <div className="md:hidden fixed inset-0 bg-[#000000]/98 backdrop-blur-xl z-40 animate-in fade-in duration-200 safe-area-top" onClick={() => setIsMobileMenuOpen(false)}>
+          <div className="pt-20 px-5 pb-32" onClick={e => e.stopPropagation()}>
+            <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 px-2">Navigation</p>
+            <nav className="space-y-1">
+              {desktopNavItems.map((item) => (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={({ isActive }) =>
+                    `flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all ${
+                      isActive 
+                        ? 'bg-[#00FF00] text-black font-bold' 
+                        : 'text-zinc-300 hover:bg-zinc-900 active:bg-zinc-800'
+                    }`
+                  }
                 >
-                    <LogOut size={18} />
-                    <span>{t('nav.logout')}</span>
-                </button>
-             </div>
-          </nav>
+                  {item.icon}
+                  <span className="text-base font-medium">{item.label}</span>
+                </NavLink>
+              ))}
+            </nav>
+
+            <div className="border-t border-zinc-800 mt-6 pt-6 space-y-2">
+              <button 
+                onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }}
+                className="flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-500/10 rounded-2xl w-full transition-colors"
+              >
+                <LogOut size={18} />
+                <span className="font-medium">{t('nav.logout')}</span>
+              </button>
+              <div className="text-[10px] text-zinc-600 flex gap-2 justify-center pt-2">
+                <Link to="/legal/imprint" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-zinc-400">Impressum</Link>
+                <span>•</span>
+                <Link to="/legal/privacy" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-zinc-400">Datenschutz</Link>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Main Content */}
-      <main className="flex-1 md:ml-64 p-4 md:p-6 pt-24 md:pt-8 bg-[#000000] min-w-0 safe-area-top">
+      {/* Mobile Bottom Tab Bar (Coach/Admin) — native iOS/Android style */}
+      <div className="md:hidden fixed bottom-0 w-full z-30 safe-area-bottom">
+        <div className="bg-[#0A0A0A]/95 backdrop-blur-2xl border-t border-zinc-800/60">
+          <div className="flex justify-around items-center px-2 pt-2 pb-1">
+            {mobileTabItems.map(item => {
+              const isActive = item.path === '/' 
+                ? location.pathname === '/' 
+                : location.pathname.startsWith(item.path);
+              return (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  className="flex flex-col items-center gap-0.5 py-1 px-3 min-w-[56px] transition-all"
+                >
+                  <div className={`transition-all duration-200 ${isActive ? 'text-[#00FF00] scale-110' : 'text-zinc-500'}`}>
+                    {item.icon}
+                  </div>
+                  <span className={`text-[10px] font-medium transition-colors ${isActive ? 'text-[#00FF00]' : 'text-zinc-600'}`}>
+                    {item.label}
+                  </span>
+                </NavLink>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content — padded for mobile top + bottom bars, desktop sidebar */}
+      <main className="flex-1 md:ml-64 p-4 md:p-6 pt-20 md:pt-8 pb-24 md:pb-8 bg-[#000000] min-w-0 safe-area-top">
         <Outlet />
       </main>
     </div>

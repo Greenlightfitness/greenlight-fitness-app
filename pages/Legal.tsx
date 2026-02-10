@@ -86,7 +86,7 @@ const Legal: React.FC = () => {
 
         <h3 className="text-lg font-semibold text-zinc-200 mb-2">4.2 Profildaten (freiwillig)</h3>
         <ul className="list-disc list-inside mb-4">
-          <li>Name, Nickname</li>
+          <li>Name, Nickname, Profilbild</li>
           <li>Geburtsdatum, Geschlecht</li>
           <li>Körperdaten: Größe, Gewicht, Körperfett, Herzfrequenz</li>
         </ul>
@@ -107,6 +107,30 @@ const Legal: React.FC = () => {
           <li>Zugriffszeitpunkte</li>
         </ul>
         <p className="text-sm text-zinc-500 mb-4">Rechtsgrundlage: Art. 6 Abs. 1 lit. f DSGVO (Berechtigtes Interesse - Sicherheit)</p>
+
+        <h3 className="text-lg font-semibold text-zinc-200 mb-2">4.5 Coach-spezifische Daten</h3>
+        <p className="mb-2">Wenn Sie die Plattform als Coach nutzen, werden zusätzlich erhoben:</p>
+        <ul className="list-disc list-inside mb-4">
+          <li>Berufsbezeichnung, Biografie, Spezialisierungen</li>
+          <li>Profilbild (öffentlich sichtbar für Buchungsseite)</li>
+          <li>Kontaktdaten: Telefonnummer, Website, Social-Media-Profile</li>
+          <li>Buchungslink und Verfügbarkeitszeiten</li>
+          <li>Terminbuchungen und Kundendaten (als Auftragsverarbeiter)</li>
+        </ul>
+        <p className="text-sm text-zinc-500 mb-4">Rechtsgrundlage: Art. 6 Abs. 1 lit. b DSGVO (Vertragserfüllung) + Art. 28 DSGVO (Auftragsverarbeitung)</p>
+        <div className="bg-blue-500/10 border border-blue-500/30 p-4 rounded-xl mb-4">
+          <p className="text-blue-300 text-sm"><strong>Auftragsverarbeitung (Art. 28 DSGVO):</strong> Coaches agieren als Auftragsverarbeiter für die personenbezogenen Daten ihrer Athleten. Sie verpflichten sich, diese Daten nur im Rahmen des Coaching-Verhältnisses zu verarbeiten, vertraulich zu behandeln und nach Beendigung der Zusammenarbeit zu löschen oder zurückzugeben.</p>
+        </div>
+
+        <h3 className="text-lg font-semibold text-zinc-200 mb-2">4.6 Admin-spezifische Datenverarbeitung</h3>
+        <p className="mb-2">Administratoren haben erweiterten Zugriff auf:</p>
+        <ul className="list-disc list-inside mb-4">
+          <li>Nutzerverwaltung (Profile, Rollen, Zuweisungen)</li>
+          <li>Abrechnungsdaten und Stripe-Transaktionen</li>
+          <li>Audit-Logs und Systemprotokolle</li>
+          <li>Plattformweite Konfigurationen</li>
+        </ul>
+        <p className="text-sm text-zinc-500 mb-4">Rechtsgrundlage: Art. 6 Abs. 1 lit. f DSGVO (Berechtigtes Interesse - Plattformbetrieb) + Art. 32 DSGVO (Sicherheit der Verarbeitung)</p>
       </section>
 
       <section className="mb-8">
@@ -219,7 +243,30 @@ const Legal: React.FC = () => {
         <h2 className="text-xl font-bold text-white mb-4">§ 3 Leistungsbeschreibung</h2>
         <p className="mb-2">(1) Greenlight Fitness bietet eine Plattform für Fitness-Coaching und Trainingsplanung.</p>
         <p className="mb-2">(2) Die Basis-Funktionen sind kostenlos ("Freemium-Modell").</p>
-        <p>(3) Premium-Funktionen können kostenpflichtig sein und werden separat ausgewiesen.</p>
+        <p className="mb-2">(3) Premium-Funktionen können kostenpflichtig sein und werden separat ausgewiesen.</p>
+        <p className="mb-2">(4) Die Plattform unterscheidet drei Nutzerrollen mit unterschiedlichem Funktionsumfang:</p>
+        <ul className="list-disc list-inside ml-4 space-y-1 mb-4">
+          <li><strong className="text-white">Athlet:</strong> Trainingsplan-Nutzung, Fortschrittstracking, Check-ins, Chat mit Coach, Shop</li>
+          <li><strong className="text-white">Coach:</strong> Trainingsplanung, Athletenbetreuung, Terminverwaltung (Calendly-ähnlich), öffentliches Coaching-Profil, Buchungsseite</li>
+          <li><strong className="text-white">Admin:</strong> Alle Coach-Funktionen plus Nutzerverwaltung, CRM, Produktmanagement, Abrechnungsübersicht</li>
+        </ul>
+      </section>
+
+      <section className="mb-8">
+        <h2 className="text-xl font-bold text-white mb-4">§ 3a Besondere Bedingungen für Coaches</h2>
+        <p className="mb-2">(1) Coaches erstellen im Rahmen des Onboardings ein öffentliches Profil mit Berufsbezeichnung, Biografie, Spezialisierungen und optionalem Profilbild.</p>
+        <p className="mb-2">(2) Coaches erhalten einen persönlichen Buchungslink, über den Dritte Termine buchen können. Der Coach ist für die korrekte Pflege seiner Verfügbarkeiten verantwortlich.</p>
+        <p className="mb-2">(3) Coaches verarbeiten im Rahmen ihrer Tätigkeit personenbezogene Daten von Athleten (Gesundheitsdaten, Trainingsdaten, Kommunikation). Sie verpflichten sich zur vertraulichen Behandlung gem. DSGVO Art. 28.</p>
+        <p className="mb-2">(4) Der Coach stellt sicher, dass seine Profilangaben wahrheitsgemäß sind und keine irreführenden Qualifikationen angegeben werden.</p>
+        <p>(5) Die Coaching-Beziehung zwischen Coach und Athlet basiert auf gegenseitigem Einverständnis. Beide Seiten können die Zusammenarbeit jederzeit beenden.</p>
+      </section>
+
+      <section className="mb-8">
+        <h2 className="text-xl font-bold text-white mb-4">§ 3b Besondere Bedingungen für Administratoren</h2>
+        <p className="mb-2">(1) Administratoren haben erweiterten Zugriff auf alle Plattformfunktionen, einschließlich Nutzerverwaltung, Abrechnungsdaten und Systemkonfiguration.</p>
+        <p className="mb-2">(2) Mit dem erweiterten Zugriff geht eine besondere Sorgfaltspflicht einher. Administratoren verpflichten sich, Nutzerdaten nur im Rahmen des Plattformbetriebs zu verarbeiten.</p>
+        <p className="mb-2">(3) Administratoren dürfen Nutzerkonten verwalten, Coach-Zuweisungen vornehmen und Produkte erstellen/ändern.</p>
+        <p>(4) Der Missbrauch von Admin-Berechtigungen (z.B. unbefugte Datenweitergabe) führt zum sofortigen Entzug der Admin-Rolle und kann rechtliche Konsequenzen nach sich ziehen.</p>
       </section>
 
       <section className="mb-8">
@@ -231,6 +278,7 @@ const Legal: React.FC = () => {
           <li>Missbrauch der Plattform</li>
           <li>Verbreitung rechtswidriger Inhalte</li>
           <li>Automatisierte Zugriffe ohne Genehmigung</li>
+          <li>Weitergabe von Athleten- oder Nutzerdaten an Dritte ohne Einwilligung</li>
         </ul>
       </section>
 

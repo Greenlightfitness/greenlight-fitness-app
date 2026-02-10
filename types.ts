@@ -28,6 +28,7 @@ export interface UserProfile {
   restingHeartRate?: number; // bpm
   maxHeartRate?: number; // bpm
   onboardingCompleted?: boolean;
+  avatarUrl?: string;
 }
 
 // --- ATTENTIONS & ACTIVITIES (NEW) ---
@@ -419,6 +420,74 @@ export interface Invitation {
   expiresAt?: string;
   acceptedAt?: string;
   acceptedByUserId?: string;
+  createdAt: any;
+}
+
+// --- BODY MEASUREMENTS (Körperdaten über Zeit) ---
+
+export interface BodyMeasurement {
+  id: string;
+  athleteId: string;
+  date: string;
+  weight?: number;
+  bodyFat?: number;
+  waistCircumference?: number;
+  chest?: number;
+  armLeft?: number;
+  armRight?: number;
+  thighLeft?: number;
+  thighRight?: number;
+  notes?: string;
+  createdAt: any;
+}
+
+// --- COACH NOTES (Notizen pro Athlet) ---
+
+export interface CoachNote {
+  id: string;
+  coachId: string;
+  athleteId: string;
+  title?: string;
+  content: string;
+  tags?: string[];
+  isPinned: boolean;
+  createdAt: any;
+  updatedAt: any;
+}
+
+// --- WORKOUT FEEDBACK (Coach-Kommentare auf Logs) ---
+
+export interface WorkoutFeedback {
+  id: string;
+  workoutLogId: string;
+  coachId: string;
+  athleteId: string;
+  comment: string;
+  rating?: number;
+  createdAt: any;
+}
+
+// --- CHECK-INS (Wöchentliche Athleten Check-Ins) ---
+
+export type CheckInStatus = 'SUBMITTED' | 'REVIEWED';
+
+export interface CheckIn {
+  id: string;
+  athleteId: string;
+  coachId?: string;
+  weekStart: string;
+  weight?: number;
+  bodyFat?: number;
+  nutritionRating?: number;
+  sleepRating?: number;
+  stressRating?: number;
+  energyRating?: number;
+  notes?: string;
+  coachResponse?: string;
+  photoUrls?: string[];
+  status: CheckInStatus;
+  submittedAt: any;
+  reviewedAt?: any;
   createdAt: any;
 }
 

@@ -84,6 +84,9 @@ const AthleteTrainingView: React.FC = () => {
   // Exercise history cache
   const [exerciseHistory, setExerciseHistory] = useState<Record<string, { lastSets: { reps: string; weight: string }[]; pb: { weight: string; reps: string } | null }>>({});
   
+  // Video preview
+  const [videoPreview, setVideoPreview] = useState<string | null>(null);
+  
 
   // Get week dates
   const weekDates = useMemo(() => {
@@ -111,13 +114,29 @@ const AthleteTrainingView: React.FC = () => {
       // Load assigned plans with scheduled sessions
       const assignedPlans = await getAssignedPlans(user.id);
       
-      // Load custom scheduled workouts
-      const { data: customWorkouts } = await supabase
+      // Load ALL scheduled workouts for the week (both custom and plan-based completion records)
+      const { data: scheduleEntries } = await supabase
         .from('athlete_schedule')
         .select('*')
         .eq('athlete_id', user.id)
         .gte('date', weekDates[0].toISOString().split('T')[0])
         .lte('date', weekDates[6].toISOString().split('T')[0]);
+
+      // Build a lookup: "planId-sessionId-date" → completed status from athlete_schedule
+      const completionLookup = new Map<string, { completed: boolean; id: string; workoutData: any; duration?: number; completedAt?: string }>();
+      (scheduleEntries || []).forEach((entry: any) => {
+        // For plan-based entries, use plan_id + session reference as key
+        if (entry.plan_id) {
+          const key = `${entry.plan_id}-${entry.date}`;
+          completionLookup.set(key, {
+            completed: entry.completed || false,
+            id: entry.id,
+            workoutData: entry.workout_data,
+            duration: entry.duration_seconds,
+            completedAt: entry.completed_at,
+          });
+        }
+      });
 
       const workoutMap: Record<string, DayWorkout[]> = {};
       
@@ -130,14 +149,19 @@ const AthleteTrainingView: React.FC = () => {
               week.sessions?.forEach((session: any) => {
                 if (session.id === sessionId) {
                   if (!workoutMap[dateKey]) workoutMap[dateKey] = [];
+                  // Check completion from athlete_schedule
+                  const completionKey = `${plan.original_plan_id || plan.id}-${dateKey}`;
+                  const completionRecord = completionLookup.get(completionKey);
                   workoutMap[dateKey].push({
                     id: `${plan.id}-${session.id}`,
                     date: dateKey,
                     planName: plan.plan_name,
                     sessionTitle: session.title || 'Workout',
-                    workoutData: session.workoutData || [],
+                    workoutData: completionRecord?.workoutData || session.workoutData || [],
                     isCustom: false,
-                    completed: false, // TODO: track completion
+                    completed: completionRecord?.completed || false,
+                    duration: completionRecord?.duration,
+                    completedAt: completionRecord?.completedAt,
                   });
                 }
               });
@@ -146,8 +170,8 @@ const AthleteTrainingView: React.FC = () => {
         }
       });
 
-      // Process custom workouts
-      (customWorkouts || []).forEach((cw: any) => {
+      // Process custom workouts (entries without plan_id)
+      (scheduleEntries || []).filter((cw: any) => !cw.plan_id).forEach((cw: any) => {
         const dateKey = cw.date;
         if (!workoutMap[dateKey]) workoutMap[dateKey] = [];
         workoutMap[dateKey].push({
@@ -158,6 +182,8 @@ const AthleteTrainingView: React.FC = () => {
           workoutData: cw.workout_data || [],
           isCustom: true,
           completed: cw.completed || false,
+          duration: cw.duration_seconds,
+          completedAt: cw.completed_at,
         });
       });
 
@@ -299,6 +325,7 @@ const AthleteTrainingView: React.FC = () => {
         id: `ex-${Date.now()}`,
         exerciseId: exercise.id,
         name: exercise.name,
+        videoUrl: exercise.videoUrl || undefined,
         visibleMetrics: (exercise.defaultVisibleMetrics as any) || ['reps', 'weight'],
         sets: defaultSets,
       };
@@ -512,15 +539,34 @@ const AthleteTrainingView: React.FC = () => {
         return updated;
       });
       
-      // Update DB for custom workouts (use pre-computed data, not stale state)
+      // Update DB: persist completion state
       if (workout?.isCustom) {
+        // Custom workout: update existing athlete_schedule entry
         await supabase
           .from('athlete_schedule')
           .update({ 
             workout_data: updatedBlocks,
-            completed: allCompleted 
+            completed: allCompleted,
+            duration_seconds: allCompleted ? totalDuration : undefined,
+            completed_at: allCompleted ? new Date().toISOString() : undefined,
           })
           .eq('id', workoutId);
+      } else {
+        // Assigned plan workout: upsert into athlete_schedule for completion tracking
+        const [planId, sessionId] = workoutId.split('-');
+        await supabase
+          .from('athlete_schedule')
+          .upsert({
+            athlete_id: user.id,
+            date: selectedDateKey,
+            plan_id: planId,
+            plan_name: workout.planName,
+            session_title: workout.sessionTitle,
+            workout_data: updatedBlocks,
+            completed: allCompleted,
+            duration_seconds: allCompleted ? totalDuration : null,
+            completed_at: allCompleted ? new Date().toISOString() : null,
+          }, { onConflict: 'athlete_id,date' });
       }
       
       // Remove from active blocks and auto-start next block
@@ -565,6 +611,35 @@ const AthleteTrainingView: React.FC = () => {
     return block.exercises?.every(ex => isExerciseComplete(ex)) || false;
   };
 
+  // Rest timer alert: vibrate + beep when timer expires
+  const triggerRestTimerAlert = () => {
+    // Vibrate (mobile devices)
+    if ('vibrate' in navigator) {
+      navigator.vibrate([200, 100, 200, 100, 300]);
+    }
+    // Audio beep using Web Audio API (no file needed)
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const playBeep = (freq: number, startTime: number, duration: number) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.frequency.value = freq;
+        osc.type = 'sine';
+        gain.gain.value = 0.3;
+        gain.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+        osc.start(startTime);
+        osc.stop(startTime + duration);
+      };
+      playBeep(880, audioCtx.currentTime, 0.15);
+      playBeep(880, audioCtx.currentTime + 0.2, 0.15);
+      playBeep(1320, audioCtx.currentTime + 0.4, 0.3);
+    } catch (e) {
+      // Audio not available, vibration is enough
+    }
+  };
+
   // Rest timer functions
   const startRestTimer = (afterSetId: string, seconds?: number) => {
     if (restInterval.current) {
@@ -576,6 +651,7 @@ const AthleteTrainingView: React.FC = () => {
       setRestTimer(prev => {
         if (prev.seconds <= 1) {
           if (restInterval.current) clearInterval(restInterval.current);
+          triggerRestTimerAlert();
           return { ...prev, active: false, seconds: 0, afterSetId: null };
         }
         return { ...prev, seconds: prev.seconds - 1 };
@@ -1250,6 +1326,15 @@ const AthleteTrainingView: React.FC = () => {
                                       </div>
                                     )}
                                     <p className={`font-medium ${exerciseComplete ? 'text-[#00FF00]' : 'text-white'}`}>{exercise.name}</p>
+                                    {exercise.videoUrl && (
+                                      <button
+                                        onClick={() => setVideoPreview(exercise.videoUrl || null)}
+                                        className="p-1 rounded-md hover:bg-zinc-700 text-zinc-500 hover:text-blue-400 transition-colors"
+                                        title="Video ansehen"
+                                      >
+                                        <Play size={12} />
+                                      </button>
+                                    )}
                                   </div>
                                   {pb && isBlockActive && (
                                     <div className="flex items-center gap-1 text-xs bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded-full">
@@ -1789,6 +1874,30 @@ const AthleteTrainingView: React.FC = () => {
               >
                 Später
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Video Preview Modal */}
+      {videoPreview && (
+        <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in" onClick={() => setVideoPreview(null)}>
+          <div className="bg-[#1C1C1E] border border-zinc-800 w-full max-w-lg rounded-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center p-3 border-b border-zinc-800">
+              <h4 className="text-white font-bold text-sm">Übungsvideo</h4>
+              <button onClick={() => setVideoPreview(null)} className="text-zinc-500 hover:text-white"><X size={20} /></button>
+            </div>
+            <div className="aspect-video bg-black">
+              {videoPreview.includes('youtube.com') || videoPreview.includes('youtu.be') ? (
+                <iframe
+                  src={videoPreview.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/')}
+                  className="w-full h-full"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              ) : (
+                <video src={videoPreview} controls className="w-full h-full" autoPlay />
+              )}
             </div>
           </div>
         </div>

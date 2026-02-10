@@ -6,6 +6,8 @@ import { UserProfile, AssignedPlan, Attention, ActivityFeedItem } from '../types
 import { X, User, Activity, AlertTriangle, Calendar, ChevronRight, Dumbbell, History, Ruler, Weight, TrendingUp, TrendingDown, Heart, Moon, Battery, Trophy, BarChart3, Flame, Plus, Send, Target, ClipboardList } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { calculateFFMI } from '../utils/formulas';
+import CoachNotesPanel from './CoachNotesPanel';
+import WorkoutReview from './WorkoutReview';
 
 interface AthleteProfileModalProps {
   athleteId: string | null;
@@ -30,6 +32,7 @@ const AthleteProfileModal: React.FC<AthleteProfileModalProps> = ({ athleteId, is
   const [weeklyStats, setWeeklyStats] = useState<any[]>([]);
   const [personalBests, setPersonalBests] = useState<any[]>([]);
   const [volumeData, setVolumeData] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'overview' | 'notes' | 'review'>('overview');
 
   useEffect(() => {
     if (isOpen && athleteId) {
@@ -416,6 +419,27 @@ const AthleteProfileModal: React.FC<AthleteProfileModalProps> = ({ athleteId, is
             </div>
         )}
 
+        {/* Tab Navigation */}
+        <div className="px-6 py-2 border-b border-zinc-800 flex gap-1 bg-zinc-900/30">
+          {[
+            { key: 'overview' as const, label: 'Übersicht' },
+            { key: 'notes' as const, label: 'Notizen' },
+            { key: 'review' as const, label: 'Workout Review' },
+          ].map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                activeTab === tab.key
+                  ? 'bg-[#00FF00] text-black'
+                  : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-8">
             
@@ -423,6 +447,16 @@ const AthleteProfileModal: React.FC<AthleteProfileModalProps> = ({ athleteId, is
                 <div className="flex justify-center py-10">
                     <div className="w-8 h-8 border-2 border-[#00FF00] border-t-transparent rounded-full animate-spin"></div>
                 </div>
+            ) : activeTab === 'notes' && athleteId ? (
+                <CoachNotesPanel
+                  athleteId={athleteId}
+                  athleteName={[profile?.firstName, profile?.lastName].filter(Boolean).join(' ') || profile?.email?.split('@')[0]}
+                />
+            ) : activeTab === 'review' && athleteId ? (
+                <WorkoutReview
+                  athleteId={athleteId}
+                  athleteName={[profile?.firstName, profile?.lastName].filter(Boolean).join(' ') || profile?.email?.split('@')[0]}
+                />
             ) : (
                 <>
                     {/* 1. Critical Attentions */}

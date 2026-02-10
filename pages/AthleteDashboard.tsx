@@ -25,6 +25,8 @@ import {
 import Button from '../components/Button';
 import GoalWidget from '../components/GoalWidget';
 import MyCoach from '../components/MyCoach';
+import BodyTracker from '../components/BodyTracker';
+import CheckInForm from '../components/CheckInForm';
 
 interface WeeklyStats {
   weekStart: string;
@@ -347,6 +349,16 @@ const AthleteDashboard: React.FC = () => {
       {/* Goals Widget - Now at top! */}
       <div className="px-4 mt-4">
         <GoalWidget compact />
+      </div>
+
+      {/* Body Tracker Widget */}
+      <div className="px-4 mt-4">
+        <BodyTracker />
+      </div>
+
+      {/* Weekly Check-In Widget */}
+      <div className="px-4 mt-4">
+        <CheckInForm />
       </div>
 
       {/* Daily Wellness Card - Premium Style with Week Chart */}

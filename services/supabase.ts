@@ -37,8 +37,8 @@ export const getProfile = async (userId: string) => {
     .from('profiles')
     .select('*')
     .eq('id', userId)
-    .single();
-  if (error && error.code !== 'PGRST116') throw error;
+    .maybeSingle();
+  if (error) throw error;
   return data;
 };
 
@@ -611,8 +611,8 @@ export const getCurrentPlanVersion = async (planId: string) => {
     .select('*')
     .eq('plan_id', planId)
     .eq('is_current', true)
-    .single();
-  if (error && error.code !== 'PGRST116') throw error;
+    .maybeSingle();
+  if (error) throw error;
   return data;
 };
 
@@ -993,8 +993,8 @@ export const getActiveSubscription = async (userId: string) => {
     .select('*')
     .eq('user_id', userId)
     .eq('status', 'active')
-    .single();
-  if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows
+    .maybeSingle();
+  if (error) throw error;
   return data;
 };
 
@@ -1027,9 +1027,8 @@ export const getCoachingApproval = async (athleteId: string, productId: string) 
       .select('*')
       .eq('athlete_id', athleteId)
       .eq('product_id', productId)
-      .single();
-    // PGRST116 = no rows found (normal), 42P01 = table doesn't exist
-    if (error && error.code !== 'PGRST116') {
+      .maybeSingle();
+    if (error) {
       console.warn('[Supabase] coaching_approvals query error:', error.code);
       return null;
     }
@@ -1166,8 +1165,8 @@ export const getCoachingRelationship = async (athleteId: string, coachId?: strin
     query = query.eq('coach_id', coachId);
   }
   
-  const { data, error } = await query.single();
-  if (error && error.code !== 'PGRST116') throw error;
+  const { data, error } = await query.maybeSingle();
+  if (error) throw error;
   return data;
 };
 
@@ -1579,8 +1578,8 @@ export const getInvitationByCode = async (code: string) => {
     .from('invitations')
     .select('*')
     .eq('invitation_code', code)
-    .single();
-  if (error && error.code !== 'PGRST116') throw error;
+    .maybeSingle();
+  if (error) throw error;
   return data;
 };
 
@@ -2121,6 +2120,241 @@ export const getAvailableSlots = async (calendarId: string, date: string): Promi
   });
 };
 
+// ============ BODY MEASUREMENTS ============
+
+export const getBodyMeasurements = async (athleteId: string, limit = 90) => {
+  const { data, error } = await supabase
+    .from('body_measurements')
+    .select('*')
+    .eq('athlete_id', athleteId)
+    .order('date', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data || [];
+};
+
+export const upsertBodyMeasurement = async (measurement: {
+  athlete_id: string;
+  date: string;
+  weight?: number | null;
+  body_fat?: number | null;
+  waist_circumference?: number | null;
+  chest?: number | null;
+  arm_left?: number | null;
+  arm_right?: number | null;
+  thigh_left?: number | null;
+  thigh_right?: number | null;
+  notes?: string | null;
+}) => {
+  const { data, error } = await supabase
+    .from('body_measurements')
+    .upsert(measurement, { onConflict: 'athlete_id,date' })
+    .select()
+    .single();
+  if (error) throw error;
+
+  // Auto-update profile weight if provided
+  if (measurement.weight) {
+    await supabase
+      .from('profiles')
+      .update({ weight: measurement.weight })
+      .eq('id', measurement.athlete_id);
+  }
+  if (measurement.body_fat) {
+    await supabase
+      .from('profiles')
+      .update({ body_fat: measurement.body_fat })
+      .eq('id', measurement.athlete_id);
+  }
+
+  return data;
+};
+
+// ============ COACH NOTES ============
+
+export const getCoachNotes = async (coachId: string, athleteId: string) => {
+  const { data, error } = await supabase
+    .from('coach_notes')
+    .select('*')
+    .eq('coach_id', coachId)
+    .eq('athlete_id', athleteId)
+    .order('is_pinned', { ascending: false })
+    .order('updated_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+};
+
+export const createCoachNote = async (note: {
+  coach_id: string;
+  athlete_id: string;
+  title?: string;
+  content: string;
+  tags?: string[];
+  is_pinned?: boolean;
+}) => {
+  const { data, error } = await supabase
+    .from('coach_notes')
+    .insert(note)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const updateCoachNote = async (id: string, updates: {
+  title?: string;
+  content?: string;
+  tags?: string[];
+  is_pinned?: boolean;
+}) => {
+  const { data, error } = await supabase
+    .from('coach_notes')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const deleteCoachNote = async (id: string) => {
+  const { error } = await supabase
+    .from('coach_notes')
+    .delete()
+    .eq('id', id);
+  if (error) throw error;
+};
+
+// ============ WORKOUT FEEDBACK ============
+
+export const getWorkoutFeedback = async (workoutLogId: string) => {
+  const { data, error } = await supabase
+    .from('workout_feedback')
+    .select('*')
+    .eq('workout_log_id', workoutLogId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+};
+
+export const getAthleteFeedback = async (athleteId: string, limit = 20) => {
+  const { data, error } = await supabase
+    .from('workout_feedback')
+    .select('*, workout_logs(exercise_name, workout_date, sets)')
+    .eq('athlete_id', athleteId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data || [];
+};
+
+export const createWorkoutFeedback = async (feedback: {
+  workout_log_id: string;
+  coach_id: string;
+  athlete_id: string;
+  comment: string;
+  rating?: number;
+}) => {
+  const { data, error } = await supabase
+    .from('workout_feedback')
+    .insert(feedback)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+// ============ CHECK-INS ============
+
+export const getCheckIns = async (athleteId?: string, coachId?: string, status?: string) => {
+  let query = supabase.from('check_ins').select('*');
+  if (athleteId) query = query.eq('athlete_id', athleteId);
+  if (coachId) query = query.eq('coach_id', coachId);
+  if (status) query = query.eq('status', status);
+  const { data, error } = await query.order('week_start', { ascending: false });
+  if (error) throw error;
+  return data || [];
+};
+
+export const createCheckIn = async (checkIn: {
+  athlete_id: string;
+  coach_id?: string;
+  week_start: string;
+  weight?: number;
+  body_fat?: number;
+  nutrition_rating?: number;
+  sleep_rating?: number;
+  stress_rating?: number;
+  energy_rating?: number;
+  notes?: string;
+  photo_urls?: string[];
+}) => {
+  const { data, error } = await supabase
+    .from('check_ins')
+    .upsert(checkIn, { onConflict: 'athlete_id,week_start' })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const respondToCheckIn = async (checkInId: string, coachResponse: string) => {
+  const { data, error } = await supabase
+    .from('check_ins')
+    .update({
+      coach_response: coachResponse,
+      status: 'REVIEWED',
+      reviewed_at: new Date().toISOString(),
+    })
+    .eq('id', checkInId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+// ============ WORKOUT LOGS (Extended queries for History page) ============
+
+export const getWorkoutHistory = async (athleteId: string, options?: {
+  exerciseId?: string;
+  startDate?: string;
+  endDate?: string;
+  limit?: number;
+  offset?: number;
+}) => {
+  let query = supabase
+    .from('workout_logs')
+    .select('*', { count: 'exact' })
+    .eq('athlete_id', athleteId);
+  
+  if (options?.exerciseId) query = query.eq('exercise_id', options.exerciseId);
+  if (options?.startDate) query = query.gte('workout_date', options.startDate);
+  if (options?.endDate) query = query.lte('workout_date', options.endDate);
+  
+  query = query
+    .order('workout_date', { ascending: false })
+    .order('created_at', { ascending: false })
+    .range(options?.offset || 0, (options?.offset || 0) + (options?.limit || 20) - 1);
+  
+  const { data, count, error } = await query;
+  if (error) throw error;
+  return { logs: data || [], total: count || 0 };
+};
+
+export const getExerciseProgressData = async (athleteId: string, exerciseId: string, days = 90) => {
+  const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  
+  const { data, error } = await supabase
+    .from('workout_logs')
+    .select('workout_date, sets, total_volume')
+    .eq('athlete_id', athleteId)
+    .eq('exercise_id', exerciseId)
+    .gte('workout_date', startDate)
+    .order('workout_date', { ascending: true });
+  if (error) throw error;
+  return data || [];
+};
+
 // Get dates with availability for a calendar within a date range
 export const getDatesWithAvailability = async (calendarId: string, startDate: string, endDate: string): Promise<string[]> => {
   const { data: calendar } = await supabase
@@ -2164,4 +2398,117 @@ export const getDatesWithAvailability = async (calendarId: string, startDate: st
   }
 
   return dates;
+};
+
+// ============ PUBLIC BOOKING ============
+
+export const getCoachBySlug = async (slug: string) => {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, email, first_name, last_name, nickname, booking_slug')
+    .eq('booking_slug', slug)
+    .single();
+  if (error) return null;
+  return data;
+};
+
+export const getPublicCalendars = async (coachId: string) => {
+  const { data, error } = await supabase
+    .from('coach_calendars')
+    .select('*')
+    .eq('coach_id', coachId)
+    .eq('is_public', true)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return data || [];
+};
+
+export const getCalendarById = async (calendarId: string) => {
+  const { data, error } = await supabase
+    .from('coach_calendars')
+    .select('*')
+    .eq('id', calendarId)
+    .single();
+  if (error) return null;
+  return data;
+};
+
+export const createPublicAppointment = async (appointment: {
+  coach_id: string;
+  calendar_id: string;
+  date: string;
+  time: string;
+  duration_minutes: number;
+  athlete_id?: string;
+  athlete_name?: string;
+  booker_name: string;
+  booker_email: string;
+  notes?: string;
+  type?: string;
+  status?: string;
+}) => {
+  const { data, error } = await supabase
+    .from('appointments')
+    .insert({
+      ...appointment,
+      status: appointment.status || 'PENDING',
+      type: appointment.type || 'CONSULTATION',
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const updateBookingSlug = async (userId: string, slug: string) => {
+  const { data, error } = await supabase
+    .from('profiles')
+    .update({ booking_slug: slug })
+    .eq('id', userId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const cancelAppointment = async (id: string, reason?: string) => {
+  const { data, error } = await supabase
+    .from('appointments')
+    .update({
+      status: 'CANCELLED',
+      cancelled_at: new Date().toISOString(),
+      cancel_reason: reason || null,
+    })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const confirmAppointment = async (id: string) => {
+  const { data, error } = await supabase
+    .from('appointments')
+    .update({
+      status: 'CONFIRMED',
+      confirmed_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const getCoachAppointments = async (coachId: string, status?: string) => {
+  let query = supabase
+    .from('appointments')
+    .select('*')
+    .eq('coach_id', coachId)
+    .order('date', { ascending: true })
+    .order('time', { ascending: true });
+  if (status) query = query.eq('status', status);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
 };

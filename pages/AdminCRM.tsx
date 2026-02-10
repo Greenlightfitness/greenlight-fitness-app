@@ -14,6 +14,7 @@ import {
   Ban, Trash2, ShoppingCart, ClipboardList, CreditCard
 } from 'lucide-react';
 import { showLocalNotification } from '../services/notifications';
+import ConfirmActionModal, { ConfirmActionConfig, getRoleChangeConfig, getUnassignConfig, getRevokePurchaseConfig, getRevokePlanConfig } from '../components/ConfirmActionModal';
 
 interface CRMUser {
   id: string;
@@ -91,6 +92,11 @@ const AdminCRM: React.FC = () => {
 
   // Role change
   const [changingRole, setChangingRole] = useState<string | null>(null);
+
+  // Confirmation Modal
+  const [confirmConfig, setConfirmConfig] = useState<ConfirmActionConfig | null>(null);
+  const [confirmAction, setConfirmAction] = useState<(() => Promise<void>) | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
 
   useEffect(() => {
     if (user) fetchData();
@@ -251,58 +257,93 @@ const AdminCRM: React.FC = () => {
     }
   };
 
-  const handleUnassign = async (relationshipId: string, userName: string, coachName: string) => {
-    if (!confirm(`Zuweisung von ${userName} zu ${coachName} wirklich beenden?`)) return;
-    try {
-      await endCoachingRelationship(relationshipId);
-      await fetchData();
-    } catch (error) {
-      console.error("Error ending relationship:", error);
-      alert("Fehler beim Beenden der Zuweisung");
-    }
-  };
-
-  const handleRevokePurchase = async (purchaseId: string, productName: string, userName: string) => {
-    if (!confirm(`Kauf "${productName}" von ${userName} wirklich widerrufen?`)) return;
-    try {
-      await revokePurchase(purchaseId);
-      await fetchData();
-      if (detailUser) {
-        const refreshed = allUsers.find(u => u.id === detailUser.id);
-        if (refreshed) setDetailUser(refreshed);
+  const handleUnassign = (relationshipId: string, userName: string, coachName: string) => {
+    setConfirmConfig(getUnassignConfig(userName, coachName));
+    setConfirmAction(() => async () => {
+      try {
+        await endCoachingRelationship(relationshipId);
+        await fetchData();
+      } catch (error) {
+        console.error("Error ending relationship:", error);
+        alert("Fehler beim Beenden der Zuweisung");
       }
-    } catch (error) {
-      console.error("Error revoking purchase:", error);
-      alert("Fehler beim Widerrufen des Kaufs");
-    }
+    });
   };
 
-  const handleRevokeAssignedPlan = async (planId: string, planName: string, userName: string) => {
-    if (!confirm(`Trainingsplan "${planName}" von ${userName} wirklich entziehen?`)) return;
-    try {
-      await revokeAssignedPlan(planId);
-      await fetchData();
-      if (detailUser) {
-        const refreshed = allUsers.find(u => u.id === detailUser.id);
-        if (refreshed) setDetailUser(refreshed);
+  const handleRevokePurchase = (purchaseId: string, productName: string, userName: string) => {
+    setConfirmConfig(getRevokePurchaseConfig(productName, userName));
+    setConfirmAction(() => async () => {
+      try {
+        await revokePurchase(purchaseId);
+        await fetchData();
+        if (detailUser) {
+          const refreshed = allUsers.find(u => u.id === detailUser.id);
+          if (refreshed) setDetailUser(refreshed);
+        }
+      } catch (error) {
+        console.error("Error revoking purchase:", error);
+        alert("Fehler beim Widerrufen des Kaufs");
       }
-    } catch (error) {
-      console.error("Error revoking plan:", error);
-      alert("Fehler beim Entziehen des Plans");
-    }
+    });
   };
 
-  const handleRoleChange = async (userId: string, newRole: string) => {
-    setChangingRole(userId);
+  const handleRevokeAssignedPlan = (planId: string, planName: string, userName: string) => {
+    setConfirmConfig(getRevokePlanConfig(planName, userName));
+    setConfirmAction(() => async () => {
+      try {
+        await revokeAssignedPlan(planId);
+        await fetchData();
+        if (detailUser) {
+          const refreshed = allUsers.find(u => u.id === detailUser.id);
+          if (refreshed) setDetailUser(refreshed);
+        }
+      } catch (error) {
+        console.error("Error revoking plan:", error);
+        alert("Fehler beim Entziehen des Plans");
+      }
+    });
+  };
+
+  const handleRoleChange = (userId: string, newRole: string) => {
+    const targetUser = allUsers.find(u => u.id === userId);
+    if (!targetUser) return;
+    const userName = getUserName(targetUser);
+    const fromRole = targetUser.role;
+    setConfirmConfig(getRoleChangeConfig(userName, fromRole, newRole));
+    setConfirmAction(() => async () => {
+      setChangingRole(userId);
+      try {
+        await updateProfile(userId, { role: newRole });
+        await fetchData();
+        if (detailUser && detailUser.id === userId) {
+          const refreshed = allUsers.find(u => u.id === userId);
+          if (refreshed) setDetailUser(refreshed);
+        }
+      } catch (error) {
+        console.error("Error updating role:", error);
+        alert("Fehler beim Ändern der Rolle");
+      } finally {
+        setChangingRole(null);
+      }
+    });
+  };
+
+  const executeConfirm = async () => {
+    if (!confirmAction) return;
+    setConfirmLoading(true);
     try {
-      await updateProfile(userId, { role: newRole });
-      await fetchData();
-    } catch (error) {
-      console.error("Error updating role:", error);
-      alert("Fehler beim Ändern der Rolle");
+      await confirmAction();
     } finally {
-      setChangingRole(null);
+      setConfirmLoading(false);
+      setConfirmConfig(null);
+      setConfirmAction(null);
     }
+  };
+
+  const cancelConfirm = () => {
+    setConfirmConfig(null);
+    setConfirmAction(null);
+    setConfirmLoading(false);
   };
 
   const toggleSort = (field: SortField) => {
@@ -929,6 +970,16 @@ const AdminCRM: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* === CONFIRMATION MODAL === */}
+      {confirmConfig && (
+        <ConfirmActionModal
+          config={confirmConfig}
+          loading={confirmLoading}
+          onConfirm={executeConfirm}
+          onCancel={cancelConfirm}
+        />
       )}
     </div>
   );

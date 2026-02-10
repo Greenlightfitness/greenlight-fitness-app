@@ -13,6 +13,8 @@ import AthleteProfileModal from '../components/AthleteProfileModal';
 import AthleteTrainingView from '../components/AthleteTrainingView';
 import AthleteDashboard from './AthleteDashboard';
 import CoachChat from '../components/CoachChat';
+import ComplianceDashboard from '../components/ComplianceDashboard';
+import RevenueWidget from '../components/RevenueWidget';
 import { calculateVolumeLoad } from '../utils/formulas';
 import { useLocation } from 'react-router-dom';
 
@@ -829,6 +831,11 @@ const Dashboard: React.FC = () => {
               </div>
             )}
 
+            {/* Revenue Widget (Admin Only) */}
+            {userProfile?.role === UserRole.ADMIN && (
+              <RevenueWidget />
+            )}
+
             {/* Coach KPIs & Feeds */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-[#1C1C1E] p-5 rounded-[1.5rem] border border-zinc-800 relative overflow-hidden group">
@@ -989,15 +996,28 @@ const Dashboard: React.FC = () => {
                 </div>
             </div>
 
-            {/* MY ATHLETES Section - Coach sees assigned athletes, Admin sees all */}
+            {/* Athlete Compliance Dashboard */}
+            <div className="bg-[#1C1C1E] border border-zinc-800 rounded-[2rem] p-6">
+                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                    <User size={18} className="text-[#00FF00]" /> 
+                    {userProfile?.role === UserRole.ADMIN ? t('dashboard.allAthletes') : t('dashboard.myAthletes')}
+                </h3>
+                <ComplianceDashboard
+                  onSelectAthlete={(id) => setSelectedAthleteId(id)}
+                  onOpenChat={(relId, athId, name) => setChatTarget({ relationshipId: relId, athleteId: athId, athleteName: name })}
+                />
+            </div>
+
+            {/* Legacy MY ATHLETES Grid (Admin: all athletes) */}
+            {userProfile?.role === UserRole.ADMIN && allAthletes.length > 0 && (
             <div className="bg-[#1C1C1E] border border-zinc-800 rounded-[2rem] p-6">
                 <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                        <User size={18} className="text-[#00FF00]" /> 
-                        {userProfile?.role === UserRole.ADMIN ? t('dashboard.allAthletes') : t('dashboard.myAthletes')}
+                        <User size={18} className="text-zinc-400" /> 
+                        {t('dashboard.allAthletes')}
                     </h3>
                     <span className="text-xs bg-zinc-800 px-2 py-1 rounded text-zinc-400">
-                        {userProfile?.role === UserRole.ADMIN ? allAthletes.length : myAthletes.length} Athleten
+                        {allAthletes.length} Athleten
                     </span>
                 </div>
 
@@ -1097,6 +1117,7 @@ const Dashboard: React.FC = () => {
                     )}
                 </div>
             </div>
+            )}
         </div>
     );
   }

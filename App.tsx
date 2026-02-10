@@ -19,14 +19,19 @@ import CoachChatPage from './pages/CoachChatPage';
 import Shop from './pages/Shop';
 import Profile from './pages/Profile';
 import Chat from './pages/Chat';
+import WorkoutHistory from './pages/WorkoutHistory';
 import Legal from './pages/Legal';
+import PublicBooking from './pages/PublicBooking';
 import Layout from './components/Layout';
 import PWAInstallPrompt from './components/PWAInstallPrompt';
+import CoachOnboarding from './components/CoachOnboarding';
+import AdminOnboarding from './components/AdminOnboarding';
+import ProfileSetupWizard from './components/ProfileSetupWizard';
 import { UserRole } from './types';
 
-// Protected Route Wrapper
+// Protected Route Wrapper with Onboarding Gate
 const ProtectedRoute = ({ allowedRoles }: { allowedRoles?: UserRole[] }) => {
-  const { user, userProfile, loading } = useAuth();
+  const { user, userProfile, loading, refreshProfile, activeRole } = useAuth();
 
   if (loading) {
     return (
@@ -40,14 +45,24 @@ const ProtectedRoute = ({ allowedRoles }: { allowedRoles?: UserRole[] }) => {
     return <Navigate to="/login" replace />;
   }
 
+  // Onboarding Gate — show role-specific onboarding if not completed
+  if (userProfile && !userProfile.onboardingCompleted) {
+    const effectiveRole = activeRole || userProfile.role;
+    if (effectiveRole === UserRole.COACH) {
+      return <CoachOnboarding onComplete={() => refreshProfile()} />;
+    }
+    if (effectiveRole === UserRole.ADMIN) {
+      return <AdminOnboarding onComplete={() => refreshProfile()} />;
+    }
+    // Athlete fallback — existing wizard
+    return <ProfileSetupWizard onComplete={() => refreshProfile()} />;
+  }
+
   // Strict Role Check
   if (allowedRoles && userProfile && !allowedRoles.includes(userProfile.role)) {
-    // If Athlete tries to access Coach routes that are NOT allowed, send to Hub
-    // (Note: Planner and Exercises are now allowed for Athletes in the route definition below)
     if (userProfile.role === UserRole.ATHLETE) {
         return <Navigate to="/" replace />;
     }
-    // General fallback
     return <Navigate to="/" replace />;
   }
 
@@ -67,6 +82,9 @@ const App: React.FC = () => {
             <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/invite/:code" element={<AcceptInvite />} />
             
+            {/* Public Booking Page (no auth required) */}
+            <Route path="/book/:slug" element={<PublicBooking />} />
+
             {/* Legal Pages (Public) */}
             <Route path="/legal/imprint" element={<Legal />} />
             <Route path="/legal/privacy" element={<Legal />} />
@@ -82,6 +100,7 @@ const App: React.FC = () => {
                  <Route path="/shop" element={<Shop />} />
                  <Route path="/chat" element={<Chat />} />
                  <Route path="/profile" element={<Profile />} />
+                 <Route path="/history" element={<WorkoutHistory />} />
               </Route>
               
               {/* Shared Routes (Coach, Admin AND Athlete now for self-planning) */}

@@ -7,7 +7,10 @@
  * - Background Sync
  */
 
-const CACHE_NAME = 'greenlight-v1';
+const CACHE_NAME = 'greenlight-v2';
+const STATIC_CACHE = 'greenlight-static-v2';
+const API_CACHE = 'greenlight-api-v1';
+
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -15,11 +18,14 @@ const STATIC_ASSETS = [
   '/favicon.svg',
 ];
 
+// File extensions that should use cache-first
+const CACHE_FIRST_EXTENSIONS = /\.(js|css|woff2?|ttf|eot|svg|png|jpg|jpeg|gif|webp|ico)$/i;
+
 // Install: Cache static assets
 self.addEventListener('install', (event) => {
   console.log('[SW] Installing...');
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
+    caches.open(STATIC_CACHE).then((cache) => {
       console.log('[SW] Caching static assets');
       return cache.addAll(STATIC_ASSETS);
     })
@@ -30,11 +36,12 @@ self.addEventListener('install', (event) => {
 // Activate: Clean up old caches
 self.addEventListener('activate', (event) => {
   console.log('[SW] Activating...');
+  const validCaches = [CACHE_NAME, STATIC_CACHE, API_CACHE];
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames
-          .filter((name) => name !== CACHE_NAME)
+          .filter((name) => !validCaches.includes(name))
           .map((name) => {
             console.log('[SW] Deleting old cache:', name);
             return caches.delete(name);
@@ -45,36 +52,83 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch: Network-first strategy with cache fallback
+// Fetch: Strategy depends on request type
 self.addEventListener('fetch', (event) => {
   // Skip non-GET requests
   if (event.request.method !== 'GET') return;
-  
-  // Skip API calls and external requests
+
   const url = new URL(event.request.url);
-  if (url.pathname.startsWith('/api/') || url.origin !== self.location.origin) {
+
+  // Skip Vercel serverless API calls
+  if (url.pathname.startsWith('/api/')) return;
+
+  // Skip Supabase auth requests (must always be fresh)
+  if (url.href.includes('supabase.co/auth/')) return;
+
+  // Strategy 1: Cache-first for static assets (JS/CSS/images/fonts)
+  if (CACHE_FIRST_EXTENSIONS.test(url.pathname) && url.origin === self.location.origin) {
+    event.respondWith(
+      caches.match(event.request).then((cached) => {
+        if (cached) {
+          // Return cached version, update in background
+          fetch(event.request).then((response) => {
+            if (response.ok) {
+              caches.open(STATIC_CACHE).then((cache) => cache.put(event.request, response));
+            }
+          }).catch(() => {});
+          return cached;
+        }
+        // Not cached: fetch and cache
+        return fetch(event.request).then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(STATIC_CACHE).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
+        }).catch(() => new Response('Offline', { status: 503 }));
+      })
+    );
     return;
   }
 
+  // Strategy 2: Stale-while-revalidate for Supabase REST API data
+  if (url.href.includes('supabase.co/rest/')) {
+    event.respondWith(
+      caches.match(event.request).then((cached) => {
+        const fetchPromise = fetch(event.request).then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(API_CACHE).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
+        }).catch(() => {
+          // Network failure: return cached or error
+          if (cached) return cached;
+          return new Response(JSON.stringify({ error: 'Offline' }), {
+            status: 503,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        });
+        // Return cached immediately if available, otherwise wait for network
+        return cached || fetchPromise;
+      })
+    );
+    return;
+  }
+
+  // Strategy 3: Network-first for navigation (HTML pages)
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // Clone and cache successful responses
         if (response.ok) {
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseClone);
-          });
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         }
         return response;
       })
       .catch(() => {
-        // Fallback to cache on network failure
         return caches.match(event.request).then((cachedResponse) => {
-          if (cachedResponse) {
-            return cachedResponse;
-          }
-          // Return offline page for navigation requests
+          if (cachedResponse) return cachedResponse;
           if (event.request.mode === 'navigate') {
             return caches.match('/');
           }

@@ -11,6 +11,7 @@ import {
   AlertCircle, Eye, EyeOff, Link2, Sparkles, Save, Info, AlertTriangle, Scale
 } from 'lucide-react';
 import PriceChangeChecklist from '../components/PriceChangeChecklist';
+import ConfirmActionModal, { ConfirmActionConfig } from '../components/ConfirmActionModal';
 
 type ViewMode = 'list' | 'create' | 'edit';
 
@@ -50,6 +51,11 @@ const AdminProducts: React.FC = () => {
   const [pendingFormSubmit, setPendingFormSubmit] = useState<React.FormEvent | null>(null);
   const [coachCalendars, setCoachCalendars] = useState<any[]>([]);
   const [selectedCalendarId, setSelectedCalendarId] = useState<string>('');
+
+  // Confirmation Modal
+  const [confirmConfig, setConfirmConfig] = useState<ConfirmActionConfig | null>(null);
+  const [confirmAction, setConfirmAction] = useState<(() => Promise<void>) | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
 
   useEffect(() => {
     if (user) fetchData();
@@ -343,27 +349,95 @@ const AdminProducts: React.FC = () => {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Produkt wirklich löschen?")) return;
-    try {
-      await deleteProduct(id);
-      setProducts(products.filter(p => p.id !== id));
-      setSuccess("Produkt gelöscht!");
-    } catch (err: any) {
-      setError(`Fehler beim Löschen: ${err.message}`);
+  const handleDelete = (id: string) => {
+    const product = products.find(p => p.id === id);
+    const isSubscription = product?.interval && product.interval !== 'onetime';
+    setConfirmConfig({
+      title: `"${product?.title || 'Produkt'}" löschen?`,
+      description: 'Das Produkt wird unwiderruflich gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.',
+      severity: 'danger',
+      checklist: [
+        { id: 'understand', label: 'Mir ist bewusst, dass das Produkt dauerhaft entfernt wird', required: true },
+        ...(isSubscription ? [
+          { id: 'stripe', label: 'Bestehende Stripe-Abonnements müssen separat in Stripe storniert/migriert werden', required: true },
+          { id: 'subscribers', label: 'Aktive Abonnenten verlieren den Zugang zu diesem Produkt', required: true },
+        ] : []),
+        { id: 'confirm', label: 'Ich möchte dieses Produkt wirklich löschen', required: true },
+      ],
+      confirmLabel: 'Endgültig löschen',
+    });
+    setConfirmAction(() => async () => {
+      try {
+        await deleteProduct(id);
+        setProducts(products.filter(p => p.id !== id));
+        setSuccess('Produkt gelöscht!');
+      } catch (err: any) {
+        setError(`Fehler beim Löschen: ${err.message}`);
+      }
+    });
+  };
+
+  const handleToggleActive = (product: Product) => {
+    const isDeactivating = product.isActive;
+    const isSubscription = product.interval && product.interval !== 'onetime';
+
+    if (isDeactivating) {
+      // Deactivating requires confirmation — could affect Stripe subscribers
+      setConfirmConfig({
+        title: `"${product.title}" deaktivieren?`,
+        description: isSubscription
+          ? 'Dieses Produkt hat ein Abo-Intervall. Das Deaktivieren kann aktive Stripe-Abonnements beeinträchtigen.'
+          : 'Das Produkt wird im Shop nicht mehr angezeigt. Bestehende Käufer behalten ihren Zugang.',
+        severity: isSubscription ? 'danger' : 'warning',
+        checklist: [
+          { id: 'hidden', label: 'Mir ist bewusst, dass das Produkt im Shop nicht mehr sichtbar ist', required: true },
+          ...(isSubscription ? [
+            { id: 'stripe-subs', label: 'Aktive Stripe-Abonnements laufen weiter — Neukäufe werden verhindert', required: true },
+            { id: 'stripe-check', label: 'Ich habe geprüft, ob bestehende Abonnenten informiert werden müssen', required: true },
+          ] : []),
+          { id: 'confirm', label: 'Ich möchte dieses Produkt wirklich deaktivieren', required: true },
+        ],
+        confirmLabel: 'Produkt deaktivieren',
+      });
+      setConfirmAction(() => async () => {
+        try {
+          await updateProduct(product.id, { is_active: false });
+          setProducts(products.map(p => p.id === product.id ? { ...p, isActive: false } : p));
+          setSuccess('Produkt deaktiviert');
+        } catch (err: any) {
+          setError(`Fehler: ${err.message}`);
+        }
+      });
+    } else {
+      // Reactivating is safe — no confirmation needed
+      (async () => {
+        try {
+          await updateProduct(product.id, { is_active: true });
+          setProducts(products.map(p => p.id === product.id ? { ...p, isActive: true } : p));
+          setSuccess('Produkt aktiviert');
+        } catch (err: any) {
+          setError(`Fehler: ${err.message}`);
+        }
+      })();
     }
   };
 
-  const handleToggleActive = async (product: Product) => {
+  const executeConfirm = async () => {
+    if (!confirmAction) return;
+    setConfirmLoading(true);
     try {
-      await updateProduct(product.id, { is_active: !product.isActive });
-      setProducts(products.map(p => 
-        p.id === product.id ? { ...p, isActive: !p.isActive } : p
-      ));
-      setSuccess(product.isActive ? "Produkt deaktiviert" : "Produkt aktiviert");
-    } catch (err: any) {
-      setError(`Fehler: ${err.message}`);
+      await confirmAction();
+    } finally {
+      setConfirmLoading(false);
+      setConfirmConfig(null);
+      setConfirmAction(null);
     }
+  };
+
+  const cancelConfirm = () => {
+    setConfirmConfig(null);
+    setConfirmAction(null);
+    setConfirmLoading(false);
   };
 
   // ============ RENDER: PRODUCT LIST ============
@@ -432,13 +506,6 @@ const AdminProducts: React.FC = () => {
                     )}
                   </div>
                   <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button 
-                      onClick={() => handleToggleActive(product)} 
-                      className="bg-black/80 p-2 rounded-lg text-white hover:text-[#00FF00] transition-colors"
-                      title={product.isActive ? "Deaktivieren" : "Aktivieren"}
-                    >
-                      {product.isActive ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
                     <button onClick={() => handleEdit(product)} className="bg-black/80 p-2 rounded-lg text-white hover:text-[#00FF00] transition-colors">
                       <Edit size={16} />
                     </button>
@@ -455,11 +522,43 @@ const AdminProducts: React.FC = () => {
                       {product.interval === 'onetime' ? 'Einmalig' : `/ ${product.interval}`}
                     </span>
                   </div>
-                  <p className="text-zinc-500 text-sm line-clamp-2">{product.description}</p>
+                  <p className="text-zinc-500 text-sm line-clamp-2 mb-4">{product.description}</p>
+
+                  {/* Always-visible status toggle */}
+                  <button
+                    onClick={() => handleToggleActive(product)}
+                    className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wide transition-all ${
+                      product.isActive
+                        ? 'bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 hover:border-amber-500/40'
+                        : 'bg-[#00FF00]/10 border border-[#00FF00]/20 text-[#00FF00] hover:bg-[#00FF00]/20 hover:border-[#00FF00]/40'
+                    }`}
+                  >
+                    {product.isActive ? (
+                      <>
+                        <EyeOff size={14} />
+                        Produkt deaktivieren
+                      </>
+                    ) : (
+                      <>
+                        <Eye size={14} />
+                        Produkt aktivieren
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
             ))}
           </div>
+        )}
+
+        {/* Confirmation Modal (list view) */}
+        {confirmConfig && (
+          <ConfirmActionModal
+            config={confirmConfig}
+            loading={confirmLoading}
+            onConfirm={executeConfirm}
+            onCancel={cancelConfirm}
+          />
         )}
       </div>
     );
@@ -947,3 +1046,4 @@ const AdminProducts: React.FC = () => {
 };
 
 export default AdminProducts;
+// Note: ConfirmActionModal is rendered in both list and edit views

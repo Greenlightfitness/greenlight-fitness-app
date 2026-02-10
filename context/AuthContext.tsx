@@ -66,6 +66,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           restingHeartRate: profile.resting_heart_rate,
           maxHeartRate: profile.max_heart_rate,
           onboardingCompleted: profile.onboarding_completed,
+          avatarUrl: profile.avatar_url,
           createdAt: profile.created_at,
         };
         setUserProfile(mappedProfile);
