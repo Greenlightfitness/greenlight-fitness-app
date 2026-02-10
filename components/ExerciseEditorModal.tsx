@@ -32,8 +32,8 @@ const ExerciseEditorModal: React.FC<ExerciseEditorModalProps> = ({ isOpen, onClo
   ];
 
   const TRACKING_TYPE_OPTIONS: { value: ExerciseTrackingType; label: string; icon: React.ReactNode; metrics: string[] }[] = [
-    { value: 'WEIGHT_REPS', label: 'Gewicht + Wdh.', icon: <Dumbbell size={16} />, metrics: ['reps', 'weight', 'rpe'] },
-    { value: 'BODYWEIGHT_REPS', label: 'Bodyweight (nur Wdh.)', icon: <Repeat size={16} />, metrics: ['reps', 'rpe'] },
+    { value: 'WEIGHT_REPS', label: 'Gewicht + Wdh.', icon: <Dumbbell size={16} />, metrics: ['reps', 'weight'] },
+    { value: 'BODYWEIGHT_REPS', label: 'Bodyweight (nur Wdh.)', icon: <Repeat size={16} />, metrics: ['reps'] },
     { value: 'TIME', label: 'Zeit (Dauer)', icon: <Timer size={16} />, metrics: ['time'] },
     { value: 'DISTANCE', label: 'Distanz', icon: <Route size={16} />, metrics: ['distance'] },
     { value: 'TIME_DISTANCE', label: 'Zeit + Distanz', icon: <Route size={16} />, metrics: ['time', 'distance'] },
@@ -60,7 +60,7 @@ const ExerciseEditorModal: React.FC<ExerciseEditorModalProps> = ({ isOpen, onClo
     videoUrl: '',
     thumbnailUrl: '',
     sequenceUrl: '',
-    defaultVisibleMetrics: ['reps', 'weight', 'rpe'],
+    defaultVisibleMetrics: ['reps', 'weight'],
     defaultSets: []
   });
 
@@ -81,7 +81,7 @@ const ExerciseEditorModal: React.FC<ExerciseEditorModalProps> = ({ isOpen, onClo
           videoUrl: exerciseToEdit.videoUrl || '',
           thumbnailUrl: exerciseToEdit.thumbnailUrl || '',
           sequenceUrl: exerciseToEdit.sequenceUrl || '',
-          defaultVisibleMetrics: exerciseToEdit.defaultVisibleMetrics || ['reps', 'weight', 'rpe'],
+          defaultVisibleMetrics: exerciseToEdit.defaultVisibleMetrics || ['reps', 'weight'],
           defaultSets: exerciseToEdit.defaultSets || Array(3).fill(null).map(() => ({
              id: generateId(), type: 'Normal', reps: '', weight: '', rpe: '', rest: ''
           }))
@@ -96,7 +96,7 @@ const ExerciseEditorModal: React.FC<ExerciseEditorModalProps> = ({ isOpen, onClo
           videoUrl: '',
           thumbnailUrl: '',
           sequenceUrl: '',
-          defaultVisibleMetrics: ['reps', 'weight', 'rpe'],
+          defaultVisibleMetrics: ['reps', 'weight'],
           defaultSets: Array(3).fill(null).map(() => ({
              id: generateId(), type: 'Normal', reps: '', weight: '', rpe: '', rest: ''
           }))
@@ -111,7 +111,7 @@ const ExerciseEditorModal: React.FC<ExerciseEditorModalProps> = ({ isOpen, onClo
     setFormData(prev => ({
       ...prev,
       trackingType: type,
-      defaultVisibleMetrics: option?.metrics || ['reps', 'weight', 'rpe']
+      defaultVisibleMetrics: option?.metrics || ['reps', 'weight']
     }));
   };
 
