@@ -201,6 +201,36 @@ export const NotificationTypes = {
     body: `${athleteName} wurde dir zugewiesen. Mach dich vertraut!`,
     tag: 'new-athlete',
     data: { url: '/' }
+  }),
+
+  dailyCheckInReminder: () => ({
+    title: '☀️ Guten Morgen! Zeit für deinen Check-In',
+    body: 'Wie fühlst du dich heute? 30 Sekunden für bessere Ergebnisse.',
+    tag: 'daily-checkin',
+    data: { url: '/' },
+    requireInteraction: true
+  }),
+
+  weeklyCheckInReminder: () => ({
+    title: '📊 Wöchentlicher Check-In',
+    body: 'Dein Coach wartet auf dein wöchentliches Update. Wie war deine Woche?',
+    tag: 'weekly-checkin',
+    data: { url: '/' },
+    requireInteraction: true
+  }),
+
+  workoutReminder: (sessionName: string) => ({
+    title: '💪 Workout heute!',
+    body: `"${sessionName}" steht auf dem Plan. Bist du bereit?`,
+    tag: 'workout-reminder',
+    data: { url: '/' }
+  }),
+
+  streakReminder: (days: number) => ({
+    title: `🔥 ${days}-Tage-Streak!`,
+    body: 'Mach weiter so! Dein nächster Check-In hält die Serie am Laufen.',
+    tag: 'streak-reminder',
+    data: { url: '/' }
   })
 };
 
