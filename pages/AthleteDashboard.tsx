@@ -64,7 +64,7 @@ interface VolumeData {
 }
 
 const AthleteDashboard: React.FC = () => {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [weeklyStats, setWeeklyStats] = useState<WeeklyStats[]>([]);
   const [wellnessData, setWellnessData] = useState<DailyWellness[]>([]);
@@ -303,6 +303,13 @@ const AthleteDashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-black text-white pb-24">
+      {/* Greeting */}
+      <div className="px-4 pt-4 pb-1">
+        <h1 className="text-2xl font-bold text-white">
+          Hallo{userProfile?.firstName ? `, ${userProfile.firstName}` : ''} <span className="inline-block animate-in fade-in">👋</span>
+        </h1>
+      </div>
+
       {/* Week Stats Header - Premium Style (Green) */}
       <div className="p-4">
         <div className="bg-gradient-to-r from-[#00FF00]/10 to-transparent border border-[#00FF00]/20 rounded-2xl p-4">
@@ -337,11 +344,6 @@ const AthleteDashboard: React.FC = () => {
         <GoalWidget compact />
       </div>
 
-      {/* My Coach Section */}
-      <div className="px-4 mt-4">
-        <MyCoach />
-      </div>
-      
       {/* Daily Wellness Card - Premium Style with Week Chart */}
       <div className="px-4 mt-4">
         <div className="bg-gradient-to-r from-purple-500/10 to-transparent border border-purple-500/20 rounded-2xl p-4">
@@ -491,7 +493,7 @@ const AthleteDashboard: React.FC = () => {
       </div>
 
       {/* Personal Bests - Premium Feature - Premium Style */}
-      <div className="px-4 mt-4 mb-8">
+      <div className="px-4 mt-4">
         <div 
           className={`bg-gradient-to-r from-yellow-500/10 to-transparent border border-yellow-500/20 rounded-2xl p-4 ${!hasPremium ? 'cursor-pointer' : ''}`}
           onClick={() => !hasPremium && setShowPremiumModal(true)}
@@ -551,6 +553,11 @@ const AthleteDashboard: React.FC = () => {
             )}
           </div>
         </div>
+      </div>
+
+      {/* My Coach Section - at bottom */}
+      <div className="px-4 mt-4 mb-8">
+        <MyCoach />
       </div>
 
       {/* Wellness Modal */}
