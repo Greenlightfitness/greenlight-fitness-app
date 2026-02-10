@@ -20,6 +20,7 @@ interface CoachChatProps {
   hasAccess: boolean;
   onClose?: () => void;
   isFullPage?: boolean;
+  hideHeader?: boolean;
 }
 
 interface ChatMessage {
@@ -44,6 +45,7 @@ const CoachChat: React.FC<CoachChatProps> = ({
   hasAccess,
   onClose,
   isFullPage = false,
+  hideHeader = false,
 }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -286,25 +288,27 @@ const CoachChat: React.FC<CoachChatProps> = ({
 
   return (
     <div className={containerClass}>
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-[#1C1C1E] shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-[#00FF00]/10 border border-[#00FF00]/30 flex items-center justify-center">
-            <span className="text-[#00FF00] font-bold text-sm">
-              {partnerName.charAt(0).toUpperCase()}
-            </span>
+      {/* Header (hidden when parent provides its own) */}
+      {!hideHeader && (
+        <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-[#1C1C1E] shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-[#00FF00]/10 border border-[#00FF00]/30 flex items-center justify-center">
+              <span className="text-[#00FF00] font-bold text-sm">
+                {partnerName.charAt(0).toUpperCase()}
+              </span>
+            </div>
+            <div>
+              <p className="text-white font-bold text-sm">{partnerName}</p>
+              <p className="text-[#00FF00] text-[10px] font-medium">Online</p>
+            </div>
           </div>
-          <div>
-            <p className="text-white font-bold text-sm">{partnerName}</p>
-            <p className="text-[#00FF00] text-[10px] font-medium">Online</p>
-          </div>
+          {onClose && (
+            <button onClick={onClose} className="p-2 text-zinc-500 hover:text-white transition-colors">
+              <X size={20} />
+            </button>
+          )}
         </div>
-        {onClose && (
-          <button onClick={onClose} className="p-2 text-zinc-500 hover:text-white transition-colors">
-            <X size={20} />
-          </button>
-        )}
-      </div>
+      )}
 
       {/* Messages */}
       <div
@@ -392,7 +396,7 @@ const CoachChat: React.FC<CoachChatProps> = ({
       )}
 
       {/* Input */}
-      <div className="px-3 py-3 border-t border-zinc-800 bg-[#1C1C1E] shrink-0">
+      <div className={`px-3 py-3 border-t border-zinc-800 bg-[#1C1C1E] shrink-0 ${hideHeader ? 'safe-area-bottom pb-4' : ''}`}>
         {isRecording ? (
           <div className="flex items-center gap-3">
             <button

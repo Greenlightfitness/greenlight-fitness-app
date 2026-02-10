@@ -58,8 +58,19 @@ const Layout: React.FC = () => {
   const isPlannerActive = location.pathname === '/planner';
   const isDashboardRoute = location.pathname === '/';
 
+  const isImmersiveChat = isAthlete && isChatActive;
+
   // --- ATHLETE LAYOUT (Mobile App Style) ---
   if (isAthlete) {
+      // Immersive fullscreen mode for chat (like WhatsApp)
+      if (isImmersiveChat) {
+        return (
+          <div className="h-[100dvh] bg-[#0A0A0A] text-white flex flex-col font-sans selection:bg-[#00FF00] selection:text-black overflow-hidden">
+            <Outlet />
+          </div>
+        );
+      }
+
       return (
         <div className="min-h-screen bg-[#000000] text-white flex flex-col font-sans selection:bg-[#00FF00] selection:text-black overflow-x-hidden">
             
