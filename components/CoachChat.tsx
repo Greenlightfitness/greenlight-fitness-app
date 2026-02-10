@@ -338,6 +338,45 @@ const CoachChat: React.FC<CoachChatProps> = ({
                     </span>
                   </div>
                 )}
+                {msg.message_type === 'system' && msg.content?.startsWith('{') ? (() => {
+                  try {
+                    const data = JSON.parse(msg.content!);
+                    if (data.type === 'attention') {
+                      const isInjury = data.attentionType === 'INJURY';
+                      const severityColor = data.severity === 'HIGH' ? 'bg-red-500' : data.severity === 'MEDIUM' ? 'bg-orange-500' : 'bg-yellow-500';
+                      return (
+                        <div className="flex justify-center mb-2">
+                          <div className={`max-w-[85%] rounded-2xl px-4 py-3 ${isInjury ? 'bg-red-950/40 border border-red-900/50' : 'bg-zinc-800/50 border border-zinc-700/50'}`}>
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <div className={`w-2 h-2 rounded-full ${severityColor} ${data.severity === 'HIGH' ? 'animate-pulse' : ''}`} />
+                              <span className={`text-xs font-bold uppercase tracking-wider ${isInjury ? 'text-red-400' : 'text-zinc-400'}`}>
+                                {isInjury ? (
+                                  <span className="underline decoration-red-500 decoration-2 underline-offset-2 cursor-pointer hover:text-red-300 transition-colors">
+                                    {data.label}
+                                  </span>
+                                ) : data.label}
+                              </span>
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${
+                                data.severity === 'HIGH' ? 'bg-red-500/20 text-red-400' :
+                                data.severity === 'MEDIUM' ? 'bg-orange-500/20 text-orange-400' :
+                                'bg-yellow-500/20 text-yellow-400'
+                              }`}>
+                                {data.severityLabel}
+                              </span>
+                            </div>
+                            <p className={`text-sm leading-relaxed ${isInjury ? 'text-red-200/80' : 'text-zinc-400'}`}>
+                              "{data.message}"
+                            </p>
+                            <div className="text-[10px] text-zinc-600 mt-1.5">
+                              {formatMessageTime(msg.created_at)}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+                  } catch {}
+                  return null;
+                })() : (
                 <div className={`flex ${isMine ? 'justify-end' : 'justify-start'} mb-1`}>
                   <div
                     className={`max-w-[75%] rounded-2xl px-4 py-2.5 ${
@@ -371,6 +410,7 @@ const CoachChat: React.FC<CoachChatProps> = ({
                     )}
                   </div>
                 </div>
+                )}
               </React.Fragment>
             );
           })

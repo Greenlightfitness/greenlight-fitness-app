@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { supabase, getAssignedPlans, updateAssignedPlan, getAttentions, getActivities, getAppointments, createAttention, createActivity, getPlans, getWeeksByPlan, getSessionsByWeek, getPendingCoachingApprovals, approveCoaching, rejectCoaching, updateAppointment, getActiveCoachingRelationships, getAllAthletes } from '../services/supabase';
+import { supabase, getAssignedPlans, updateAssignedPlan, getAttentions, getActivities, getAppointments, createAttention, createActivity, getPlans, getWeeksByPlan, getSessionsByWeek, getPendingCoachingApprovals, approveCoaching, rejectCoaching, updateAppointment, getActiveCoachingRelationships, getAllAthletes, sendAttentionChatNotification } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { UserRole, AssignedPlan, AssignedSession, WorkoutSet, Attention, ActivityFeedItem, AttentionType, AttentionSeverity, Appointment, TrainingPlan, TrainingWeek, TrainingSession, CoachingApproval } from '../types';
@@ -70,7 +70,7 @@ const ReportIssueModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
         if (!user || !userProfile) return;
         setLoading(true);
         try {
-            await createAttention({
+            const attentionData = await createAttention({
                 athlete_id: user.id,
                 athlete_name: userProfile.nickname || userProfile.email,
                 type,
@@ -84,9 +84,19 @@ const ReportIssueModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
                 athlete_id: user.id,
                 athlete_name: userProfile.nickname || userProfile.email,
                 type: 'NOTE',
-                title: type === 'INJURY' ? 'Reported an Injury' : 'Reported an Issue',
+                title: type === 'INJURY' ? t('dashboard.injuryReported') : 'Reported an Issue',
                 subtitle: message,
             });
+
+            // Auto-send system message to coaching chat
+            if (attentionData?.id) {
+                await sendAttentionChatNotification(user.id, {
+                    id: attentionData.id,
+                    type,
+                    severity,
+                    message,
+                });
+            }
 
             alert(t('report.success'));
             onClose();
@@ -793,7 +803,7 @@ const Dashboard: React.FC = () => {
                     <h1 className="text-3xl font-bold text-white tracking-tight">
                         {getGreeting()}, <span className="text-[#00FF00]">{userProfile?.email?.split('@')[0]}</span>
                     </h1>
-                    <p className="text-zinc-400 mt-1">Here is what's happening with your team today.</p>
+                    <p className="text-zinc-400 mt-1">{t('dashboard.teamOverview')}</p>
                 </div>
                 <button onClick={() => setShowTools(true)} className="p-3 bg-zinc-900 border border-zinc-800 rounded-xl hover:border-[#00FF00] transition-colors group">
                     <Calculator size={24} className="text-zinc-400 group-hover:text-[#00FF00]" />
@@ -823,9 +833,9 @@ const Dashboard: React.FC = () => {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-[#1C1C1E] p-5 rounded-[1.5rem] border border-zinc-800 relative overflow-hidden group">
                     <div className="relative z-10">
-                        <div className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mb-1">Open Issues</div>
+                        <div className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mb-1">{t('dashboard.openIssues')}</div>
                         <div className="text-3xl font-bold text-white">{attentions.length}</div>
-                        <div className="text-xs text-red-500 mt-1 font-medium">{attentions.filter(a => a.severity === 'HIGH').length} High Priority</div>
+                        <div className="text-xs text-red-500 mt-1 font-medium">{t('dashboard.highPriority', { count: String(attentions.filter(a => a.severity === 'HIGH').length) })}</div>
                     </div>
                     <div className="absolute right-0 bottom-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
                         <AlertCircle size={40} />
@@ -834,9 +844,9 @@ const Dashboard: React.FC = () => {
                 {/* Appointment KPI */}
                 <div className="bg-[#1C1C1E] p-5 rounded-[1.5rem] border border-zinc-800 relative overflow-hidden group">
                     <div className="relative z-10">
-                        <div className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mb-1">Requests</div>
+                        <div className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mb-1">{t('dashboard.requests')}</div>
                         <div className="text-3xl font-bold text-white">{appointments.length}</div>
-                        <div className="text-xs text-blue-400 mt-1 font-medium">Pending Approvals</div>
+                        <div className="text-xs text-blue-400 mt-1 font-medium">{t('dashboard.pendingApprovals')}</div>
                     </div>
                     <div className="absolute right-0 bottom-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
                         <Phone size={40} />
@@ -849,11 +859,11 @@ const Dashboard: React.FC = () => {
                 {/* Needs Attention / Alerts */}
                 <div className="col-span-1 bg-[#1C1C1E] border border-zinc-800 rounded-[2rem] p-6">
                     <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                        <Bell size={18} className="text-red-500" /> Needs Attention
+                        <Bell size={18} className="text-red-500" /> {t('dashboard.needsAttention')}
                     </h3>
                     <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
                         {attentions.length === 0 ? (
-                            <p className="text-zinc-500 text-sm italic">No open issues reported.</p>
+                            <p className="text-zinc-500 text-sm italic">{t('dashboard.noOpenIssues')}</p>
                         ) : (
                             attentions.map(att => (
                                 <div key={att.id} onClick={() => setSelectedAthleteId(att.athleteId)} className="flex items-center gap-3 p-3 bg-zinc-900/50 rounded-xl border border-zinc-800 hover:bg-zinc-900 hover:border-zinc-700 transition-all cursor-pointer group">
@@ -876,7 +886,7 @@ const Dashboard: React.FC = () => {
                 {/* Team Activity Feed */}
                 <div className="col-span-1 md:col-span-2 bg-[#1C1C1E] border border-zinc-800 rounded-[2rem] p-6">
                     <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                        <Activity size={18} className="text-[#00FF00]" /> Recent Activity
+                        <Activity size={18} className="text-[#00FF00]" /> {t('dashboard.recentActivity')}
                     </h3>
                     <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
                         {/* Coaching Approvals - Athletes waiting for approval */}
@@ -957,7 +967,7 @@ const Dashboard: React.FC = () => {
                         )}
 
                         {activityFeed.length === 0 && appointments.length === 0 ? (
-                            <p className="text-zinc-500 text-sm italic">No recent activity.</p>
+                            <p className="text-zinc-500 text-sm italic">{t('dashboard.noRecentActivity')}</p>
                         ) : (
                             activityFeed.map(feed => (
                                 <div key={feed.id} onClick={() => setSelectedAthleteId(feed.athleteId)} className="flex gap-4 border-b border-zinc-800 pb-4 last:border-0 last:pb-0 hover:bg-white/5 p-2 -mx-2 rounded-xl transition-colors cursor-pointer group">
@@ -984,7 +994,7 @@ const Dashboard: React.FC = () => {
                 <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-bold text-white flex items-center gap-2">
                         <User size={18} className="text-[#00FF00]" /> 
-                        {userProfile?.role === UserRole.ADMIN ? 'Alle Athleten' : 'Meine Athleten'}
+                        {userProfile?.role === UserRole.ADMIN ? t('dashboard.allAthletes') : t('dashboard.myAthletes')}
                     </h3>
                     <span className="text-xs bg-zinc-800 px-2 py-1 rounded text-zinc-400">
                         {userProfile?.role === UserRole.ADMIN ? allAthletes.length : myAthletes.length} Athleten
@@ -998,8 +1008,8 @@ const Dashboard: React.FC = () => {
                             <User size={32} className="mx-auto mb-2 text-zinc-700" />
                             <p className="text-sm">
                                 {userProfile?.role === UserRole.ADMIN 
-                                    ? 'Noch keine Athleten registriert.' 
-                                    : 'Du hast noch keine zugeordneten Athleten.'}
+                                    ? t('dashboard.noAthletesAdmin') 
+                                    : t('dashboard.noAthletesCoach')}
                             </p>
                         </div>
                     ) : (

@@ -1614,6 +1614,56 @@ export const sendChatMessage = async (message: {
   return data;
 };
 
+// Send automatic system message to coaching chat when athlete reports an issue
+export const sendAttentionChatNotification = async (athleteId: string, attention: {
+  type: string;
+  severity: string;
+  message: string;
+  id: string;
+}) => {
+  try {
+    // Find active coaching relationship for this athlete
+    const { data: rel } = await supabase
+      .from('coaching_relationships')
+      .select('id, coach_id')
+      .eq('athlete_id', athleteId)
+      .eq('status', 'ACTIVE')
+      .limit(1)
+      .maybeSingle();
+
+    if (!rel) return; // No active coaching → no chat message
+
+    const typeLabel = attention.type === 'INJURY' ? 'Verletzung'
+      : attention.type === 'MISSED_SESSION' ? 'Verpasste Einheit'
+      : attention.type === 'FEEDBACK' ? 'Feedback'
+      : 'Meldung';
+
+    const severityLabel = attention.severity === 'HIGH' ? 'Hoch'
+      : attention.severity === 'MEDIUM' ? 'Mittel' : 'Niedrig';
+
+    // System message with structured content for special rendering
+    const content = JSON.stringify({
+      type: 'attention',
+      attentionType: attention.type,
+      attentionId: attention.id,
+      severity: attention.severity,
+      label: typeLabel,
+      severityLabel,
+      message: attention.message,
+    });
+
+    await supabase.from('chat_messages').insert({
+      coaching_relationship_id: rel.id,
+      sender_id: athleteId,
+      receiver_id: rel.coach_id,
+      message_type: 'system',
+      content,
+    });
+  } catch (error) {
+    console.error('Error sending attention chat notification:', error);
+  }
+};
+
 export const markMessagesAsRead = async (relationshipId: string, receiverId: string) => {
   const { error } = await supabase
     .from('chat_messages')
