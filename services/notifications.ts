@@ -132,7 +132,7 @@ export function showLocalNotification(
     return;
   }
 
-  const defaultOptions: NotificationOptions = {
+  const defaultOptions: NotificationOptions & { vibrate?: number[] } = {
     icon: '/icons/icon-192x192.png',
     badge: '/icons/badge-72x72.png',
     vibrate: [100, 50, 100],

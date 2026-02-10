@@ -5,7 +5,7 @@ import CoachChat from './CoachChat';
 import { User, MessageCircle, Calendar, Star, ChevronRight, Shield, Lock } from 'lucide-react';
 
 const MyCoach: React.FC = () => {
-  const { user, profile } = useAuth();
+  const { user, userProfile: profile } = useAuth();
   const [relationship, setRelationship] = useState<any>(null);
   const [chatAccess, setChatAccess] = useState(false);
   const [showChat, setShowChat] = useState(false);

@@ -510,7 +510,7 @@ const Shop: React.FC = () => {
                                               <option value="16:00">16:00</option>
                                           </select>
                                       </div>
-                                      <Button onClick={handleBookAppointment} disabled={!selectedDate || !selectedTime || purchasing === 'booking'} fullWidth className="mt-4">
+                                      <Button onClick={() => handleBookAppointment()} disabled={!selectedDate || !selectedTime || purchasing === 'booking'} fullWidth className="mt-4">
                                           {purchasing === 'booking' ? "Buche..." : "Termin best\u00e4tigen"}
                                       </Button>
                                       <button onClick={() => setBookingMode(false)} className="w-full text-center text-zinc-500 py-4 hover:text-white">Abbrechen</button>

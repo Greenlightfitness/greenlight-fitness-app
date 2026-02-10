@@ -256,6 +256,7 @@ export interface WorkoutBlock {
   rounds?: string; // Specific for Circuits
   restBetweenRounds?: string; // Specific for Circuits
   exercises: WorkoutExercise[];
+  isCompleted?: boolean; // Runtime: block completion state
 }
 
 export interface TrainingSession {

@@ -419,7 +419,7 @@ const Planner: React.FC = () => {
                   <option value="ALL">All Authors</option>
                   <option value={user?.id}>Me (System/Admin)</option>
                   {(Object.values(coachMap) as UserProfile[])
-                    .filter(c => c.uid !== user?.uid)
+                    .filter(c => c.uid !== user?.id)
                     .map(c => (
                       <option key={c.uid} value={c.uid}>{c.firstName || c.email} ({c.role})</option>
                   ))}
@@ -472,7 +472,7 @@ const Planner: React.FC = () => {
           {filteredPlans.map((plan) => {
             const author = coachMap[plan.coachId];
             const isSystem = author?.role === UserRole.ADMIN;
-            const isMe = plan.coachId === user?.uid;
+            const isMe = plan.coachId === user?.id;
             
             // Only show Assign Actions for Coaches/Admins
             const canManage = userProfile?.role === UserRole.COACH || userProfile?.role === UserRole.ADMIN;

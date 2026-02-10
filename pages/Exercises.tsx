@@ -206,10 +206,10 @@ const Exercises: React.FC = () => {
     if (userProfile?.role === UserRole.ADMIN) {
         if (filterMode === 'SYSTEM') {
             const author = userMap[ex.authorId || ''];
-            matchesAdminFilter = author?.role === UserRole.ADMIN || ex.authorId === user?.uid;
+            matchesAdminFilter = author?.role === UserRole.ADMIN || ex.authorId === user?.id;
         } else if (filterMode === 'COACH') {
             const author = userMap[ex.authorId || ''];
-            matchesAdminFilter = author?.role !== UserRole.ADMIN && ex.authorId !== user?.uid;
+            matchesAdminFilter = author?.role !== UserRole.ADMIN && ex.authorId !== user?.id;
         }
     }
 
@@ -363,7 +363,7 @@ const Exercises: React.FC = () => {
         ) : filteredExercises.length > 0 ? (
           filteredExercises.map((ex) => {
             // Determine authorship visual
-            const isMe = ex.authorId === user?.uid;
+            const isMe = ex.authorId === user?.id;
             const authorProfile = userMap[ex.authorId || ''];
             const isAdminAuthor = authorProfile?.role === UserRole.ADMIN || (isMe && userProfile?.role === UserRole.ADMIN);
 
