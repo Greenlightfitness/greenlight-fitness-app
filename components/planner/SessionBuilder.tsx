@@ -5,7 +5,7 @@ import Button from '../Button';
 import ExerciseSelector from './ExerciseSelector';
 import ExerciseEditorModal from '../ExerciseEditorModal';
 import ConfirmationModal from '../ConfirmationModal';
-import LibrarySelector from './LibrarySelector';
+import LibrarySelectorV2 from './LibrarySelectorV2';
 import { useLanguage } from '../../context/LanguageContext';
 import { 
   X, Save, Plus, GripVertical, Trash2, 
@@ -364,7 +364,7 @@ const SessionBuilder: React.FC<SessionBuilderProps> = ({ planId, weekId, session
         onCancel={() => setDeleteData(null)}
       />
 
-      <LibrarySelector 
+      <LibrarySelectorV2 
           mode="block"
           isOpen={isLibraryOpen}
           onClose={() => setIsLibraryOpen(false)}
