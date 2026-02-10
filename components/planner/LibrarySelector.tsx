@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore/lite';
-import { db } from '../../services/firebase';
+import { getPlans } from '../../services/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { TrainingPlan, TrainingWeek, TrainingSession, WorkoutBlock } from '../../types';
@@ -44,50 +43,37 @@ const LibrarySelector: React.FC<LibrarySelectorProps> = ({ mode, isOpen, onClose
       if(!user) return;
       
       try {
-          // 1. Fetch all plans for this coach
-          const plansQ = query(collection(db, 'plans'), where('coachId', '==', user.uid));
-          const plansSnap = await getDocs(plansQ);
-          const plans = plansSnap.docs.map(d => ({ id: d.id, ...d.data() } as TrainingPlan));
-          
+          const plans = await getPlans(user.id);
           let gatheredResults: SearchResult[] = [];
 
-          // This is a client-side aggregation. 
-          // For a production app with huge data, this should be indexed via Algolia or a specialized collection.
-          // For a single coach's library, this is acceptable.
-
           for (const plan of plans) {
-              const weeksQ = query(collection(db, 'plans', plan.id, 'weeks'), orderBy('order'));
-              const weeksSnap = await getDocs(weeksQ);
-              
-              for (const weekDoc of weeksSnap.docs) {
-                  const week = { id: weekDoc.id, ...weekDoc.data() } as TrainingWeek;
+              const planName = plan.name || 'Unnamed Plan';
+              const weeks = plan.structure?.weeks || [];
 
+              for (const week of weeks) {
                   // --- WEEK MODE ---
                   if (mode === 'week') {
                       gatheredResults.push({
                           id: week.id,
                           title: week.focus || `Week ${week.order}`,
                           subtitle: `${t('dashboard.week')} ${week.order}`,
-                          sourcePlanName: plan.name,
-                          data: { ...week, planId: plan.id } // Pass planId to help fetch sessions later
+                          sourcePlanName: planName,
+                          data: { ...week, planId: plan.id }
                       });
                   }
 
                   // If we need sessions or blocks, drill down
                   if (mode === 'session' || mode === 'block') {
-                      const sessionsQ = query(collection(db, 'plans', plan.id, 'weeks', week.id, 'sessions'), orderBy('dayOfWeek'));
-                      const sessionsSnap = await getDocs(sessionsQ);
+                      const sessions = week.sessions || [];
                       
-                      for (const sessionDoc of sessionsSnap.docs) {
-                          const session = { id: sessionDoc.id, ...sessionDoc.data() } as TrainingSession;
-
+                      for (const session of sessions) {
                           // --- SESSION MODE ---
                           if (mode === 'session') {
                               gatheredResults.push({
                                   id: session.id,
-                                  title: session.title,
+                                  title: session.title || 'Workout',
                                   subtitle: week.focus || `Week ${week.order}`,
-                                  sourcePlanName: plan.name,
+                                  sourcePlanName: planName,
                                   data: session
                               });
                           }
@@ -98,8 +84,8 @@ const LibrarySelector: React.FC<LibrarySelectorProps> = ({ mode, isOpen, onClose
                                   gatheredResults.push({
                                       id: block.id,
                                       title: block.name,
-                                      subtitle: `${session.title} (${block.exercises.length} Ex)`,
-                                      sourcePlanName: plan.name,
+                                      subtitle: `${session.title || 'Workout'} (${block.exercises?.length || 0} Ex)`,
+                                      sourcePlanName: planName,
                                       data: block
                                   });
                               });

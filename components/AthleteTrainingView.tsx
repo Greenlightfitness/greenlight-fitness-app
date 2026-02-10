@@ -487,38 +487,38 @@ const AthleteTrainingView: React.FC = () => {
       // CONSISTENCY: Update session count for this week
       autoTrackConsistencyGoals(user.id);
       
+      // Compute updated workout data before state update (avoid race condition)
+      const updatedBlocks = workout.workoutData?.map(b => 
+        b.id === blockId ? { ...b, isCompleted: true } : b
+      ) || [];
+      const allCompleted = updatedBlocks.every((b: any) => b.isCompleted);
+      const totalDuration = Object.values(blockTimers).reduce<number>((sum, t) => sum + (t as { elapsed: number }).elapsed, 0);
+
       // Mark block as completed in local state
       setWorkouts(prev => {
         const updated = { ...prev };
         if (updated[selectedDateKey]) {
           updated[selectedDateKey] = updated[selectedDateKey].map(w => {
             if (w.id !== workoutId) return w;
-            const updatedBlocks = w.workoutData?.map(b => 
-              b.id === blockId ? { ...b, isCompleted: true } : b
-            ) || [];
-            // Check if all blocks are completed
-            const allCompleted = updatedBlocks.every(b => b.isCompleted);
-            const totalDuration = Object.values(blockTimers).reduce<number>((sum, t) => sum + (t as { elapsed: number }).elapsed, 0);
             return { 
               ...w, 
               workoutData: updatedBlocks,
               completed: allCompleted,
               duration: allCompleted ? totalDuration : w.duration,
-              completedAt: allCompleted ? new Date().toISOString() : w.completedAt
+              completedAt: allCompleted ? new Date().toISOString() : (w as any).completedAt
             };
           });
         }
         return updated;
       });
       
-      // Update DB for custom workouts
+      // Update DB for custom workouts (use pre-computed data, not stale state)
       if (workout?.isCustom) {
-        const updatedWorkout = workouts[selectedDateKey]?.find(w => w.id === workoutId);
         await supabase
           .from('athlete_schedule')
           .update({ 
-            workout_data: updatedWorkout?.workoutData,
-            completed: updatedWorkout?.completed 
+            workout_data: updatedBlocks,
+            completed: allCompleted 
           })
           .eq('id', workoutId);
       }

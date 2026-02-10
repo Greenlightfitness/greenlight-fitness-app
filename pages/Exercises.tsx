@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { supabase, getExercises, createExercise, updateExercise, deleteExercise, getUsersByRoles } from '../services/supabase';
+import { supabase, getExercises, createExercise, updateExercise, deleteExercise, getUsersByRoles, getActiveSubscription, getCoachingRelationship } from '../services/supabase';
 import { Exercise, INITIAL_EXERCISES, UserRole, UserProfile } from '../types';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/Button';
@@ -30,8 +30,21 @@ const Exercises: React.FC = () => {
 
   // Athlete-specific: Check if user is athlete and count their exercises
   const isAthlete = userProfile?.role === UserRole.ATHLETE;
-  // TODO: Replace with actual premium check
-  const hasPremium = false;
+  const [hasPremium, setHasPremium] = useState(false);
+
+  useEffect(() => {
+    const checkPremium = async () => {
+      if (!user) return;
+      try {
+        const [subscription, coaching] = await Promise.all([
+          getActiveSubscription(user.id).catch(() => null),
+          getCoachingRelationship(user.id).catch(() => null),
+        ]);
+        setHasPremium(!!(subscription || coaching));
+      } catch { setHasPremium(false); }
+    };
+    checkPremium();
+  }, [user]);
   
   const myExerciseCount = useMemo(() => {
     if (!isAthlete || !user) return 0;

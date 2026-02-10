@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { supabase } from '../services/supabase';
+import { supabase, getActiveSubscription, getCoachingRelationship } from '../services/supabase';
 import { 
   TrendingUp, 
   TrendingDown,
@@ -74,9 +74,7 @@ const AthleteDashboard: React.FC = () => {
   const [showWellnessModal, setShowWellnessModal] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [currentStreak, setCurrentStreak] = useState(0);
-  
-  // TODO: Replace with actual subscription check
-  const hasPremium = false;
+  const [hasPremium, setHasPremium] = useState(false);
 
   // Load all dashboard data
   useEffect(() => {
@@ -89,6 +87,13 @@ const AthleteDashboard: React.FC = () => {
     setLoading(true);
 
     try {
+      // Check premium status: active subscription OR active coaching relationship
+      const [subscription, coaching] = await Promise.all([
+        getActiveSubscription(user.id).catch(() => null),
+        getCoachingRelationship(user.id).catch(() => null),
+      ]);
+      setHasPremium(!!(subscription || coaching));
+
       const today = new Date().toISOString().split('T')[0];
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       const eightWeeksAgo = new Date(Date.now() - 56 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];

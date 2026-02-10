@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, getDocs, orderBy, addDoc, Timestamp } from 'firebase/firestore/lite';
-import { db } from '../../services/firebase';
+import { getExercises, createExercise } from '../../services/supabase';
 import { Exercise } from '../../types';
 import Input from '../Input';
 import Button from '../Button';
@@ -38,9 +37,20 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ isOpen, onClose, on
   const fetchExercises = async () => {
     setLoading(true);
     try {
-      const q = query(collection(db, 'exercises'), orderBy('name'));
-      const snapshot = await getDocs(q);
-      const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Exercise));
+      const data = await getExercises();
+      const fetched = data.map((e: any) => ({
+        id: e.id,
+        name: e.name,
+        description: e.description,
+        category: e.category,
+        difficulty: e.difficulty,
+        trackingType: e.tracking_type,
+        videoUrl: e.video_url,
+        thumbnailUrl: e.thumbnail_url,
+        defaultSets: e.default_sets,
+        defaultVisibleMetrics: e.default_visible_metrics,
+        isArchived: e.is_archived,
+      } as Exercise));
       setExercises(fetched.filter(ex => !ex.isArchived));
     } catch (error) {
       console.error("Error fetching exercises", error);
@@ -54,15 +64,15 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ isOpen, onClose, on
     
     setLoading(true);
     try {
-        const docData = {
-            ...newExercise,
+        const data = await createExercise({
+            name: newExercise.name,
+            category: newExercise.category,
+            difficulty: newExercise.difficulty,
             description: 'Created from Session Builder',
-            isArchived: false,
-            createdAt: Timestamp.now()
-        };
+            is_archived: false,
+        });
         
-        const docRef = await addDoc(collection(db, 'exercises'), docData);
-        const createdEx = { id: docRef.id, ...docData } as Exercise;
+        const createdEx = { id: data.id, name: data.name, category: data.category, difficulty: data.difficulty, description: data.description } as Exercise;
         
         onSelect(createdEx);
         onClose();
