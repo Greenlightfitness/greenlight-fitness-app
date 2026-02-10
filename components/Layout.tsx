@@ -3,7 +3,7 @@ import { Outlet, NavLink, useNavigate, useLocation, Link } from 'react-router-do
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { UserRole } from '../types';
-import { LayoutDashboard, Dumbbell, Calendar, LogOut, Menu, X, Globe, ShoppingBag, Package, Home, Users, User, MessageCircle, Scale } from 'lucide-react';
+import { LayoutDashboard, Dumbbell, Calendar, LogOut, Menu, X, Globe, ShoppingBag, Package, Home, Users, User, MessageCircle, Scale, UserPlus } from 'lucide-react';
 import { signOut } from '../services/supabase';
 
 const Layout: React.FC = () => {
@@ -39,9 +39,10 @@ const Layout: React.FC = () => {
     { label: t('nav.products'), path: '/admin/products', icon: <Package size={20} /> },
   ];
 
-  // Add Users CRM for Admins
+  // Add Users CRM and Athlete Assignment for Admins
   if (isAdmin) {
       desktopNavItems.push({ label: t('nav.users'), path: '/admin/users', icon: <Users size={20} /> });
+      desktopNavItems.push({ label: 'Zuweisungen', path: '/admin/assignments', icon: <UserPlus size={20} /> });
   }
 
   const handleAthleteNav = (view: 'hub' | 'training') => {

@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { doc, getDoc, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore/lite';
-import { db } from '../services/firebase';
-import { supabase } from '../services/supabase';
+import { supabase, getPlans, createAssignedPlan } from '../services/supabase';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { UserProfile, AssignedPlan, Attention, ActivityFeedItem } from '../types';
-import { X, User, Activity, AlertTriangle, Calendar, ChevronRight, Dumbbell, History, Ruler, Weight, TrendingUp, TrendingDown, Heart, Moon, Battery, Trophy, BarChart3, Flame } from 'lucide-react';
+import { X, User, Activity, AlertTriangle, Calendar, ChevronRight, Dumbbell, History, Ruler, Weight, TrendingUp, TrendingDown, Heart, Moon, Battery, Trophy, BarChart3, Flame, Plus, Send, Target, ClipboardList } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { calculateFFMI } from '../utils/formulas';
 
@@ -15,7 +15,13 @@ interface AthleteProfileModalProps {
 
 const AthleteProfileModal: React.FC<AthleteProfileModalProps> = ({ athleteId, isOpen, onClose }) => {
   const { t } = useLanguage();
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [showPlanSelector, setShowPlanSelector] = useState(false);
+  const [availablePlans, setAvailablePlans] = useState<any[]>([]);
+  const [selectedPlanId, setSelectedPlanId] = useState('');
+  const [assigning, setAssigning] = useState(false);
   const [activePlan, setActivePlan] = useState<AssignedPlan | null>(null);
   const [attentions, setAttentions] = useState<Attention[]>([]);
   const [activities, setActivities] = useState<ActivityFeedItem[]>([]);
@@ -40,40 +46,99 @@ const AthleteProfileModal: React.FC<AthleteProfileModalProps> = ({ athleteId, is
   const fetchAthleteData = async (uid: string) => {
     setLoading(true);
     try {
-      // 1. Fetch Profile
-      const userDoc = await getDoc(doc(db, 'users', uid));
-      if (userDoc.exists()) {
-        setProfile(userDoc.data() as UserProfile);
+      // 1. Fetch Profile from Supabase
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', uid)
+        .single();
+      
+      if (profileData) {
+        setProfile({
+          uid: profileData.id,
+          email: profileData.email,
+          role: profileData.role,
+          firstName: profileData.first_name,
+          lastName: profileData.last_name,
+          nickname: profileData.nickname,
+          height: profileData.height,
+          weight: profileData.weight,
+          bodyFat: profileData.body_fat,
+          gender: profileData.gender,
+          birthDate: profileData.birth_date,
+          restingHeartRate: profileData.resting_heart_rate,
+          maxHeartRate: profileData.max_heart_rate,
+          createdAt: profileData.created_at,
+        } as UserProfile);
       }
 
-      // 2. Fetch Active Plan
-      const planQ = query(collection(db, 'assigned_plans'), where('athleteId', '==', uid));
-      const planSnap = await getDocs(planQ);
-      if (!planSnap.empty) {
-        // Sort by assigned date desc, take first
-        const plans = planSnap.docs.map(d => ({id: d.id, ...d.data()} as AssignedPlan));
-        plans.sort((a,b) => (b.assignedAt?.seconds || 0) - (a.assignedAt?.seconds || 0));
-        setActivePlan(plans[0]);
+      // 2. Fetch Active Plan from Supabase
+      const { data: plansData } = await supabase
+        .from('assigned_plans')
+        .select('*')
+        .eq('athlete_id', uid)
+        .order('assigned_at', { ascending: false })
+        .limit(1);
+      
+      if (plansData && plansData.length > 0) {
+        const p = plansData[0];
+        setActivePlan({
+          id: p.id,
+          athleteId: p.athlete_id,
+          coachId: p.coach_id,
+          originalPlanId: p.original_plan_id,
+          assignedAt: p.assigned_at,
+          startDate: p.start_date,
+          planName: p.plan_name,
+          description: p.description,
+          assignmentType: p.assignment_type,
+          scheduleStatus: p.schedule_status,
+          schedule: p.schedule,
+          structure: p.structure,
+        } as AssignedPlan);
       }
 
-      // 3. Fetch Open Issues (Injuries/Attentions)
-      const attQ = query(
-          collection(db, 'attentions'), 
-          where('athleteId', '==', uid),
-          where('status', '==', 'OPEN')
-      );
-      const attSnap = await getDocs(attQ);
-      setAttentions(attSnap.docs.map(d => ({id: d.id, ...d.data()} as Attention)));
+      // 3. Fetch Open Issues from Supabase
+      const { data: attData } = await supabase
+        .from('attentions')
+        .select('*')
+        .eq('athlete_id', uid)
+        .eq('status', 'OPEN');
+      
+      if (attData) {
+        setAttentions(attData.map((a: any) => ({
+          id: a.id,
+          athleteId: a.athlete_id,
+          athleteName: a.athlete_name,
+          coachId: a.coach_id,
+          type: a.type,
+          severity: a.severity,
+          message: a.message,
+          status: a.status,
+          createdAt: a.created_at,
+        } as Attention)));
+      }
 
-      // 4. Fetch Recent Activity
-      const actQ = query(
-          collection(db, 'activities'), 
-          where('athleteId', '==', uid),
-          orderBy('createdAt', 'desc'),
-          limit(5)
-      );
-      const actSnap = await getDocs(actQ);
-      setActivities(actSnap.docs.map(d => ({id: d.id, ...d.data()} as ActivityFeedItem)));
+      // 4. Fetch Recent Activity from Supabase
+      const { data: actData } = await supabase
+        .from('activities')
+        .select('*')
+        .eq('athlete_id', uid)
+        .order('created_at', { ascending: false })
+        .limit(5);
+      
+      if (actData) {
+        setActivities(actData.map((a: any) => ({
+          id: a.id,
+          athleteId: a.athlete_id,
+          athleteName: a.athlete_name,
+          type: a.type,
+          title: a.title,
+          subtitle: a.subtitle,
+          metadata: a.metadata,
+          createdAt: a.created_at,
+        } as ActivityFeedItem)));
+      }
 
       // 5. Fetch Wellness Data from Supabase (last 14 days)
       const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -217,6 +282,140 @@ const AthleteProfileModal: React.FC<AthleteProfileModalProps> = ({ athleteId, is
             </button>
         </div>
 
+        {/* Coach Quick Actions */}
+        <div className="px-6 py-4 border-b border-zinc-800 bg-zinc-900/30">
+            <div className="flex flex-wrap gap-2">
+                <button
+                    onClick={async () => {
+                        if (!user) return;
+                        const plans = await getPlans(user.id);
+                        setAvailablePlans(plans);
+                        setShowPlanSelector(true);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-[#00FF00]/10 text-[#00FF00] rounded-xl hover:bg-[#00FF00]/20 transition-colors text-sm font-medium"
+                >
+                    <ClipboardList size={16} />
+                    Training zuweisen
+                </button>
+                <button
+                    onClick={() => {
+                        onClose();
+                        navigate('/planner', { state: { athleteId: athleteId, athleteName: `${profile?.firstName || ''} ${profile?.lastName || ''}`.trim() } });
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-500/10 text-blue-400 rounded-xl hover:bg-blue-500/20 transition-colors text-sm font-medium"
+                >
+                    <Plus size={16} />
+                    Neuen Plan erstellen
+                </button>
+                <button
+                    onClick={() => {
+                        onClose();
+                        navigate('/chat', { state: { athleteId: athleteId } });
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-purple-500/10 text-purple-400 rounded-xl hover:bg-purple-500/20 transition-colors text-sm font-medium"
+                >
+                    <Send size={16} />
+                    Nachricht
+                </button>
+            </div>
+        </div>
+
+        {/* Plan Selector Modal */}
+        {showPlanSelector && (
+            <div className="absolute inset-0 z-10 bg-black/80 flex items-center justify-center p-4">
+                <div className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl w-full max-w-md p-6">
+                    <h3 className="text-lg font-bold text-white mb-4">Trainingsplan zuweisen</h3>
+                    {availablePlans.length === 0 ? (
+                        <p className="text-zinc-500 text-sm">Keine Pläne verfügbar. Erstelle zuerst einen Plan im Planner.</p>
+                    ) : (
+                        <div className="space-y-2 max-h-64 overflow-y-auto">
+                            {availablePlans.map((plan: any) => (
+                                <button
+                                    key={plan.id}
+                                    onClick={() => setSelectedPlanId(plan.id)}
+                                    className={`w-full text-left p-4 rounded-xl border transition-all ${
+                                        selectedPlanId === plan.id 
+                                            ? 'bg-[#00FF00]/10 border-[#00FF00]/50 text-white' 
+                                            : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700'
+                                    }`}
+                                >
+                                    <p className="font-bold">{plan.name}</p>
+                                    <p className="text-xs text-zinc-500 mt-1">{plan.description || 'Keine Beschreibung'}</p>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                    <div className="flex gap-3 mt-4">
+                        <button
+                            onClick={() => { setShowPlanSelector(false); setSelectedPlanId(''); }}
+                            className="flex-1 py-2 text-zinc-400 hover:text-white transition-colors"
+                        >
+                            Abbrechen
+                        </button>
+                        <button
+                            onClick={async () => {
+                                if (!selectedPlanId || !athleteId || !user) return;
+                                setAssigning(true);
+                                try {
+                                    const plan = availablePlans.find((p: any) => p.id === selectedPlanId);
+                                    
+                                    // Fetch full plan structure
+                                    const { data: weeks } = await supabase
+                                        .from('weeks')
+                                        .select('*, sessions(*)')
+                                        .eq('plan_id', selectedPlanId)
+                                        .order('order');
+                                    
+                                    const structure = {
+                                        weeks: (weeks || []).map((w: any) => ({
+                                            id: w.id,
+                                            order: w.order,
+                                            focus: w.focus,
+                                            sessions: (w.sessions || []).map((s: any) => ({
+                                                id: s.id,
+                                                dayOfWeek: s.day_of_week,
+                                                title: s.title,
+                                                description: s.description,
+                                                order: s.order,
+                                                workoutData: s.workout_data
+                                            }))
+                                        }))
+                                    };
+                                    
+                                    await createAssignedPlan({
+                                        athlete_id: athleteId,
+                                        coach_id: user.id,
+                                        original_plan_id: selectedPlanId,
+                                        plan_name: plan?.name,
+                                        description: plan?.description,
+                                        start_date: new Date().toISOString().split('T')[0],
+                                        assignment_type: 'ONE_TO_ONE',
+                                        schedule_status: 'ACTIVE',
+                                        structure: structure
+                                    });
+                                    
+                                    alert('Plan erfolgreich zugewiesen!');
+                                    setShowPlanSelector(false);
+                                    setSelectedPlanId('');
+                                    // Refresh athlete data
+                                    fetchAthleteData(athleteId);
+                                } catch (error) {
+                                    console.error('Error assigning plan:', error);
+                                    alert('Fehler beim Zuweisen des Plans');
+                                } finally {
+                                    setAssigning(false);
+                                }
+                            }}
+                            disabled={!selectedPlanId || assigning}
+                            className="flex-1 py-2 bg-[#00FF00] text-black font-bold rounded-xl hover:bg-[#00FF00]/80 transition-colors disabled:opacity-50"
+                        >
+                            {assigning ? 'Wird zugewiesen...' : 'Zuweisen'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-8">
             
@@ -242,7 +441,7 @@ const AthleteProfileModal: React.FC<AthleteProfileModalProps> = ({ athleteId, is
                                                 <span className="text-red-400 text-xs uppercase border border-red-900 px-1.5 rounded">{att.severity}</span>
                                             </div>
                                             <p className="text-red-300 text-sm leading-relaxed">"{att.message}"</p>
-                                            <p className="text-red-500/50 text-xs mt-2">{new Date(att.createdAt?.seconds * 1000).toLocaleDateString()}</p>
+                                            <p className="text-red-500/50 text-xs mt-2">{att.createdAt ? new Date(att.createdAt).toLocaleDateString('de-DE') : ''}</p>
                                         </div>
                                     </div>
                                 ))}
@@ -447,7 +646,7 @@ const AthleteProfileModal: React.FC<AthleteProfileModalProps> = ({ athleteId, is
                                         </div>
                                         <div>
                                             <p className="text-white text-sm font-medium">{act.title}</p>
-                                            <p className="text-zinc-500 text-xs">{new Date(act.createdAt?.seconds * 1000).toLocaleString()} • {act.subtitle}</p>
+                                            <p className="text-zinc-500 text-xs">{act.createdAt ? new Date(act.createdAt).toLocaleString('de-DE') : ''} • {act.subtitle}</p>
                                         </div>
                                     </div>
                                 ))
