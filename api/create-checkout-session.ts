@@ -30,11 +30,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       customerEmail,
       successUrl,
       cancelUrl,
-      stripePriceId // If product already has a Stripe price
+      stripePriceId, // If product already has a Stripe price
+      trialDays = 0, // Free trial period in days
     } = req.body;
 
-    if (!price && !stripePriceId) {
-      return res.status(400).json({ error: 'Price or stripePriceId required' });
+    // Free products don't need Stripe checkout
+    if ((!price || Number(price) <= 0) && !stripePriceId) {
+      return res.status(200).json({ 
+        free: true,
+        message: 'Free product - no checkout needed' 
+      });
     }
 
     // Build line items
@@ -84,6 +89,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       allow_promotion_codes: true,
       // Billing address collection
       billing_address_collection: 'auto',
+      // Free trial period for subscriptions
+      ...(mode === 'subscription' && trialDays > 0 ? {
+        subscription_data: {
+          trial_period_days: Number(trialDays),
+        },
+      } : {}),
     };
 
     const session = await stripe.checkout.sessions.create(sessionParams);

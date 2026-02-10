@@ -8,7 +8,7 @@ import Input from '../components/Input';
 import { 
   Package, Plus, Trash2, Edit, X, Image as ImageIcon, Upload, Loader2,
   ChevronLeft, DollarSign, Tag, FileText, Layers, CheckCircle, Calendar,
-  AlertCircle, Eye, EyeOff, Link2, Sparkles, Save, Info, AlertTriangle, Scale
+  AlertCircle, Eye, EyeOff, Link2, Sparkles, Save, Info, AlertTriangle, Scale, Gift
 } from 'lucide-react';
 import PriceChangeChecklist from '../components/PriceChangeChecklist';
 import ConfirmActionModal, { ConfirmActionConfig } from '../components/ConfirmActionModal';
@@ -43,6 +43,7 @@ const AdminProducts: React.FC = () => {
     isActive: true,
     selectedPlanIds: [],
     hasChatAccess: false,
+    trialDays: 0,
   });
 
   const [currentFeature, setCurrentFeature] = useState('');
@@ -91,6 +92,7 @@ const AdminProducts: React.FC = () => {
         interval: d.interval,
         thumbnailUrl: d.thumbnail_url,
         isActive: d.is_active ?? true,
+        trialDays: d.trial_days || 0,
       } as Product)));
 
       const planData = await getPlans();
@@ -126,7 +128,8 @@ const AdminProducts: React.FC = () => {
       type: 'PLAN',
       features: [],
       isActive: true,
-      selectedPlanIds: []
+      selectedPlanIds: [],
+      trialDays: 0,
     });
     setCurrentFeature('');
     setEditingProduct(null);
@@ -237,8 +240,8 @@ const AdminProducts: React.FC = () => {
       setError("Bitte gib einen Produktnamen ein.");
       return;
     }
-    if (!formData.price || formData.price <= 0) {
-      setError("Bitte gib einen gültigen Preis ein.");
+    if (formData.price === undefined || formData.price === null || formData.price < 0) {
+      setError("Bitte gib einen gültigen Preis ein (0 für kostenlos).");
       return;
     }
     if (!formData.selectedPlanIds || formData.selectedPlanIds.length === 0) {
@@ -261,13 +264,14 @@ const AdminProducts: React.FC = () => {
       // 1. Try to create in Stripe first (optional - won't fail if Stripe not configured)
       setCreatingStripe(true);
       let stripeData = null;
-      if (!editingProduct) {
+      if (!editingProduct && Number(formData.price) > 0) {
         stripeData = await createStripeProduct({
           title: formData.title?.trim(),
           description: formData.description?.trim(),
           price: formData.price,
           currency: formData.currency,
           interval: formData.interval,
+          trialDays: formData.trialDays || 0,
         });
         if (stripeData) {
           console.log('Stripe product created:', stripeData);
@@ -292,6 +296,7 @@ const AdminProducts: React.FC = () => {
         is_active: formData.isActive ?? true,
         has_chat_access: formData.hasChatAccess ?? false,
         calendar_id: selectedCalendarId || null,
+        trial_days: formData.trialDays || 0,
         stripe_product_id: stripeData?.stripe_product_id || null,
         stripe_price_id: stripeData?.stripe_price_id || null,
       };
@@ -715,9 +720,40 @@ const AdminProducts: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {/* Row 1: Zahlungsart */}
+          <div className="space-y-2 mb-5">
+            <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">Zahlungsart *</label>
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { value: 'onetime', label: 'Einmalzahlung', desc: 'Einmalige Zahlung' },
+                { value: 'month', label: 'Monatsabo', desc: 'Wiederkehrend / Monat' },
+                { value: 'year', label: 'Jahresabo', desc: 'Wiederkehrend / Jahr' },
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setFormData({...formData, interval: opt.value as any, ...(opt.value === 'onetime' ? { trialDays: 0 } : {})})}
+                  className={`p-4 rounded-xl border text-left transition-all ${
+                    formData.interval === opt.value
+                      ? 'bg-[#00FF00]/10 border-[#00FF00]/40 ring-1 ring-[#00FF00]/20'
+                      : 'bg-[#121212] border-zinc-800 hover:border-zinc-600'
+                  }`}
+                >
+                  <span className={`text-sm font-bold block ${formData.interval === opt.value ? 'text-[#00FF00]' : 'text-white'}`}>
+                    {opt.label}
+                  </span>
+                  <span className="text-[10px] text-zinc-500 mt-0.5 block">{opt.desc}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Row 2: Preis & Währung */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-5">
             <div className="space-y-2">
-              <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">Preis *</label>
+              <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">
+                Preis * <span className="text-zinc-600 normal-case">(0 = kostenlos)</span>
+              </label>
               <div className="relative">
                 <input
                   type="number"
@@ -726,7 +762,7 @@ const AdminProducts: React.FC = () => {
                   value={formData.price}
                   onChange={e => setFormData({...formData, price: Number(e.target.value)})}
                   className="w-full bg-[#121212] border border-zinc-800 text-white rounded-xl pl-10 pr-4 py-3.5 focus:border-[#00FF00] outline-none transition-colors"
-                  placeholder="99.00"
+                  placeholder="0.00"
                 />
                 <DollarSign size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600" />
               </div>
@@ -743,19 +779,64 @@ const AdminProducts: React.FC = () => {
                 <option value="CHF">CHF</option>
               </select>
             </div>
-            <div className="space-y-2">
-              <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">Intervall</label>
-              <select 
-                value={formData.interval}
-                onChange={e => setFormData({...formData, interval: e.target.value as any})}
-                className="w-full bg-[#121212] border border-zinc-800 text-white rounded-xl px-4 py-3.5 focus:border-[#00FF00] outline-none transition-colors"
-              >
-                <option value="onetime">💎 Einmalzahlung</option>
-                <option value="month">📅 Monatlich</option>
-                <option value="year">📆 Jährlich</option>
-              </select>
+            <div className="flex items-end pb-1">
+              {Number(formData.price) === 0 && (
+                <div className="bg-[#00FF00]/10 border border-[#00FF00]/20 rounded-xl px-4 py-3 flex items-center gap-2 w-full">
+                  <Gift size={18} className="text-[#00FF00]" />
+                  <span className="text-[#00FF00] font-bold text-sm">Kostenlos</span>
+                </div>
+              )}
             </div>
           </div>
+
+          {/* Row 3: Free Trial (only for subscriptions) */}
+          {formData.interval && formData.interval !== 'onetime' && (
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">
+                Kostenloser Testzeitraum <span className="text-zinc-600 normal-case">(optional)</span>
+              </label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    max="365"
+                    step="1"
+                    value={formData.trialDays || 0}
+                    onChange={e => setFormData({...formData, trialDays: Math.max(0, Math.min(365, Number(e.target.value)))})}
+                    className="w-full bg-[#121212] border border-zinc-800 text-white rounded-xl pl-4 pr-16 py-3.5 focus:border-[#00FF00] outline-none transition-colors"
+                    placeholder="0"
+                  />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 text-sm">Tage</span>
+                </div>
+                <div className="flex items-center">
+                  {Number(formData.trialDays) > 0 ? (
+                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl px-4 py-3 flex items-center gap-2 w-full">
+                      <Calendar size={16} className="text-blue-400" />
+                      <span className="text-blue-400 text-sm">
+                        <strong>{formData.trialDays} Tage</strong> kostenlos testen, dann {formData.price} {formData.currency}/{formData.interval === 'year' ? 'Jahr' : 'Monat'}
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-zinc-600">Kein Testzeitraum — Zahlung startet sofort</p>
+                  )}
+                </div>
+              </div>
+              <p className="text-[10px] text-zinc-600 flex items-center gap-1 mt-1">
+                <Info size={10} />
+                Stripe erstellt automatisch eine Testphase. Der Kunde wird erst nach Ablauf belastet.
+              </p>
+            </div>
+          )}
+
+          {/* Free product info */}
+          {Number(formData.price) === 0 && (
+            <div className="mt-4 bg-[#00FF00]/5 border border-[#00FF00]/10 rounded-xl p-4">
+              <p className="text-zinc-400 text-xs leading-relaxed">
+                <strong className="text-[#00FF00]">Kostenloses Produkt:</strong> Kein Stripe-Checkout erforderlich. Der Zugang wird direkt nach dem "Kauf" freigeschaltet. Ideal für Probe-Pläne, Lead-Magneten oder Bonus-Inhalte.
+              </p>
+            </div>
+          )}
         </section>
 
         {/* SECTION 3: Produktbild */}

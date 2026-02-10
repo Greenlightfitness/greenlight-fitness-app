@@ -30,11 +30,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       price, 
       currency = 'eur',
       interval = 'month',
-      productId // Our internal product ID for reference
+      productId, // Our internal product ID for reference
+      trialDays = 0, // Free trial period in days
     } = req.body;
 
-    if (!title || !price) {
-      return res.status(400).json({ error: 'Title and price are required' });
+    if (!title) {
+      return res.status(400).json({ error: 'Title is required' });
+    }
+
+    // Free products (price = 0) don't need Stripe pricing
+    if (!price || Number(price) <= 0) {
+      return res.status(200).json({
+        success: true,
+        stripe_product_id: null,
+        stripe_price_id: null,
+        free: true,
+      });
     }
 
     // 1. Create Stripe Product
@@ -74,6 +85,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       success: true,
       stripe_product_id: stripeProduct.id,
       stripe_price_id: stripePrice.id,
+      trial_days: isRecurring && trialDays > 0 ? trialDays : 0,
     });
 
   } catch (error: any) {

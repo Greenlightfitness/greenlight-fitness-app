@@ -208,6 +208,7 @@ export interface Product {
   thumbnailUrl?: string;
   isActive: boolean;
   hasChatAccess?: boolean; // Whether this product includes chat with coach
+  trialDays?: number; // Free trial period in days (Stripe trial_period_days)
 }
 
 // --- WORKOUT BUILDER TYPES ---
