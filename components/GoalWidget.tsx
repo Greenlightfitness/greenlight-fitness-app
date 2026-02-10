@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getActiveGoals, getGoalCheckpoints } from '../services/supabase';
+import { getActiveGoals, getGoalCheckpoints, createGoalCheckpoint } from '../services/supabase';
 import { Goal, GoalCheckpoint } from '../types';
-import { Target, TrendingUp, Trophy, Plus, ChevronRight, Flame, Dumbbell, Scale, Activity } from 'lucide-react';
+import { Target, TrendingUp, Trophy, Plus, ChevronRight, Flame, Dumbbell, Scale, Activity, Pencil, Check, X } from 'lucide-react';
 import GoalForm from './GoalForm';
 
 interface GoalWidgetProps {
@@ -15,6 +15,8 @@ const GoalWidget: React.FC<GoalWidgetProps> = ({ compact = false, onGoalClick })
     const [goals, setGoals] = useState<Goal[]>([]);
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
+    const [updatingGoalId, setUpdatingGoalId] = useState<string | null>(null);
+    const [updateValue, setUpdateValue] = useState('');
 
     useEffect(() => {
         if (user) {
@@ -88,6 +90,25 @@ const GoalWidget: React.FC<GoalWidgetProps> = ({ compact = false, onGoalClick })
         return diff;
     };
 
+    const isAutoTracked = (goalType: string) => goalType === 'STRENGTH' || goalType === 'CONSISTENCY';
+
+    const handleUpdateProgress = async (goalId: string) => {
+        const val = parseFloat(updateValue);
+        if (isNaN(val)) return;
+        try {
+            await createGoalCheckpoint({
+                goal_id: goalId,
+                value: val,
+                source: 'MANUAL',
+            });
+            setUpdatingGoalId(null);
+            setUpdateValue('');
+            fetchGoals();
+        } catch (error) {
+            console.error('Error updating goal progress:', error);
+        }
+    };
+
     if (loading) {
         return (
             <div className="bg-[#1C1C1E] border border-zinc-800 rounded-[2rem] p-6">
@@ -128,11 +149,12 @@ const GoalWidget: React.FC<GoalWidgetProps> = ({ compact = false, onGoalClick })
                         <div className="mt-4 pt-4 border-t border-[#00FF00]/10 space-y-3">
                             {goals.slice(0, 2).map(goal => {
                                 const daysRemaining = getDaysRemaining(goal.targetDate);
+                                const autoTracked = isAutoTracked(goal.goalType);
+                                const isUpdating = updatingGoalId === goal.id;
                                 return (
                                     <div 
                                         key={goal.id} 
-                                        onClick={() => onGoalClick?.(goal)}
-                                        className="bg-black/30 border border-zinc-800/50 rounded-xl p-3 cursor-pointer hover:border-[#00FF00]/30 transition-colors group"
+                                        className="bg-black/30 border border-zinc-800/50 rounded-xl p-3 hover:border-[#00FF00]/30 transition-colors group"
                                     >
                                         <div className="flex items-center gap-3 mb-2">
                                             <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${getGoalColor(goal.goalType)}`}>
@@ -142,13 +164,47 @@ const GoalWidget: React.FC<GoalWidgetProps> = ({ compact = false, onGoalClick })
                                                 <h4 className="text-sm font-bold text-white truncate">{goal.title}</h4>
                                                 <p className="text-xs text-zinc-500">
                                                     {goal.currentValue} / {goal.targetValue} {goal.targetUnit}
+                                                    {autoTracked && <span className="ml-1 text-[#00FF00]/60">• Auto</span>}
                                                 </p>
                                             </div>
-                                            <div className="text-right">
-                                                <p className="text-sm font-bold text-[#00FF00]">{goal.progressPercentage || 0}%</p>
-                                                <p className="text-[10px] text-zinc-500">{daysRemaining > 0 ? `${daysRemaining}d` : 'Abgelaufen'}</p>
+                                            <div className="flex items-center gap-2">
+                                                {!autoTracked && !isUpdating && (
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); setUpdatingGoalId(goal.id); setUpdateValue(String(goal.currentValue)); }}
+                                                        className="w-7 h-7 bg-zinc-800 hover:bg-[#00FF00]/20 text-zinc-400 hover:text-[#00FF00] rounded-lg flex items-center justify-center transition-colors"
+                                                        title="Fortschritt aktualisieren"
+                                                    >
+                                                        <Pencil size={12} />
+                                                    </button>
+                                                )}
+                                                <div className="text-right">
+                                                    <p className="text-sm font-bold text-[#00FF00]">{goal.progressPercentage || 0}%</p>
+                                                    <p className="text-[10px] text-zinc-500">{daysRemaining > 0 ? `${daysRemaining}d` : 'Abgelaufen'}</p>
+                                                </div>
                                             </div>
                                         </div>
+
+                                        {/* Inline Quick Update */}
+                                        {isUpdating && (
+                                            <div className="flex items-center gap-2 mb-2 animate-in fade-in duration-150" onClick={(e) => e.stopPropagation()}>
+                                                <input
+                                                    type="number"
+                                                    inputMode="decimal"
+                                                    value={updateValue}
+                                                    onChange={(e) => setUpdateValue(e.target.value)}
+                                                    autoFocus
+                                                    onKeyDown={(e) => { if (e.key === 'Enter') handleUpdateProgress(goal.id); if (e.key === 'Escape') setUpdatingGoalId(null); }}
+                                                    className="flex-1 bg-zinc-900 border border-zinc-700 text-white rounded-lg px-3 py-1.5 text-sm focus:border-[#00FF00] outline-none"
+                                                    placeholder={`Aktueller Wert (${goal.targetUnit})`}
+                                                />
+                                                <button onClick={() => handleUpdateProgress(goal.id)} className="w-8 h-8 bg-[#00FF00] text-black rounded-lg flex items-center justify-center hover:bg-[#00FF00]/80 transition-colors">
+                                                    <Check size={14} />
+                                                </button>
+                                                <button onClick={() => setUpdatingGoalId(null)} className="w-8 h-8 bg-zinc-800 text-zinc-400 rounded-lg flex items-center justify-center hover:text-white transition-colors">
+                                                    <X size={14} />
+                                                </button>
+                                            </div>
+                                        )}
                                         
                                         {/* Progress Bar */}
                                         <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
@@ -242,7 +298,7 @@ const GoalWidget: React.FC<GoalWidgetProps> = ({ compact = false, onGoalClick })
                                     />
                                 </div>
 
-                                <div className="flex justify-between text-sm">
+                                <div className="flex justify-between text-sm mb-4">
                                     <div>
                                         <span className="text-zinc-500">Start:</span>
                                         <span className="text-white ml-2">{goal.startValue} {goal.targetUnit}</span>
@@ -256,6 +312,40 @@ const GoalWidget: React.FC<GoalWidgetProps> = ({ compact = false, onGoalClick })
                                         <span className="text-white ml-2">{goal.targetValue} {goal.targetUnit}</span>
                                     </div>
                                 </div>
+
+                                {/* Update / Auto-tracked info */}
+                                {isAutoTracked(goal.goalType) ? (
+                                    <div className="flex items-center gap-2 text-xs text-zinc-500">
+                                        <TrendingUp size={12} className="text-[#00FF00]" />
+                                        <span>Wird automatisch aus deinen Workouts aktualisiert</span>
+                                    </div>
+                                ) : updatingGoalId === goal.id ? (
+                                    <div className="flex items-center gap-2 animate-in fade-in duration-150">
+                                        <input
+                                            type="number"
+                                            inputMode="decimal"
+                                            value={updateValue}
+                                            onChange={(e) => setUpdateValue(e.target.value)}
+                                            autoFocus
+                                            onKeyDown={(e) => { if (e.key === 'Enter') handleUpdateProgress(goal.id); if (e.key === 'Escape') setUpdatingGoalId(null); }}
+                                            className="flex-1 bg-zinc-900 border border-zinc-700 text-white rounded-xl px-4 py-2 focus:border-[#00FF00] outline-none"
+                                            placeholder={`Neuer Wert (${goal.targetUnit})`}
+                                        />
+                                        <button onClick={() => handleUpdateProgress(goal.id)} className="px-4 py-2 bg-[#00FF00] text-black rounded-xl font-bold hover:bg-[#00FF00]/80 transition-colors flex items-center gap-1">
+                                            <Check size={14} /> Speichern
+                                        </button>
+                                        <button onClick={() => setUpdatingGoalId(null)} className="px-3 py-2 bg-zinc-800 text-zinc-400 rounded-xl hover:text-white transition-colors">
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button
+                                        onClick={() => { setUpdatingGoalId(goal.id); setUpdateValue(String(goal.currentValue)); }}
+                                        className="flex items-center gap-2 text-sm text-zinc-400 hover:text-[#00FF00] transition-colors"
+                                    >
+                                        <Pencil size={14} /> Fortschritt aktualisieren
+                                    </button>
+                                )}
                             </div>
                         ))}
                     </div>

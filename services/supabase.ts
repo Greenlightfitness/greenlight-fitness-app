@@ -1489,6 +1489,79 @@ export const createGoalCheckpoint = async (checkpoint: {
   return data;
 };
 
+// Auto-update STRENGTH goals after workout completion
+export const autoTrackStrengthGoals = async (athleteId: string, exerciseResults: { exerciseId: string; maxWeight: number }[]) => {
+  try {
+    // Fetch active STRENGTH goals for this athlete
+    const { data: goals } = await supabase
+      .from('goals')
+      .select('id, exercise_id, current_value, target_value')
+      .eq('athlete_id', athleteId)
+      .eq('status', 'ACTIVE')
+      .eq('goal_type', 'STRENGTH')
+      .not('exercise_id', 'is', null);
+
+    if (!goals || goals.length === 0) return;
+
+    for (const goal of goals) {
+      const match = exerciseResults.find(r => r.exerciseId === goal.exercise_id);
+      if (match && match.maxWeight > (goal.current_value || 0)) {
+        await createGoalCheckpoint({
+          goal_id: goal.id,
+          value: match.maxWeight,
+          source: 'WORKOUT',
+          notes: `Auto-tracked: ${match.maxWeight}kg`,
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Error auto-tracking strength goals:', error);
+  }
+};
+
+// Auto-update CONSISTENCY goals (sessions per week)
+export const autoTrackConsistencyGoals = async (athleteId: string) => {
+  try {
+    const { data: goals } = await supabase
+      .from('goals')
+      .select('id, current_value, target_value, start_date')
+      .eq('athlete_id', athleteId)
+      .eq('status', 'ACTIVE')
+      .eq('goal_type', 'CONSISTENCY');
+
+    if (!goals || goals.length === 0) return;
+
+    // Count completed sessions this week (Mon-Sun)
+    const now = new Date();
+    const day = now.getDay();
+    const mondayOffset = day === 0 ? -6 : 1 - day;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + mondayOffset);
+    monday.setHours(0, 0, 0, 0);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    sunday.setHours(23, 59, 59, 999);
+
+    const { count } = await supabase
+      .from('athlete_schedule')
+      .select('*', { count: 'exact', head: true })
+      .eq('athlete_id', athleteId)
+      .eq('completed', true)
+      .gte('date', monday.toISOString().split('T')[0])
+      .lte('date', sunday.toISOString().split('T')[0]);
+
+    const sessionsThisWeek = count || 0;
+
+    for (const goal of goals) {
+      if (sessionsThisWeek !== goal.current_value) {
+        await updateGoalProgress(goal.id, sessionsThisWeek);
+      }
+    }
+  } catch (error) {
+    console.error('Error auto-tracking consistency goals:', error);
+  }
+};
+
 // ============ INVITATIONS ============
 
 export const getInvitations = async (invitedBy: string) => {

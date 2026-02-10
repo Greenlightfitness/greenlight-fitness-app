@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { supabase, getAssignedPlans, getExercises } from '../services/supabase';
+import { supabase, getAssignedPlans, getExercises, autoTrackStrengthGoals, autoTrackConsistencyGoals } from '../services/supabase';
 import { ChevronLeft, ChevronRight, Plus, Check, Play, Dumbbell, X, ChevronDown, ChevronUp, Search, Trash2, Trophy, Repeat, Link, Layers, Timer, Square, Pause, ClipboardList, Pencil, CheckCircle, Bookmark, Lock, Zap, TrendingUp } from 'lucide-react';
 import Button from './Button';
 import { Exercise, BlockType, WorkoutSet, WorkoutExercise, WorkoutBlock } from '../types';
@@ -469,6 +469,23 @@ const AthleteTrainingView: React.FC = () => {
       if (logs.length > 0) {
         await supabase.from('workout_logs').insert(logs);
       }
+
+      // --- AUTO-TRACK GOALS ---
+      // STRENGTH: Extract max weight per exercise for goal tracking
+      const exerciseResults = block.exercises
+        .filter(ex => ex.exerciseId)
+        .map(ex => {
+          const maxWeight = Math.max(...ex.sets.map(s => parseFloat(s.completedWeight || s.weight || '0') || 0));
+          return { exerciseId: ex.exerciseId!, maxWeight };
+        })
+        .filter(r => r.maxWeight > 0);
+
+      if (exerciseResults.length > 0) {
+        autoTrackStrengthGoals(user.id, exerciseResults);
+      }
+
+      // CONSISTENCY: Update session count for this week
+      autoTrackConsistencyGoals(user.id);
       
       // Mark block as completed in local state
       setWorkouts(prev => {
