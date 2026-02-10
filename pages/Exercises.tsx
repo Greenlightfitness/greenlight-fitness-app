@@ -18,6 +18,8 @@ const Exercises: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'active' | 'archived'>('active');
   const [filterMode, setFilterMode] = useState<'ALL' | 'SYSTEM' | 'COACH'>('ALL');
+  const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
+  const [difficultyFilter, setDifficultyFilter] = useState<string>('ALL');
   const { t } = useLanguage();
   
   // Cache for user profiles to show names
@@ -182,39 +184,87 @@ const Exercises: React.FC = () => {
     }
   };
 
+  // Extract unique categories and difficulties for filter pills
+  const availableCategories = useMemo(() => {
+    const cats = new Set(exercises.filter(ex => !ex.isArchived === (viewMode === 'active')).map(ex => ex.category).filter(Boolean));
+    return Array.from(cats).sort();
+  }, [exercises, viewMode]);
+
+  const DIFFICULTY_LEVELS = ['Beginner', 'Intermediate', 'Advanced'] as const;
+  const DIFFICULTY_COLORS: Record<string, string> = {
+    Beginner: 'bg-[#00FF00] text-black',
+    Intermediate: 'bg-yellow-500 text-black',
+    Advanced: 'bg-red-500 text-white',
+  };
+
+  const activeExtraFilterCount = (categoryFilter !== 'ALL' ? 1 : 0) + (difficultyFilter !== 'ALL' ? 1 : 0);
+
   // Filter Logic
-  const filteredExercises = exercises.filter(ex => {
-    // 1. Filter by Search
-    const matchesSearch = 
-      ex.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      ex.category.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    // 2. Filter by View Mode (Active vs Archived)
-    const isArchived = !!ex.isArchived;
-    const matchesView = viewMode === 'active' ? !isArchived : isArchived;
+  const filteredExercises = useMemo(() => {
+    let results = exercises.filter(ex => {
+      // 1. Filter by View Mode (Active vs Archived)
+      const isArchived = !!ex.isArchived;
+      const matchesView = viewMode === 'active' ? !isArchived : isArchived;
 
-    // 3. Role-based visibility
-    let matchesRoleFilter = true;
-    
-    // Athletes see: public exercises OR their own exercises
-    if (isAthlete) {
-      matchesRoleFilter = ex.isPublic !== false || ex.authorId === user?.id;
-    }
-    
-    // 4. Admin Filter (only for admin view)
-    let matchesAdminFilter = true;
-    if (userProfile?.role === UserRole.ADMIN) {
+      // 2. Role-based visibility
+      let matchesRoleFilter = true;
+      if (isAthlete) {
+        matchesRoleFilter = ex.isPublic !== false || ex.authorId === user?.id;
+      }
+
+      // 3. Admin Filter (only for admin view)
+      let matchesAdminFilter = true;
+      if (userProfile?.role === UserRole.ADMIN) {
         if (filterMode === 'SYSTEM') {
-            const author = userMap[ex.authorId || ''];
-            matchesAdminFilter = author?.role === UserRole.ADMIN || ex.authorId === user?.id;
+          const author = userMap[ex.authorId || ''];
+          matchesAdminFilter = author?.role === UserRole.ADMIN || ex.authorId === user?.id;
         } else if (filterMode === 'COACH') {
-            const author = userMap[ex.authorId || ''];
-            matchesAdminFilter = author?.role !== UserRole.ADMIN && ex.authorId !== user?.id;
+          const author = userMap[ex.authorId || ''];
+          matchesAdminFilter = author?.role !== UserRole.ADMIN && ex.authorId !== user?.id;
         }
+      }
+
+      // 4. Category filter
+      const matchesCategory = categoryFilter === 'ALL' || ex.category === categoryFilter;
+
+      // 5. Difficulty filter
+      const matchesDifficulty = difficultyFilter === 'ALL' || ex.difficulty === difficultyFilter;
+
+      return matchesView && matchesRoleFilter && matchesAdminFilter && matchesCategory && matchesDifficulty;
+    });
+
+    // 6. Semantic text search with scoring
+    if (searchTerm.trim()) {
+      const words = searchTerm.toLowerCase().split(/\s+/).filter(w => w.length > 0);
+      const queryLower = searchTerm.toLowerCase();
+      results = results
+        .map(ex => {
+          const nameLower = ex.name.toLowerCase();
+          const catLower = (ex.category || '').toLowerCase();
+          const descLower = (ex.description || '').toLowerCase();
+          const diffLower = (ex.difficulty || '').toLowerCase();
+
+          let score = 0;
+          if (nameLower === queryLower) score += 200;
+          else if (nameLower.startsWith(queryLower)) score += 150;
+          else if (nameLower.includes(queryLower)) score += 100;
+
+          words.forEach(word => {
+            if (nameLower.includes(word)) score += 40;
+            if (catLower.includes(word)) score += 20;
+            if (descLower.includes(word)) score += 10;
+            if (diffLower.includes(word)) score += 5;
+          });
+
+          return { ex, score };
+        })
+        .filter(r => r.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .map(r => r.ex);
     }
 
-    return matchesSearch && matchesView && matchesRoleFilter && matchesAdminFilter;
-  });
+    return results;
+  }, [exercises, searchTerm, viewMode, isAthlete, user, userProfile, filterMode, userMap, categoryFilter, difficultyFilter]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -291,8 +341,8 @@ const Exercises: React.FC = () => {
       </div>
 
       {/* Controls: Tabs & Search */}
-      <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-[#1C1C1E] p-2 rounded-2xl border border-zinc-800">
-          
+      <div className="bg-[#1C1C1E] rounded-2xl border border-zinc-800 overflow-hidden">
+        <div className="flex flex-col md:flex-row gap-4 justify-between items-center p-2">
           <div className="flex gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0 scrollbar-hide">
               {/* Custom Tabs */}
               <div className="flex bg-zinc-900 p-1 rounded-xl shrink-0">
@@ -348,12 +398,80 @@ const Exercises: React.FC = () => {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
             <input 
               type="text"
-              placeholder={t('exercises.searchPlaceholder')}
+              placeholder="Name, Kategorie, Beschreibung..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-zinc-900 border border-transparent rounded-xl pl-12 pr-4 py-3 text-white placeholder-zinc-600 focus:bg-zinc-950 focus:border-[#00FF00] focus:outline-none transition-all"
+              className="w-full bg-zinc-900 border border-transparent rounded-xl pl-12 pr-10 py-3 text-white placeholder-zinc-600 focus:bg-zinc-950 focus:border-[#00FF00] focus:outline-none transition-all"
             />
+            {searchTerm && (
+              <button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white">
+                <X size={16} />
+              </button>
+            )}
           </div>
+        </div>
+
+        {/* Category + Difficulty Filters */}
+        <div className="px-3 pb-3 space-y-2">
+          {/* Category Pills */}
+          {availableCategories.length > 0 && (
+            <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
+              <button
+                onClick={() => setCategoryFilter('ALL')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all shrink-0 ${
+                  categoryFilter === 'ALL'
+                    ? 'bg-white text-black'
+                    : 'bg-zinc-900 text-zinc-400 hover:text-white hover:bg-zinc-800'
+                }`}
+              >
+                Alle Kategorien
+              </button>
+              {availableCategories.map(cat => (
+                <button
+                  key={cat}
+                  onClick={() => setCategoryFilter(categoryFilter === cat ? 'ALL' : cat)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all shrink-0 ${
+                    categoryFilter === cat
+                      ? 'bg-[#00FF00] text-black'
+                      : 'bg-zinc-900 text-zinc-400 hover:text-white hover:bg-zinc-800'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Difficulty Pills + Reset */}
+          <div className="flex items-center gap-2">
+            <div className="flex gap-1.5">
+              {DIFFICULTY_LEVELS.map(level => (
+                <button
+                  key={level}
+                  onClick={() => setDifficultyFilter(difficultyFilter === level ? 'ALL' : level)}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide transition-all ${
+                    difficultyFilter === level
+                      ? DIFFICULTY_COLORS[level]
+                      : 'bg-zinc-900/50 text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  {level}
+                </button>
+              ))}
+            </div>
+            {activeExtraFilterCount > 0 && (
+              <button
+                onClick={() => { setCategoryFilter('ALL'); setDifficultyFilter('ALL'); }}
+                className="text-[10px] text-zinc-500 hover:text-[#00FF00] flex items-center gap-1 ml-1"
+              >
+                <X size={10} /> Filter zurücksetzen
+              </button>
+            )}
+            <span className="ml-auto text-[10px] text-zinc-600">
+              {filteredExercises.length} Übung{filteredExercises.length !== 1 ? 'en' : ''}
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Grid List */}
