@@ -1146,6 +1146,23 @@ export const getCoachingRelationship = async (athleteId: string, coachId?: strin
   return data;
 };
 
+// Get athlete's active coaching relationship (for athlete chat page)
+export const getAthleteActiveCoaching = async (athleteId: string) => {
+  const { data, error } = await supabase
+    .from('coaching_relationships')
+    .select(`
+      id, coach_id, product_id, status, started_at,
+      coach:profiles!coaching_relationships_coach_id_fkey(id, email, first_name, last_name, display_name)
+    `)
+    .eq('athlete_id', athleteId)
+    .eq('status', 'ACTIVE')
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+};
+
 export const getActiveCoachingRelationships = async (coachId: string) => {
   const { data, error } = await supabase
     .from('coaching_relationships')
