@@ -27,6 +27,14 @@ import {
   PlanAssignedData,
   PurchaseConfirmedData,
   SubscriptionRenewedData,
+  AthleteTrainingReminderData,
+  AthleteCheckInReminderData,
+  AthleteInactivityAlertData,
+  AthleteWeeklyProgressData,
+  CoachWeeklySummaryData,
+  CoachChurnRiskAlertData,
+  AdminWeeklyReportData,
+  AdminChurnAlertData,
 } from '../emails/templates';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -73,6 +81,15 @@ type EmailDataMap = {
   plan_assigned: PlanAssignedData;
   purchase_confirmed: PurchaseConfirmedData;
   subscription_renewed: SubscriptionRenewedData;
+  // Reattention
+  athlete_training_reminder: AthleteTrainingReminderData;
+  athlete_checkin_reminder: AthleteCheckInReminderData;
+  athlete_inactivity_alert: AthleteInactivityAlertData;
+  athlete_weekly_progress: AthleteWeeklyProgressData;
+  coach_weekly_summary: CoachWeeklySummaryData;
+  coach_churn_risk_alert: CoachChurnRiskAlertData;
+  admin_weekly_report: AdminWeeklyReportData;
+  admin_churn_alert: AdminChurnAlertData;
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

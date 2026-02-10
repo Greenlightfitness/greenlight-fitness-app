@@ -11,6 +11,28 @@
  * - MSO Conditional Comments für Outlook
  */
 
+import {
+  athleteTrainingReminder,
+  athleteCheckInReminder,
+  athleteInactivityAlert,
+  athleteWeeklyProgress,
+  coachWeeklySummary,
+  coachChurnRiskAlert,
+  adminWeeklyReport,
+  adminChurnAlert,
+} from './reattention';
+
+export type {
+  AthleteTrainingReminderData,
+  AthleteCheckInReminderData,
+  AthleteInactivityAlertData,
+  AthleteWeeklyProgressData,
+  CoachWeeklySummaryData,
+  CoachChurnRiskAlertData,
+  AdminWeeklyReportData,
+  AdminChurnAlertData,
+} from './reattention';
+
 // Base styles for consistent design
 const baseStyles = {
   fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
@@ -1748,13 +1770,21 @@ export const emailTemplates = {
   data_deletion_confirm: dataDeletionConfirm,
   welcome: welcome,
   design_showcase: designShowcase,
-  // Neue Templates
   password_reset: passwordReset,
   email_verification: emailVerification,
   invitation: invitation,
   plan_assigned: planAssigned,
   purchase_confirmed: purchaseConfirmed,
   subscription_renewed: subscriptionRenewed,
+  // Reattention Templates
+  athlete_training_reminder: athleteTrainingReminder,
+  athlete_checkin_reminder: athleteCheckInReminder,
+  athlete_inactivity_alert: athleteInactivityAlert,
+  athlete_weekly_progress: athleteWeeklyProgress,
+  coach_weekly_summary: coachWeeklySummary,
+  coach_churn_risk_alert: coachChurnRiskAlert,
+  admin_weekly_report: adminWeeklyReport,
+  admin_churn_alert: adminChurnAlert,
 };
 
 export type EmailType = keyof typeof emailTemplates;

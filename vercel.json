@@ -2,5 +2,19 @@
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "crons": [
+    {
+      "path": "/api/send-reattention?action=daily",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/send-reattention?action=weekly",
+      "schedule": "0 8 * * 1"
+    },
+    {
+      "path": "/api/send-reattention?action=churn",
+      "schedule": "0 10,22 * * *"
+    }
   ]
 }

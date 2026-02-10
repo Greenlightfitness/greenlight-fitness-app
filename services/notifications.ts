@@ -231,6 +231,53 @@ export const NotificationTypes = {
     body: 'Mach weiter so! Dein nächster Check-In hält die Serie am Laufen.',
     tag: 'streak-reminder',
     data: { url: '/' }
+  }),
+
+  // === Reattention Notifications ===
+
+  athleteInactivityAlert: (days: number) => ({
+    title: days >= 14 ? '❤️ Wir vermissen dich!' : days >= 7 ? '💭 Schon eine Weile her...' : '👋 Alles klar bei dir?',
+    body: `Du warst seit ${days} Tagen nicht mehr aktiv. Dein Training wartet!`,
+    tag: 'inactivity-alert',
+    data: { url: '/' },
+    requireInteraction: true
+  }),
+
+  athleteWeeklyProgress: (completionRate: number, weekNumber: number) => ({
+    title: `📊 Dein Wochen-Report KW${weekNumber}`,
+    body: completionRate >= 80 ? `${completionRate}% geschafft — herausragend! 🎉` : `${completionRate}% geschafft — bleib dran! 💪`,
+    tag: 'weekly-progress',
+    data: { url: '/' }
+  }),
+
+  coachChurnRisk: (athleteName: string, riskLevel: string) => ({
+    title: `⚠️ Churn-Risiko: ${athleteName}`,
+    body: `Risikostufe ${riskLevel} — ${athleteName} zeigt Anzeichen von Desengagement.`,
+    tag: 'coach-churn-risk',
+    data: { url: '/admin/crm' },
+    requireInteraction: true
+  }),
+
+  coachWeeklySummary: (activeAthletes: number, totalAthletes: number) => ({
+    title: '📈 Dein Coach-Report ist da',
+    body: `${activeAthletes}/${totalAthletes} Athleten waren diese Woche aktiv.`,
+    tag: 'coach-weekly-summary',
+    data: { url: '/admin/crm' }
+  }),
+
+  adminWeeklyReport: (revenue: string, churnRate: number) => ({
+    title: '📊 Wöchentlicher Business-Report',
+    body: `Umsatz: ${revenue} | Churn-Rate: ${churnRate}%`,
+    tag: 'admin-weekly-report',
+    data: { url: '/admin/users' }
+  }),
+
+  adminChurnAlert: (cancellations: number) => ({
+    title: `🚨 Churn-Alert: ${cancellations} Kündigungen`,
+    body: 'Erhöhte Kündigungsrate erkannt. Details im Dashboard.',
+    tag: 'admin-churn-alert',
+    data: { url: '/admin/crm' },
+    requireInteraction: true
   })
 };
 
