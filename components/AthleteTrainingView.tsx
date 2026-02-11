@@ -87,6 +87,13 @@ const AthleteTrainingView: React.FC = () => {
   // Video preview
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
   
+  // Move session modal
+  const [moveModal, setMoveModal] = useState<{ workoutId: string; currentDate: string } | null>(null);
+  const [moveTargetDate, setMoveTargetDate] = useState('');
+  
+  // Confirmation dialog for starting session while another is active
+  const [startConfirm, setStartConfirm] = useState<{ workoutId: string; blockId: string } | null>(null);
+  
 
   // Get week dates
   const weekDates = useMemo(() => {
@@ -236,7 +243,7 @@ const AthleteTrainingView: React.FC = () => {
       
       if (error) throw error;
       
-      loadWorkouts();
+      await loadWorkouts();
       // Auto-open exercise modal for the new session
       if (data) {
         setShowAddExerciseModal({ sessionId: data.id });
@@ -395,6 +402,50 @@ const AthleteTrainingView: React.FC = () => {
     setCurrentBlockId(null);
     setCurrentBlockType('Normal');
     setAddedExerciseIds(new Set());
+  };
+
+  // Move a custom session to a different date
+  const moveSession = async () => {
+    if (!moveModal || !moveTargetDate || !user) return;
+    try {
+      const { error } = await supabase
+        .from('athlete_schedule')
+        .update({ date: moveTargetDate })
+        .eq('id', moveModal.workoutId)
+        .eq('athlete_id', user.id);
+      if (error) throw error;
+      setMoveModal(null);
+      setMoveTargetDate('');
+      await loadWorkouts();
+    } catch (error) {
+      console.error('Error moving session:', error);
+      alert('Fehler beim Verschieben der Session.');
+    }
+  };
+
+  // Delete a custom session
+  const deleteSession = async (workoutId: string) => {
+    if (!user) return;
+    try {
+      const { error } = await supabase
+        .from('athlete_schedule')
+        .delete()
+        .eq('id', workoutId)
+        .eq('athlete_id', user.id);
+      if (error) throw error;
+      await loadWorkouts();
+    } catch (error) {
+      console.error('Error deleting session:', error);
+    }
+  };
+
+  // Wrapper: check if another block is active before starting
+  const handleStartBlock = (workoutId: string, blockId: string) => {
+    if (activeBlocks.size > 0 && !activeBlocks.has(blockId)) {
+      setStartConfirm({ workoutId, blockId });
+    } else {
+      startBlock(workoutId, blockId);
+    }
   };
 
   // Start block - load history and start timer for this block
@@ -1104,6 +1155,26 @@ const AthleteTrainingView: React.FC = () => {
                     )}
                   </div>
                   
+                  {/* Session actions: Move / Delete for custom sessions */}
+                  {workout.isCustom && !hasActiveBlock(workout) && (
+                    <div className="flex items-center gap-1 mr-2">
+                      <button
+                        onClick={() => { setMoveModal({ workoutId: workout.id, currentDate: workout.date }); setMoveTargetDate(''); }}
+                        className="p-1.5 text-zinc-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"
+                        title="Session verschieben"
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                      <button
+                        onClick={() => { if (confirm('Session wirklich löschen?')) deleteSession(workout.id); }}
+                        className="p-1.5 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                        title="Session löschen"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  )}
+
                   {hasActiveBlock(workout) ? (
                     <div className="flex items-center gap-2">
                       <span className="text-orange-400 font-mono text-sm flex items-center gap-1">
@@ -1115,7 +1186,7 @@ const AthleteTrainingView: React.FC = () => {
                       onClick={() => {
                         // Restart first block to continue training
                         const firstBlock = workout.workoutData?.[0];
-                        if (firstBlock) startBlock(workout.id, firstBlock.id);
+                        if (firstBlock) handleStartBlock(workout.id, firstBlock.id);
                       }}
                       className="flex items-center gap-2 text-[#00FF00] hover:bg-[#00FF00]/10 px-3 py-1.5 rounded-lg transition-colors"
                     >
@@ -1132,7 +1203,7 @@ const AthleteTrainingView: React.FC = () => {
                       onClick={() => {
                         // Start first block automatically
                         const firstBlock = workout.workoutData?.[0];
-                        if (firstBlock) startBlock(workout.id, firstBlock.id);
+                        if (firstBlock) handleStartBlock(workout.id, firstBlock.id);
                       }}
                       className="flex items-center gap-2 px-4 py-2 bg-[#00FF00] text-black rounded-xl font-bold hover:bg-[#00FF00]/90 transition-colors"
                     >
@@ -1565,14 +1636,14 @@ const AthleteTrainingView: React.FC = () => {
                             </div>
                           ) : block.isCompleted ? (
                             <button 
-                              onClick={() => startBlock(workout.id, block.id)}
+                              onClick={() => handleStartBlock(workout.id, block.id)}
                               className="w-full p-2 text-[#00FF00] text-sm font-medium hover:bg-[#00FF00]/10 rounded-lg transition-colors flex items-center justify-center gap-2"
                             >
                               <><CheckCircle size={14} className="mr-1" /> Block erledigt – Erneut bearbeiten?</>
                             </button>
                           ) : (
                             <Button 
-                              onClick={() => startBlock(workout.id, block.id)}
+                              onClick={() => handleStartBlock(workout.id, block.id)}
                               fullWidth
                               variant="secondary"
                             >
@@ -1874,6 +1945,78 @@ const AthleteTrainingView: React.FC = () => {
               >
                 Später
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Move Session Modal */}
+      {moveModal && (
+        <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in" onClick={() => setMoveModal(null)}>
+          <div className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-zinc-800">
+              <h3 className="text-lg font-bold text-white">Session verschieben</h3>
+              <button onClick={() => setMoveModal(null)} className="text-zinc-500 hover:text-white"><X size={20} /></button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">Neues Datum</label>
+                <input
+                  type="date"
+                  value={moveTargetDate}
+                  onChange={e => setMoveTargetDate(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-white focus:border-[#00FF00] outline-none [color-scheme:dark]"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setMoveModal(null)}
+                  className="flex-1 py-3 bg-zinc-800 text-white rounded-xl font-medium hover:bg-zinc-700 transition-colors"
+                >
+                  Abbrechen
+                </button>
+                <button
+                  onClick={moveSession}
+                  disabled={!moveTargetDate || moveTargetDate === moveModal.currentDate}
+                  className="flex-1 py-3 bg-[#00FF00] text-black rounded-xl font-bold hover:bg-[#00FF00]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Verschieben
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Start Confirmation Dialog */}
+      {startConfirm && (
+        <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in" onClick={() => setStartConfirm(null)}>
+          <div className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="p-5 text-center space-y-3">
+              <div className="w-12 h-12 mx-auto bg-orange-500/10 rounded-full flex items-center justify-center">
+                <Pause size={24} className="text-orange-400" />
+              </div>
+              <h3 className="text-lg font-bold text-white">Session bereits aktiv</h3>
+              <p className="text-sm text-zinc-400">
+                Du hast bereits einen aktiven Block. Möchtest du trotzdem einen weiteren starten?
+              </p>
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => setStartConfirm(null)}
+                  className="flex-1 py-3 bg-zinc-800 text-white rounded-xl font-medium hover:bg-zinc-700 transition-colors"
+                >
+                  Abbrechen
+                </button>
+                <button
+                  onClick={() => {
+                    startBlock(startConfirm.workoutId, startConfirm.blockId);
+                    setStartConfirm(null);
+                  }}
+                  className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-bold hover:bg-orange-600 transition-colors"
+                >
+                  Trotzdem starten
+                </button>
+              </div>
             </div>
           </div>
         </div>

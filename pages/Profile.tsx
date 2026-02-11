@@ -11,7 +11,7 @@ import HealthDataModal from '../components/HealthDataModal';
 import NotificationSettings from '../components/NotificationSettings';
 
 const Profile: React.FC = () => {
-  const { userProfile, user, activeRole, setActiveRole, canSwitchRole } = useAuth();
+  const { userProfile, user, activeRole, setActiveRole, canSwitchRole, refreshProfile } = useAuth();
   const { t, language, setLanguage } = useLanguage();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -121,9 +121,9 @@ const Profile: React.FC = () => {
     setUploadingAvatar(true);
     try {
       const ext = file.name.split('.').pop() || 'jpg';
-      const path = `avatars/${user.id}.${ext}`;
-      await uploadFile('public', path, file);
-      const url = getPublicUrl('public', path);
+      const path = `${user.id}/${Date.now()}.${ext}`;
+      await uploadFile('avatars', path, file);
+      const url = getPublicUrl('avatars', path);
       await updateProfile(user.id, { avatar_url: url });
       setAvatarPreview(url);
     } catch (err) {
@@ -153,6 +153,7 @@ const Profile: React.FC = () => {
         max_heart_rate: form.maxHeartRate ? Number(form.maxHeartRate) : null,
         onboarding_completed: true,
       });
+      await refreshProfile();
       setSaved(true);
       setEditing(false);
       setTimeout(() => setSaved(false), 2000);

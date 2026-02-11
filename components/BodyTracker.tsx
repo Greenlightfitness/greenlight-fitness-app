@@ -21,6 +21,8 @@ const BodyTracker: React.FC<BodyTrackerProps> = ({ compact = false, onUpdate }) 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   // Quick entry form
   const [weight, setWeight] = useState('');
@@ -55,6 +57,7 @@ const BodyTracker: React.FC<BodyTrackerProps> = ({ compact = false, onUpdate }) 
     if (!weight && !bodyFat && !waist) return;
 
     setSaving(true);
+    setSaveError(null);
     try {
       const today = new Date().toISOString().split('T')[0];
       await upsertBodyMeasurement({
@@ -68,10 +71,13 @@ const BodyTracker: React.FC<BodyTrackerProps> = ({ compact = false, onUpdate }) 
       setBodyFat('');
       setWaist('');
       setShowForm(false);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2000);
       await loadData();
       onUpdate?.();
-    } catch (e) {
+    } catch (e: any) {
       console.error('Error saving measurement:', e);
+      setSaveError(e?.message || 'Fehler beim Speichern. Bitte erneut versuchen.');
     } finally {
       setSaving(false);
     }
@@ -228,6 +234,16 @@ const BodyTracker: React.FC<BodyTrackerProps> = ({ compact = false, onUpdate }) 
                   />
                 </div>
               </div>
+              {saveError && (
+                <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg p-2 text-center">
+                  {saveError}
+                </div>
+              )}
+              {saveSuccess && (
+                <div className="text-xs text-[#00FF00] bg-[#00FF00]/10 border border-[#00FF00]/30 rounded-lg p-2 text-center flex items-center justify-center gap-1">
+                  <Check size={12} /> Gespeichert!
+                </div>
+              )}
               <button
                 onClick={handleSave}
                 disabled={saving || (!weight && !bodyFat && !waist)}

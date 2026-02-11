@@ -2187,18 +2187,18 @@ export const upsertBodyMeasurement = async (measurement: {
     .single();
   if (error) throw error;
 
-  // Auto-update profile weight if provided
-  if (measurement.weight) {
-    await supabase
+  // Auto-update profile with latest values (non-blocking)
+  const profileUpdates: Record<string, number> = {};
+  if (measurement.weight) profileUpdates.weight = measurement.weight;
+  if (measurement.body_fat) profileUpdates.body_fat = measurement.body_fat;
+  if (Object.keys(profileUpdates).length > 0) {
+    supabase
       .from('profiles')
-      .update({ weight: measurement.weight })
-      .eq('id', measurement.athlete_id);
-  }
-  if (measurement.body_fat) {
-    await supabase
-      .from('profiles')
-      .update({ body_fat: measurement.body_fat })
-      .eq('id', measurement.athlete_id);
+      .update(profileUpdates)
+      .eq('id', measurement.athlete_id)
+      .then(({ error: profileErr }) => {
+        if (profileErr) console.warn('Profile sync failed:', profileErr);
+      });
   }
 
   return data;
