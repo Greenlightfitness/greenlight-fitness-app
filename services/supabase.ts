@@ -2549,6 +2549,68 @@ export const getCoachAppointments = async (coachId: string, status?: string) => 
   return data || [];
 };
 
+// ============ PRODUCT CALENDARS (Multi-Coach per Product) ============
+
+export const getProductCalendars = async (productId: string) => {
+  const { data, error } = await supabase
+    .from('product_calendars')
+    .select('*, coach_calendars(*)')
+    .eq('product_id', productId)
+    .order('sort_order', { ascending: true });
+  if (error) throw error;
+  return data || [];
+};
+
+export const saveProductCalendars = async (productId: string, calendarIds: string[]) => {
+  // Delete existing
+  await supabase.from('product_calendars').delete().eq('product_id', productId);
+  if (calendarIds.length === 0) return [];
+  const rows = calendarIds.map((cid, i) => ({ product_id: productId, calendar_id: cid, sort_order: i }));
+  const { data, error } = await supabase.from('product_calendars').insert(rows).select();
+  if (error) throw error;
+  return data || [];
+};
+
+// ============ IN-APP NOTIFICATIONS ============
+
+export const getNotifications = async (userId: string, limit = 30) => {
+  const { data, error } = await supabase
+    .from('notifications')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data || [];
+};
+
+export const getUnreadNotificationCount = async (userId: string) => {
+  const { count, error } = await supabase
+    .from('notifications')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('read', false);
+  if (error) throw error;
+  return count || 0;
+};
+
+export const markNotificationRead = async (notificationId: string) => {
+  const { error } = await supabase
+    .from('notifications')
+    .update({ read: true })
+    .eq('id', notificationId);
+  if (error) throw error;
+};
+
+export const markAllNotificationsRead = async (userId: string) => {
+  const { error } = await supabase
+    .from('notifications')
+    .update({ read: true })
+    .eq('user_id', userId)
+    .eq('read', false);
+  if (error) throw error;
+};
+
 // ============ NOTIFICATION PREFERENCES ============
 
 export interface NotificationPreferences {

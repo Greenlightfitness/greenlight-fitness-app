@@ -3,8 +3,9 @@ import { Outlet, NavLink, useNavigate, useLocation, Link } from 'react-router-do
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { UserRole } from '../types';
-import { LayoutDashboard, Dumbbell, Calendar, CalendarClock, LogOut, Menu, X, Globe, ShoppingBag, Package, Home, Users, User, MessageCircle, Scale, UserPlus, History } from 'lucide-react';
+import { LayoutDashboard, Dumbbell, Calendar, CalendarClock, LogOut, Menu, X, Globe, ShoppingBag, Package, Home, Users, User, MessageCircle, Scale, UserPlus, History, Bell } from 'lucide-react';
 import { signOut } from '../services/supabase';
+import NotificationBell from './NotificationBell';
 
 const Layout: React.FC = () => {
   const { userProfile, activeRole } = useAuth();
@@ -152,9 +153,12 @@ const Layout: React.FC = () => {
           <h1 className="text-2xl font-bold text-white tracking-tighter">
             GREENLIGHT<span className="text-[#00FF00]">.</span>
           </h1>
-          <p className="text-[10px] text-zinc-500 mt-2 uppercase tracking-[0.2em] font-medium">
-            {isAdmin ? 'Admin Panel' : 'Coach Dashboard'}
-          </p>
+          <div className="flex items-center justify-between mt-2">
+            <p className="text-[10px] text-zinc-500 uppercase tracking-[0.2em] font-medium">
+              {isAdmin ? 'Admin Panel' : 'Coach Dashboard'}
+            </p>
+            <NotificationBell />
+          </div>
         </div>
 
         <nav className="flex-1 px-4 space-y-1 mt-4">
@@ -208,6 +212,7 @@ const Layout: React.FC = () => {
             GREENLIGHT<span className="text-[#00FF00]">.</span>
           </h1>
           <div className="flex gap-2 items-center">
+            <NotificationBell />
             <button onClick={toggleLanguage} className="text-zinc-500 hover:text-white text-xs font-bold px-2 py-1.5 rounded-lg bg-zinc-900 transition-colors">
               {language === 'en' ? 'DE' : 'EN'}
             </button>

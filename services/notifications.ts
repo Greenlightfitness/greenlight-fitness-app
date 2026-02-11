@@ -278,6 +278,46 @@ export const NotificationTypes = {
     tag: 'admin-churn-alert',
     data: { url: '/admin/crm' },
     requireInteraction: true
+  }),
+
+  // === Appointment Notifications ===
+
+  appointmentBooked: (name: string, date: string, time: string) => ({
+    title: '📅 Neue Terminbuchung',
+    body: `${name} hat einen Termin am ${date} um ${time} Uhr gebucht.`,
+    tag: 'appointment-booked',
+    data: { url: '/calendar' },
+    requireInteraction: true
+  }),
+
+  appointmentConfirmed: (coachName: string, date: string, time: string) => ({
+    title: '✅ Termin bestätigt',
+    body: `Dein Termin mit ${coachName} am ${date} um ${time} Uhr wurde bestätigt!`,
+    tag: 'appointment-confirmed',
+    data: { url: '/calendar' }
+  }),
+
+  appointmentCancelled: (name: string, date: string, time: string) => ({
+    title: '❌ Termin abgesagt',
+    body: `Termin mit ${name} am ${date} um ${time} Uhr wurde abgesagt.`,
+    tag: 'appointment-cancelled',
+    data: { url: '/calendar' }
+  }),
+
+  appointmentReminder24h: (name: string, time: string) => ({
+    title: '⏰ Termin morgen',
+    body: `Termin mit ${name} morgen um ${time} Uhr. Nicht vergessen!`,
+    tag: 'appointment-reminder-24h',
+    data: { url: '/calendar' },
+    requireInteraction: true
+  }),
+
+  appointmentReminder1h: (name: string, time: string) => ({
+    title: '🔔 Termin in 1 Stunde!',
+    body: `Dein Termin mit ${name} beginnt um ${time} Uhr.`,
+    tag: 'appointment-reminder-1h',
+    data: { url: '/calendar' },
+    requireInteraction: true
   })
 };
 

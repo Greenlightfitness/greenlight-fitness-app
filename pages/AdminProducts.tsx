@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getProducts, getPlans, createProduct, updateProduct, deleteProduct, uploadFile, getPublicUrl, getCoachCalendars } from '../services/supabase';
+import { getProducts, getPlans, createProduct, updateProduct, deleteProduct, uploadFile, getPublicUrl, getCoachCalendars, saveProductCalendars, getProductCalendars, supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Product, TrainingPlan, ProductCategory, ProductType } from '../types';
@@ -53,7 +53,7 @@ const AdminProducts: React.FC = () => {
   const [showPriceChangeWarning, setShowPriceChangeWarning] = useState(false);
   const [pendingFormSubmit, setPendingFormSubmit] = useState<React.FormEvent | null>(null);
   const [coachCalendars, setCoachCalendars] = useState<any[]>([]);
-  const [selectedCalendarId, setSelectedCalendarId] = useState<string>('');
+  const [selectedCalendarIds, setSelectedCalendarIds] = useState<string[]>([]);
 
   // Confirmation Modal
   const [confirmConfig, setConfirmConfig] = useState<ConfirmActionConfig | null>(null);
@@ -145,7 +145,11 @@ const AdminProducts: React.FC = () => {
   const handleEdit = (product: any) => {
     setEditingProduct(product);
     setFormData(product);
-    setSelectedCalendarId(product.calendar_id || '');
+    // Load multi-calendar assignments
+    getProductCalendars(product.id).then(pcs => {
+      const ids = pcs.map((pc: any) => pc.calendar_id);
+      setSelectedCalendarIds(ids.length > 0 ? ids : product.calendar_id ? [product.calendar_id] : []);
+    }).catch(() => setSelectedCalendarIds(product.calendar_id ? [product.calendar_id] : []));
     setViewMode('edit');
   };
 
@@ -297,7 +301,7 @@ const AdminProducts: React.FC = () => {
         thumbnail_url: formData.thumbnailUrl || '',
         is_active: formData.isActive ?? true,
         has_chat_access: formData.hasChatAccess ?? false,
-        calendar_id: selectedCalendarId || null,
+        calendar_id: selectedCalendarIds[0] || null,
         trial_days: formData.trialDays || 0,
         stripe_product_id: stripeData?.stripe_product_id || null,
         stripe_price_id: stripeData?.stripe_price_id || null,
@@ -320,6 +324,11 @@ const AdminProducts: React.FC = () => {
 
       // 3. Save product-plan relationships
       await saveProductPlans(productId, formData.selectedPlanIds || []);
+
+      // 4. Save product-calendar relationships (multi-coach)
+      if (selectedCalendarIds.length > 0) {
+        await saveProductCalendars(productId, selectedCalendarIds);
+      }
       
       await fetchData();
       setViewMode('list');
@@ -1017,16 +1026,34 @@ const AdminProducts: React.FC = () => {
                 <p className="text-xs text-zinc-500">Kalender für Vorabgespräche und 1:1 Termine zuordnen</p>
               </div>
             </div>
-            <select
-              value={selectedCalendarId}
-              onChange={e => setSelectedCalendarId(e.target.value)}
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-xl p-4 text-white focus:border-[#00FF00] outline-none"
-            >
-              <option value="">Kein Kalender (manuelle Terminvergabe)</option>
-              {coachCalendars.map(cal => (
-                <option key={cal.id} value={cal.id}>{cal.name} ({cal.slot_duration_minutes} Min)</option>
-              ))}
-            </select>
+            <p className="text-xs text-zinc-400 mb-3">Mehrere Kalender zuweisen, um den Workload auf verschiedene Coaches zu verteilen.</p>
+            <div className="space-y-2 max-h-[240px] overflow-y-auto">
+              {coachCalendars.map(cal => {
+                const isSelected = selectedCalendarIds.includes(cal.id);
+                return (
+                  <label key={cal.id} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                    isSelected ? 'border-[#00FF00]/50 bg-[#00FF00]/5' : 'border-zinc-800 bg-zinc-900 hover:border-zinc-700'
+                  }`}>
+                    <input type="checkbox" checked={isSelected} onChange={() => {
+                      setSelectedCalendarIds(prev => isSelected ? prev.filter(id => id !== cal.id) : [...prev, cal.id]);
+                    }} className="accent-[#00FF00] w-4 h-4" />
+                    <div className="flex-1">
+                      <span className="text-white text-sm font-medium">{cal.name}</span>
+                      <span className="text-zinc-500 text-xs ml-2">{cal.slot_duration_minutes} Min · {cal.coach_id === user?.id ? 'Dein Kalender' : 'Coach'}</span>
+                    </div>
+                    {isSelected && <span className="text-[10px] font-bold text-[#00FF00] bg-[#00FF00]/10 px-2 py-0.5 rounded">Aktiv</span>}
+                  </label>
+                );
+              })}
+            </div>
+            {selectedCalendarIds.length > 1 && (
+              <div className="mt-3 bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 flex items-center gap-2">
+                <Info size={14} className="text-blue-400 shrink-0" />
+                <p className="text-xs text-blue-300">
+                  <strong>{selectedCalendarIds.length} Kalender</strong> zugewiesen — Termine werden automatisch auf verfügbare Coaches verteilt.
+                </p>
+              </div>
+            )}
             {coachCalendars.length === 0 && (
               <p className="text-xs text-amber-400 mt-2">Erstelle zuerst einen Kalender unter "Terminkalender" in der Navigation.</p>
             )}
