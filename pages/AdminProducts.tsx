@@ -182,7 +182,7 @@ const AdminProducts: React.FC = () => {
       await uploadFile('products', storagePath, file);
       const downloadUrl = getPublicUrl('products', storagePath);
       
-      setFormData(prev => ({ ...prev, thumbnailUrl: downloadUrl }));
+      setFormData(prev => ({ ...prev, thumbnailUrl: `${downloadUrl}?t=${Date.now()}` }));
       setSuccess("Bild erfolgreich hochgeladen!");
     } catch (err: any) {
       console.error("Upload failed:", err);
@@ -322,10 +322,8 @@ const AdminProducts: React.FC = () => {
       await saveProductPlans(productId, formData.selectedPlanIds || []);
       
       await fetchData();
-      setTimeout(() => {
-        setViewMode('list');
-        resetForm();
-      }, 1500);
+      setViewMode('list');
+      resetForm();
       
     } catch (err: any) {
       console.error("Error saving product:", err);
