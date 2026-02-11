@@ -544,6 +544,40 @@ export const getDeletionRequests = async (userId: string) => {
   return data || [];
 };
 
+// ============ LEGAL VERSION TRACKING ============
+
+export const getCurrentLegalVersions = async () => {
+  const { data, error } = await supabase
+    .from('legal_versions')
+    .select('*')
+    .eq('is_current', true)
+    .order('document_type');
+  if (error) throw error;
+  return data || [];
+};
+
+export const getLegalVersionHistory = async (documentType: string) => {
+  const { data, error } = await supabase
+    .from('legal_versions')
+    .select('*')
+    .eq('document_type', documentType)
+    .order('effective_date', { ascending: false });
+  if (error) throw error;
+  return data || [];
+};
+
+// ============ PURCHASE LEDGER (§147 AO) ============
+
+export const getPurchaseLedger = async (userId: string) => {
+  const { data, error } = await supabase
+    .from('purchase_ledger')
+    .select('*')
+    .eq('user_id', userId)
+    .order('event_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+};
+
 // Data Export Request (Art. 20 DSGVO - Datenportabilität)
 export const requestDataExport = async (userId: string, email: string) => {
   const { data, error } = await supabase

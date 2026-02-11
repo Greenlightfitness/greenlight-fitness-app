@@ -28,6 +28,34 @@ async function buffer(readable: any) {
   return Buffer.concat(chunks);
 }
 
+// ============ PURCHASE LEDGER (§147 AO — Immutable Financial Log) ============
+async function logToLedger(entry: {
+  event_type: string;
+  stripe_event_id?: string;
+  stripe_session_id?: string;
+  stripe_subscription_id?: string;
+  stripe_invoice_id?: string;
+  stripe_customer_id?: string;
+  user_id?: string | null;
+  amount?: number;
+  currency?: string;
+  tax_amount?: number;
+  product_id?: string;
+  product_name?: string;
+  product_type?: string;
+  metadata?: Record<string, any>;
+}) {
+  try {
+    await supabase.from('purchase_ledger').insert({
+      ...entry,
+      event_at: new Date().toISOString(),
+    });
+  } catch (err) {
+    // Ledger logging must never block the webhook response
+    console.error('⚠️ Purchase ledger write failed (non-blocking):', err);
+  }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -83,6 +111,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               currency: session.currency,
               status: 'completed',
             });
+
+            // Redundant ledger entry (§147 AO — immutable, 10-year retention)
+            const { data: product } = await supabase.from('products').select('title, type').eq('id', productId).single();
+            await logToLedger({
+              event_type: 'CHECKOUT_COMPLETED',
+              stripe_event_id: event.id,
+              stripe_session_id: session.id,
+              stripe_customer_id: session.customer as string,
+              user_id: profile.id,
+              amount: session.amount_total ? session.amount_total / 100 : 0,
+              currency: session.currency || 'eur',
+              product_id: productId,
+              product_name: product?.title || 'Unknown',
+              product_type: product?.type || 'unknown',
+              metadata: { customer_email: customerEmail },
+            });
             
             console.log('💾 Purchase recorded for user:', profile.id);
           }
@@ -107,6 +151,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
             cancel_at_period_end: subscription.cancel_at_period_end,
           }, { onConflict: 'stripe_subscription_id' });
+
+        // Ledger entry
+        const subEventType = event.type === 'customer.subscription.created' ? 'SUBSCRIPTION_CREATED' : 'SUBSCRIPTION_UPDATED';
+        const { data: subUser } = await supabase.from('subscriptions').select('user_id').eq('stripe_subscription_id', subscription.id).maybeSingle();
+        await logToLedger({
+          event_type: subEventType,
+          stripe_event_id: event.id,
+          stripe_subscription_id: subscription.id,
+          stripe_customer_id: subscription.customer as string,
+          user_id: subUser?.user_id || null,
+          amount: subscription.plan?.amount ? subscription.plan.amount / 100 : 0,
+          currency: subscription.currency || 'eur',
+          metadata: { status: subscription.status, cancel_at_period_end: subscription.cancel_at_period_end },
+        });
         break;
       }
 
@@ -118,6 +176,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .from('subscriptions')
           .update({ status: 'canceled' })
           .eq('stripe_subscription_id', subscription.id);
+
+        // Ledger entry
+        const { data: cancelUser } = await supabase.from('subscriptions').select('user_id').eq('stripe_subscription_id', subscription.id).maybeSingle();
+        await logToLedger({
+          event_type: 'SUBSCRIPTION_CANCELED',
+          stripe_event_id: event.id,
+          stripe_subscription_id: subscription.id,
+          stripe_customer_id: subscription.customer as string,
+          user_id: cancelUser?.user_id || null,
+          metadata: { canceled_at: new Date().toISOString() },
+        });
         break;
       }
 
@@ -136,6 +205,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           invoice_pdf: invoice.invoice_pdf,
           paid_at: new Date().toISOString(),
         });
+
+        // Ledger entry
+        await logToLedger({
+          event_type: 'INVOICE_PAID',
+          stripe_event_id: event.id,
+          stripe_invoice_id: invoice.id,
+          stripe_customer_id: invoice.customer as string,
+          amount: invoice.amount_paid / 100,
+          currency: invoice.currency || 'eur',
+          tax_amount: (invoice as any).tax ? (invoice as any).tax / 100 : 0,
+          metadata: { invoice_url: invoice.hosted_invoice_url },
+        });
         break;
       }
 
@@ -143,7 +224,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const invoice = event.data.object as Stripe.Invoice;
         console.log('⚠️ Invoice payment failed:', invoice.id);
         
-        // Could send notification to user here
+        // Ledger entry
+        await logToLedger({
+          event_type: 'INVOICE_FAILED',
+          stripe_event_id: event.id,
+          stripe_invoice_id: invoice.id,
+          stripe_customer_id: invoice.customer as string,
+          amount: invoice.amount_due / 100,
+          currency: invoice.currency || 'eur',
+          metadata: { attempt_count: invoice.attempt_count },
+        });
         break;
       }
 

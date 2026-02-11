@@ -675,5 +675,15 @@ CREATE INDEX IF NOT EXISTS idx_invitations_code ON public.invitations(invitation
 CREATE INDEX IF NOT EXISTS idx_invitations_email ON public.invitations(email);
 
 -- ============================================
+-- COMPLIANCE EXTENSION (DSGVO / §147 AO)
+-- See: scripts/create-compliance-tables.sql
+-- ============================================
+-- legal_versions        → Versionierung aller Rechtstexte
+-- purchase_ledger       → Immutables Finanz-Logbuch (redundant zu Stripe)
+-- archived_users        → Anonymisierte Nutzer-Archive nach Löschung
+-- anonymize_user()      → DSGVO Art. 17 Anonymisierungsfunktion
+-- get_current_legal_version() → Aktuelle Version eines Rechtstexts
+
+-- ============================================
 -- DONE! Schema ready for Greenlight Fitness
 -- ============================================

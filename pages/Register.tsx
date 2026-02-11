@@ -58,8 +58,8 @@ const Register: React.FC = () => {
 
       // 3. Log GDPR Consent (Art. 7 DSGVO - Nachweispflicht)
       try {
-        await logConsent({ user_id: user.id, consent_type: 'TERMS', consent_given: true, consent_version: '1.0' });
-        await logConsent({ user_id: user.id, consent_type: 'PRIVACY', consent_given: true, consent_version: '1.0' });
+        await logConsent({ user_id: user.id, consent_type: 'TERMS', consent_given: true, consent_version: '2.0' });
+        await logConsent({ user_id: user.id, consent_type: 'PRIVACY', consent_given: true, consent_version: '2.0' });
         await createAuditLog({ user_id: user.id, action: 'ACCOUNT_CREATED', table_name: 'profiles', record_id: user.id });
       } catch (consentErr) {
         console.warn('Consent logging failed (non-blocking):', consentErr);
@@ -152,7 +152,7 @@ const Register: React.FC = () => {
                  {acceptedTerms ? <CheckSquare size={20} /> : <Square size={20} />}
              </div>
              <p className="text-xs text-zinc-400 select-none">
-                 Ich stimme der Verarbeitung meiner Daten gemäß der <Link to="/legal/privacy" target="_blank" className="text-white hover:underline" onClick={e => e.stopPropagation()}>Datenschutzerklärung</Link> zu und akzeptiere die <Link to="/legal/imprint" target="_blank" className="text-white hover:underline" onClick={e => e.stopPropagation()}>AGB</Link>.
+                 Ich stimme der Verarbeitung meiner Daten gemäß der <Link to="/legal/privacy" target="_blank" className="text-white hover:underline" onClick={e => e.stopPropagation()}>Datenschutzerklärung</Link> und <Link to="/legal/transparency" target="_blank" className="text-white hover:underline" onClick={e => e.stopPropagation()}>Transparenzerklärung</Link> zu und akzeptiere die <Link to="/legal/terms" target="_blank" className="text-white hover:underline" onClick={e => e.stopPropagation()}>AGB</Link>.
              </p>
           </div>
           
