@@ -103,17 +103,17 @@ const Layout: React.FC = () => {
                         </button>
 
                         <NavLink 
+                            to="/shop"
+                            className={({ isActive }) => `flex flex-col items-center gap-1 transition-all duration-300 ${isActive ? 'text-[#00FF00] scale-110' : 'text-zinc-500 hover:text-zinc-300'}`}
+                        >
+                            <ShoppingBag size={24} strokeWidth={isShopActive ? 2.5 : 2} />
+                        </NavLink>
+
+                        <NavLink 
                             to="/chat"
                             className={({ isActive }) => `flex flex-col items-center gap-1 transition-all duration-300 ${isActive ? 'text-[#00FF00] scale-110' : 'text-zinc-500 hover:text-zinc-300'}`}
                         >
                             <MessageCircle size={24} strokeWidth={isChatActive ? 2.5 : 2} />
-                        </NavLink>
-
-                        <NavLink 
-                            to="/history"
-                            className={({ isActive }) => `flex flex-col items-center gap-1 transition-all duration-300 ${isActive ? 'text-[#00FF00] scale-110' : 'text-zinc-500 hover:text-zinc-300'}`}
-                        >
-                            <History size={24} strokeWidth={isHistoryActive ? 2.5 : 2} />
                         </NavLink>
 
                         <NavLink 
