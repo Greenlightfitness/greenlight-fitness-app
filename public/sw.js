@@ -59,6 +59,9 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(event.request.url);
 
+  // Skip non-http(s) schemes (chrome-extension://, etc.)
+  if (!url.protocol.startsWith('http')) return;
+
   // Skip Vercel serverless API calls
   if (url.pathname.startsWith('/api/')) return;
 
