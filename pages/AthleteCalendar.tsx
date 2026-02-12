@@ -202,7 +202,7 @@ const AthleteCalendar: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in pb-20">
+    <div className="space-y-6 animate-in fade-in">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

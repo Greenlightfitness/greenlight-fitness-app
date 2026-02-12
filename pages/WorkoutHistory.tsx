@@ -155,7 +155,7 @@ const WorkoutHistory: React.FC = () => {
   const hasActiveFilters = selectedExerciseId || dateRange.start || dateRange.end || searchQuery;
 
   return (
-    <div className="max-w-2xl mx-auto pb-32">
+    <div className="max-w-4xl mx-auto">
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-white flex items-center gap-3">

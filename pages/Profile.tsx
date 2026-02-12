@@ -436,7 +436,7 @@ const Profile: React.FC = () => {
 
   // =================== MAIN PROFILE VIEW ===================
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500 pb-8">
+    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500 pb-8 max-w-2xl mx-auto">
       <CalculatorsModal isOpen={showTools} onClose={() => setShowTools(false)} />
       <HealthDataModal isOpen={showHealthData} onClose={() => setShowHealthData(false)} />
       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarSelect} />

@@ -371,7 +371,7 @@ const Shop: React.FC = () => {
   const filteredProducts = products.filter(p => activeCategory === 'ALL' || p.category === activeCategory);
 
   return (
-    <div className="space-y-6 animate-in fade-in pb-20">
+    <div className="space-y-6 animate-in fade-in">
       
       {/* Category Header */}
       <div className="sticky top-0 z-20 bg-black/90 backdrop-blur-md pt-4 pb-2 -mx-6 px-6 border-b border-zinc-800">
