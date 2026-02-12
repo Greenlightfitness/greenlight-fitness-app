@@ -807,12 +807,7 @@ const Dashboard: React.FC = () => {
                     </h1>
                     <p className="text-zinc-400 mt-1">{t('dashboard.teamOverview')}</p>
                 </div>
-                <button onClick={() => setShowTools(true)} className="p-3 bg-zinc-900 border border-zinc-800 rounded-xl hover:border-[#00FF00] transition-colors group">
-                    <Calculator size={24} className="text-zinc-400 group-hover:text-[#00FF00]" />
-                </button>
             </div>
-            
-            <CalculatorsModal isOpen={showTools} onClose={() => setShowTools(false)} />
             <AthleteProfileModal isOpen={!!selectedAthleteId} athleteId={selectedAthleteId} onClose={() => setSelectedAthleteId(null)} />
 
             {/* Coach Chat Modal */}

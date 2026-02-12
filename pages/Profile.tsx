@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { signOut, updateProfile, uploadFile, getPublicUrl, requestDataDeletion, exportUserData, createAuditLog, getAssignedPlans } from '../services/supabase';
-import { Camera, Check, LogOut, Globe, Settings, Download, Trash2, FileText, AlertTriangle, RefreshCw, CreditCard, Receipt, ExternalLink, Heart, Loader2, Save, ChevronRight, ArrowLeft, Bell, User2, Scale, Calculator } from 'lucide-react';
+import { Camera, Check, LogOut, Globe, Settings, Download, Trash2, FileText, AlertTriangle, RefreshCw, CreditCard, Receipt, ExternalLink, Heart, Loader2, Save, ChevronRight, ArrowLeft, Bell, User2, Scale, Calculator, BookOpen } from 'lucide-react';
 import { UserRole } from '../types';
 import Button from '../components/Button';
 import CalculatorsModal from '../components/CalculatorsModal';
@@ -69,7 +69,11 @@ const Profile: React.FC = () => {
     waistCircumference: '',
     restingHeartRate: '',
     maxHeartRate: '',
+    biography: '',
   });
+
+  const isAthlete = userProfile?.role === UserRole.ATHLETE;
+  const isCoachOrAdmin = userProfile?.role === UserRole.COACH || userProfile?.role === UserRole.ADMIN;
 
   // Sync form with profile data
   useEffect(() => {
@@ -86,6 +90,7 @@ const Profile: React.FC = () => {
         waistCircumference: userProfile.waistCircumference?.toString() || '',
         restingHeartRate: userProfile.restingHeartRate?.toString() || '',
         maxHeartRate: userProfile.maxHeartRate?.toString() || '',
+        biography: userProfile.biography || '',
       });
       if (userProfile.avatarUrl) setAvatarPreview(userProfile.avatarUrl);
     }
@@ -177,6 +182,7 @@ const Profile: React.FC = () => {
         waist_circumference: form.waistCircumference ? Number(form.waistCircumference) : null,
         resting_heart_rate: form.restingHeartRate ? Number(form.restingHeartRate) : null,
         max_heart_rate: form.maxHeartRate ? Number(form.maxHeartRate) : null,
+        biography: form.biography || null,
         onboarding_completed: true,
       };
       console.log('[Profile] Saving profile for', user.id, updates);
@@ -358,6 +364,62 @@ const Profile: React.FC = () => {
     );
   }
 
+  // =================== SUB-PAGE: Biografie (Coach/Admin) ===================
+  if (subPage === 'biography') {
+    return (
+      <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300 pb-8">
+        <div className="flex items-center justify-between">
+          <button onClick={goBack} className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors -ml-1">
+            <ArrowLeft size={20} />
+            <span className="text-sm font-medium">Profil</span>
+          </button>
+          {editing ? (
+            <div className="flex gap-2">
+              <button onClick={() => setEditing(false)} className="px-3 py-1.5 text-sm text-zinc-400 hover:text-white transition-colors">Abbrechen</button>
+              <button onClick={handleSave} disabled={saving} className="flex items-center gap-1.5 px-4 py-1.5 bg-[#00FF00] text-black font-bold rounded-xl text-sm hover:bg-[#00FF00]/80 disabled:opacity-50">
+                {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Speichern
+              </button>
+            </div>
+          ) : (
+            <button onClick={() => setEditing(true)} className="px-4 py-1.5 bg-zinc-800 text-white font-medium rounded-xl text-sm hover:bg-zinc-700 transition-colors">
+              Bearbeiten
+            </button>
+          )}
+        </div>
+        <h1 className="text-2xl font-bold text-white tracking-tight">Über mich</h1>
+        {saved && (
+          <div className="bg-[#00FF00]/10 border border-[#00FF00]/30 text-[#00FF00] text-sm p-3 rounded-xl flex items-center gap-2">
+            <Check size={14} /> Gespeichert!
+          </div>
+        )}
+        <div className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl p-5 space-y-4">
+          <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Biografie</p>
+          <p className="text-xs text-zinc-500">Erzähle deinen Athleten etwas über dich — deine Qualifikationen, Erfahrung und Philosophie.</p>
+          {editing ? (
+            <textarea
+              value={form.biography}
+              onChange={e => setForm(prev => ({ ...prev, biography: e.target.value }))}
+              placeholder="z.B. Zertifizierter Strength & Conditioning Coach mit 8 Jahren Erfahrung..."
+              className="w-full bg-zinc-900 border border-zinc-700 text-white rounded-xl px-4 py-3 focus:border-[#00FF00] outline-none transition-colors text-sm resize-none min-h-[160px]"
+              rows={6}
+            />
+          ) : (
+            <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-3 text-sm min-h-[80px]">
+              <span className={form.biography ? 'text-white whitespace-pre-wrap' : 'text-zinc-600'}>
+                {form.biography || 'Noch keine Biografie hinterlegt — tippe auf "Bearbeiten" um eine hinzuzufügen.'}
+              </span>
+            </div>
+          )}
+        </div>
+        <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-xl p-4">
+          <p className="text-xs text-zinc-500">
+            <strong className="text-zinc-400">Tipp:</strong> Deine Biografie wird für Athleten sichtbar sein und hilft ihnen, dich als Trainer besser kennenzulernen.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   // =================== SUB-PAGE: Benachrichtigungen ===================
   if (subPage === 'notifications') {
     return (
@@ -432,38 +494,66 @@ const Profile: React.FC = () => {
             </div>
             <ChevronRight size={16} className="text-zinc-600 shrink-0" />
           </button>
-          <button onClick={() => setSubPage('body')} className="w-full flex items-center gap-3.5 p-4 hover:bg-zinc-900/50 transition-colors active:bg-zinc-800/50">
-            <div className="w-9 h-9 rounded-[10px] bg-green-500/15 flex items-center justify-center shrink-0">
-              <Scale size={18} className="text-green-400" />
-            </div>
-            <div className="flex-1 text-left min-w-0">
-              <span className="text-white text-sm font-medium block">Körperdaten</span>
-              <span className="text-zinc-500 text-xs truncate block">
-                {userProfile?.weight && userProfile?.height ? `${userProfile.weight} kg · ${userProfile.height} cm` : 'Noch nicht ausgefüllt'}
-              </span>
-            </div>
-            <ChevronRight size={16} className="text-zinc-600 shrink-0" />
-          </button>
-          <button onClick={() => setShowHealthData(true)} className="w-full flex items-center gap-3.5 p-4 hover:bg-zinc-900/50 transition-colors active:bg-zinc-800/50">
-            <div className="w-9 h-9 rounded-[10px] bg-red-500/15 flex items-center justify-center shrink-0">
-              <Heart size={18} className="text-red-400" />
-            </div>
-            <div className="flex-1 text-left min-w-0">
-              <span className="text-white text-sm font-medium block">Gesundheitsdaten</span>
-              <span className="text-zinc-500 text-xs block">FFMI, TDEE, HR-Zonen</span>
-            </div>
-            <ChevronRight size={16} className="text-zinc-600 shrink-0" />
-          </button>
-          <button onClick={() => setShowTools(true)} className="w-full flex items-center gap-3.5 p-4 hover:bg-zinc-900/50 transition-colors active:bg-zinc-800/50">
-            <div className="w-9 h-9 rounded-[10px] bg-purple-500/15 flex items-center justify-center shrink-0">
-              <Calculator size={18} className="text-purple-400" />
-            </div>
-            <div className="flex-1 text-left min-w-0">
-              <span className="text-white text-sm font-medium block">Rechner</span>
-              <span className="text-zinc-500 text-xs block">1RM, FFMI, TDEE, ACWR</span>
-            </div>
-            <ChevronRight size={16} className="text-zinc-600 shrink-0" />
-          </button>
+
+          {/* Biography — Coach/Admin only */}
+          {isCoachOrAdmin && (
+            <button onClick={() => setSubPage('biography')} className="w-full flex items-center gap-3.5 p-4 hover:bg-zinc-900/50 transition-colors active:bg-zinc-800/50">
+              <div className="w-9 h-9 rounded-[10px] bg-orange-500/15 flex items-center justify-center shrink-0">
+                <BookOpen size={18} className="text-orange-400" />
+              </div>
+              <div className="flex-1 text-left min-w-0">
+                <span className="text-white text-sm font-medium block">Über mich / Biografie</span>
+                <span className="text-zinc-500 text-xs truncate block">
+                  {userProfile?.biography ? userProfile.biography.substring(0, 50) + (userProfile.biography.length > 50 ? '...' : '') : 'Noch nicht ausgefüllt'}
+                </span>
+              </div>
+              <ChevronRight size={16} className="text-zinc-600 shrink-0" />
+            </button>
+          )}
+
+          {/* Body Data — Athlete only */}
+          {isAthlete && (
+            <button onClick={() => setSubPage('body')} className="w-full flex items-center gap-3.5 p-4 hover:bg-zinc-900/50 transition-colors active:bg-zinc-800/50">
+              <div className="w-9 h-9 rounded-[10px] bg-green-500/15 flex items-center justify-center shrink-0">
+                <Scale size={18} className="text-green-400" />
+              </div>
+              <div className="flex-1 text-left min-w-0">
+                <span className="text-white text-sm font-medium block">Körperdaten</span>
+                <span className="text-zinc-500 text-xs truncate block">
+                  {userProfile?.weight && userProfile?.height ? `${userProfile.weight} kg · ${userProfile.height} cm` : 'Noch nicht ausgefüllt'}
+                </span>
+              </div>
+              <ChevronRight size={16} className="text-zinc-600 shrink-0" />
+            </button>
+          )}
+
+          {/* Health Data — Athlete only */}
+          {isAthlete && (
+            <button onClick={() => setShowHealthData(true)} className="w-full flex items-center gap-3.5 p-4 hover:bg-zinc-900/50 transition-colors active:bg-zinc-800/50">
+              <div className="w-9 h-9 rounded-[10px] bg-red-500/15 flex items-center justify-center shrink-0">
+                <Heart size={18} className="text-red-400" />
+              </div>
+              <div className="flex-1 text-left min-w-0">
+                <span className="text-white text-sm font-medium block">Gesundheitsdaten</span>
+                <span className="text-zinc-500 text-xs block">FFMI, TDEE, HR-Zonen</span>
+              </div>
+              <ChevronRight size={16} className="text-zinc-600 shrink-0" />
+            </button>
+          )}
+
+          {/* Calculator — Athlete only */}
+          {isAthlete && (
+            <button onClick={() => setShowTools(true)} className="w-full flex items-center gap-3.5 p-4 hover:bg-zinc-900/50 transition-colors active:bg-zinc-800/50">
+              <div className="w-9 h-9 rounded-[10px] bg-purple-500/15 flex items-center justify-center shrink-0">
+                <Calculator size={18} className="text-purple-400" />
+              </div>
+              <div className="flex-1 text-left min-w-0">
+                <span className="text-white text-sm font-medium block">Rechner</span>
+                <span className="text-zinc-500 text-xs block">1RM, FFMI, TDEE, ACWR</span>
+              </div>
+              <ChevronRight size={16} className="text-zinc-600 shrink-0" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -521,8 +611,8 @@ const Profile: React.FC = () => {
         </div>
       </div>
 
-      {/* === MITGLIEDSCHAFT MENU GROUP === */}
-      <div>
+      {/* === MITGLIEDSCHAFT MENU GROUP (Athlete only) === */}
+      {isAthlete && <div>
         <p className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest px-4 mb-2">Mitgliedschaft</p>
         <div className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl overflow-hidden">
           {subscriptions.length === 0 && purchases.length === 0 && assignedPlans.length === 0 && (
@@ -584,7 +674,7 @@ const Profile: React.FC = () => {
             {portalLoading ? <Loader2 size={14} className="text-zinc-500 animate-spin" /> : <ChevronRight size={14} className="text-zinc-600" />}
           </button>
         </div>
-      </div>
+      </div>}
 
       {/* === DATENSCHUTZ MENU GROUP === */}
       <div>

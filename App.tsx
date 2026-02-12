@@ -100,11 +100,15 @@ const App: React.FC = () => {
                 <Route path="/" element={<Dashboard />} />
               </Route>
               
+              {/* Profile: accessible by ALL roles */}
+              <Route element={<ProtectedRoute />}>
+                 <Route path="/profile" element={<Profile />} />
+              </Route>
+
               {/* Athlete Accessible Routes */}
               <Route element={<ProtectedRoute allowedRoles={[UserRole.ATHLETE]} />}>
                  <Route path="/shop" element={<Shop />} />
                  <Route path="/chat" element={<Chat />} />
-                 <Route path="/profile" element={<Profile />} />
                  <Route path="/history" element={<WorkoutHistory />} />
               </Route>
               

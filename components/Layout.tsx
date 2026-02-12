@@ -44,6 +44,7 @@ const Layout: React.FC = () => {
 
   // CRM for both Coaches and Admins
   desktopNavItems.push({ label: 'CRM', path: '/admin/crm', icon: <Users size={20} /> });
+  desktopNavItems.push({ label: 'Profil', path: '/profile', icon: <User size={20} /> });
 
   const handleAthleteNav = (view: 'hub' | 'training') => {
       navigate('/', { state: { view } });

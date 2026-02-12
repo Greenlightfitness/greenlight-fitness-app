@@ -29,6 +29,7 @@ export interface UserProfile {
   maxHeartRate?: number; // bpm
   onboardingCompleted?: boolean;
   avatarUrl?: string;
+  biography?: string;
 }
 
 // --- ATTENTIONS & ACTIVITIES (NEW) ---
