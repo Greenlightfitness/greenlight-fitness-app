@@ -10,6 +10,28 @@ import CalculatorsModal from '../components/CalculatorsModal';
 import HealthDataModal from '../components/HealthDataModal';
 import NotificationSettings from '../components/NotificationSettings';
 
+const ProfileField = ({ label, value, field, type = 'text', suffix, editing, onChange }: { label: string; value: string; field: string; type?: string; suffix?: string; editing: boolean; onChange: (field: string, value: string) => void }) => (
+  <div>
+    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block mb-1.5">{label}</label>
+    {editing ? (
+      <div className="relative">
+        <input
+          type={type}
+          value={value}
+          onChange={e => onChange(field, e.target.value)}
+          className="w-full bg-zinc-900 border border-zinc-700 text-white rounded-xl px-4 py-3 focus:border-[#00FF00] outline-none transition-colors text-sm"
+        />
+        {suffix && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 text-xs">{suffix}</span>}
+      </div>
+    ) : (
+      <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-3 text-sm">
+        <span className={value ? 'text-white' : 'text-zinc-600'}>{value || '—'}</span>
+        {value && suffix && <span className="text-zinc-500 ml-1">{suffix}</span>}
+      </div>
+    )}
+  </div>
+);
+
 const Profile: React.FC = () => {
   const { userProfile, user, activeRole, setActiveRole, canSwitchRole, refreshProfile } = useAuth();
   const { t, language, setLanguage } = useLanguage();
@@ -212,28 +234,7 @@ const Profile: React.FC = () => {
 
   const toggleLanguage = () => setLanguage(language === 'en' ? 'de' : 'en');
 
-  // --- Field helper ---
-  const ProfileField = ({ label, value, field, type = 'text', suffix, half }: { label: string; value: string; field: string; type?: string; suffix?: string; half?: boolean }) => (
-    <div className={half ? '' : ''}>
-      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block mb-1.5">{label}</label>
-      {editing ? (
-        <div className="relative">
-          <input
-            type={type}
-            value={value}
-            onChange={e => setForm(prev => ({ ...prev, [field]: e.target.value }))}
-            className="w-full bg-zinc-900 border border-zinc-700 text-white rounded-xl px-4 py-3 focus:border-[#00FF00] outline-none transition-colors text-sm"
-          />
-          {suffix && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 text-xs">{suffix}</span>}
-        </div>
-      ) : (
-        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-3 text-sm">
-          <span className={value ? 'text-white' : 'text-zinc-600'}>{value || '—'}</span>
-          {value && suffix && <span className="text-zinc-500 ml-1">{suffix}</span>}
-        </div>
-      )}
-    </div>
-  );
+  const handleFieldChange = (field: string, value: string) => setForm(prev => ({ ...prev, [field]: value }));
 
   const displayName = userProfile?.firstName
     ? `${userProfile.firstName} ${userProfile.lastName || ''}`.trim()
@@ -344,11 +345,11 @@ const Profile: React.FC = () => {
           <div>
             <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Persönliche Daten</p>
             <div className="grid grid-cols-2 gap-3">
-              <ProfileField label="Vorname" value={form.firstName} field="firstName" />
-              <ProfileField label="Nachname" value={form.lastName} field="lastName" />
+              <ProfileField label="Vorname" value={form.firstName} field="firstName" editing={editing} onChange={handleFieldChange} />
+              <ProfileField label="Nachname" value={form.lastName} field="lastName" editing={editing} onChange={handleFieldChange} />
             </div>
             <div className="grid grid-cols-2 gap-3 mt-3">
-              <ProfileField label="Spitzname" value={form.nickname} field="nickname" />
+              <ProfileField label="Spitzname" value={form.nickname} field="nickname" editing={editing} onChange={handleFieldChange} />
               <div>
                 <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block mb-1.5">Geschlecht</label>
                 {editing ? (
@@ -368,7 +369,7 @@ const Profile: React.FC = () => {
               </div>
             </div>
             <div className="mt-3">
-              <ProfileField label="Geburtsdatum" value={form.birthDate} field="birthDate" type="date" />
+              <ProfileField label="Geburtsdatum" value={form.birthDate} field="birthDate" type="date" editing={editing} onChange={handleFieldChange} />
             </div>
           </div>
 
@@ -376,10 +377,10 @@ const Profile: React.FC = () => {
           <div className="pt-2">
             <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Körperdaten</p>
             <div className="grid grid-cols-2 gap-3">
-              <ProfileField label="Größe" value={form.height} field="height" type="number" suffix="cm" />
-              <ProfileField label="Gewicht" value={form.weight} field="weight" type="number" suffix="kg" />
-              <ProfileField label="Körperfett" value={form.bodyFat} field="bodyFat" type="number" suffix="%" />
-              <ProfileField label="Taillenumfang" value={form.waistCircumference} field="waistCircumference" type="number" suffix="cm" />
+              <ProfileField label="Größe" value={form.height} field="height" type="number" suffix="cm" editing={editing} onChange={handleFieldChange} />
+              <ProfileField label="Gewicht" value={form.weight} field="weight" type="number" suffix="kg" editing={editing} onChange={handleFieldChange} />
+              <ProfileField label="Körperfett" value={form.bodyFat} field="bodyFat" type="number" suffix="%" editing={editing} onChange={handleFieldChange} />
+              <ProfileField label="Taillenumfang" value={form.waistCircumference} field="waistCircumference" type="number" suffix="cm" editing={editing} onChange={handleFieldChange} />
             </div>
           </div>
 
@@ -387,8 +388,8 @@ const Profile: React.FC = () => {
           <div className="pt-2">
             <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Herzfrequenz</p>
             <div className="grid grid-cols-2 gap-3">
-              <ProfileField label="Ruhe-HF" value={form.restingHeartRate} field="restingHeartRate" type="number" suffix="bpm" />
-              <ProfileField label="Max-HF" value={form.maxHeartRate} field="maxHeartRate" type="number" suffix="bpm" />
+              <ProfileField label="Ruhe-HF" value={form.restingHeartRate} field="restingHeartRate" type="number" suffix="bpm" editing={editing} onChange={handleFieldChange} />
+              <ProfileField label="Max-HF" value={form.maxHeartRate} field="maxHeartRate" type="number" suffix="bpm" editing={editing} onChange={handleFieldChange} />
             </div>
           </div>
         </div>
