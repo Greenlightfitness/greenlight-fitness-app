@@ -127,12 +127,9 @@ const Layout: React.FC = () => {
           <h1 className="text-2xl font-bold text-white tracking-tighter">
             GREENLIGHT<span className="text-[#00FF00]">.</span>
           </h1>
-          <div className="flex items-center justify-between mt-2">
-            <p className="text-[10px] text-zinc-500 uppercase tracking-[0.2em] font-medium">
-              {roleLabel}
-            </p>
-            <NotificationBell />
-          </div>
+          <p className="text-[10px] text-zinc-500 uppercase tracking-[0.2em] font-medium mt-2">
+            {roleLabel}
+          </p>
         </div>
 
         <nav className="flex-1 px-4 space-y-1 mt-4 overflow-y-auto">
@@ -340,8 +337,13 @@ const Layout: React.FC = () => {
         </div>
       </div>
 
+      {/* ============ DESKTOP TOP BAR (notification bell, top-right) ============ */}
+      <div className="hidden md:flex fixed top-0 right-0 left-64 h-14 items-center justify-end px-6 bg-[#000000]/80 backdrop-blur-md z-20 border-b border-zinc-800/30">
+        <NotificationBell />
+      </div>
+
       {/* ============ MAIN CONTENT ============ */}
-      <main className="flex-1 md:ml-64 p-4 md:p-6 pt-20 md:pt-8 pb-28 md:pb-8 bg-[#000000] min-w-0 safe-area-top">
+      <main className="flex-1 md:ml-64 p-4 md:p-6 pt-20 md:pt-[4.5rem] pb-28 md:pb-8 bg-[#000000] min-w-0 safe-area-top">
         <Outlet />
       </main>
     </div>
