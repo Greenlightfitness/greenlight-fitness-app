@@ -1051,27 +1051,18 @@ const AthleteTrainingView: React.FC = () => {
                 <p className={`text-xs font-bold ${isSelected ? 'text-black' : 'text-zinc-500'}`}>{DAYS_DE[i]}</p>
                 <p className={`text-xl font-bold ${isSelected ? 'text-black' : 'text-white'}`}>{date.getDate()}</p>
                 
-                {/* Mini workout preview for desktop */}
-                {dayWorkouts.length > 0 && (
-                  <div className="mt-2 space-y-1">
-                    {dayWorkouts.slice(0, 2).map(w => (
+                {dayWorkouts.length > 0 && !isSelected && (
+                  <div className="flex gap-1 justify-center mt-2">
+                    {dayWorkouts.slice(0, 3).map(w => (
                       <div 
                         key={w.id}
-                        className={`text-[10px] px-1.5 py-0.5 rounded truncate ${
-                          isSelected 
-                            ? 'bg-black/20 text-black' 
-                            : w.completed 
-                              ? 'bg-[#00FF00]/20 text-[#00FF00]' 
-                              : 'bg-zinc-800 text-zinc-400'
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          w.completed ? 'bg-[#00FF00]' : 'bg-zinc-500'
                         }`}
-                      >
-                        {w.sessionTitle}
-                      </div>
+                      />
                     ))}
-                    {dayWorkouts.length > 2 && (
-                      <p className={`text-[10px] ${isSelected ? 'text-black/60' : 'text-zinc-600'}`}>
-                        +{dayWorkouts.length - 2} more
-                      </p>
+                    {dayWorkouts.length > 3 && (
+                      <div className="w-1.5 h-1.5 rounded-full bg-zinc-700" />
                     )}
                   </div>
                 )}

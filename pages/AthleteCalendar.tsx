@@ -295,21 +295,17 @@ const AthleteCalendar: React.FC = () => {
                 </span>
                 
                 {hasWorkouts && (
-                  <div className="mt-1 space-y-0.5">
-                    {workouts.slice(0, 2).map(w => (
+                  <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 flex gap-1">
+                    {workouts.slice(0, 3).map(w => (
                       <div 
                         key={w.id}
-                        className={`text-[10px] px-1 py-0.5 rounded truncate ${
-                          w.completed 
-                            ? 'bg-[#00FF00]/20 text-[#00FF00] line-through' 
-                            : 'bg-zinc-800 text-zinc-300'
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          w.completed ? 'bg-[#00FF00]' : 'bg-zinc-500'
                         }`}
-                      >
-                        {w.sessionTitle}
-                      </div>
+                      />
                     ))}
-                    {workouts.length > 2 && (
-                      <div className="text-[10px] text-zinc-500">+{workouts.length - 2} mehr</div>
+                    {workouts.length > 3 && (
+                      <div className="w-1.5 h-1.5 rounded-full bg-zinc-700" />
                     )}
                   </div>
                 )}
