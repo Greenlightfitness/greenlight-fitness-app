@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { supabase, getAssignedPlans, getExercises, autoTrackStrengthGoals, autoTrackConsistencyGoals } from '../services/supabase';
 import { ChevronLeft, ChevronRight, Plus, Check, Play, Dumbbell, X, ChevronDown, ChevronUp, Search, Trash2, Trophy, Repeat, Link, Layers, Timer, Square, Pause, ClipboardList, Pencil, CheckCircle, Bookmark, Lock, Zap, TrendingUp, ShoppingBag, ArrowRight, Calendar } from 'lucide-react';
 import Button from './Button';
@@ -39,6 +40,7 @@ const DAYS_FULL = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'S
 
 const AthleteTrainingView: React.FC = () => {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => {
     const now = new Date();
     const day = now.getDay();
@@ -1115,30 +1117,27 @@ const AthleteTrainingView: React.FC = () => {
 
   return (
     <div className="space-y-4 animate-in fade-in">
-      {/* === HEUTE Hero Section === */}
+      {/* === Today Hero Section === */}
       {!loading && (
         <div className="bg-gradient-to-br from-[#1C1C1E] to-zinc-900 border border-zinc-800 rounded-2xl p-5 relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-[#00FF00]/5 to-transparent pointer-events-none" />
           <div className="relative z-10">
-            <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Heute</p>
+            <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">{t('training.today')}</p>
             <p className="text-xs text-zinc-400 mb-3">
-              {new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}
+              {new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
             </p>
 
             {(() => {
-              // Find today's first unfinished workout
               const todayUnfinished = todayWorkouts.find(w => !w.completed);
               const todayAny = todayWorkouts[0];
 
               if (todayUnfinished) {
-                // Has a session today → EINHEIT STARTEN
                 return (
                   <div>
                     <h2 className="text-xl font-extrabold text-white mb-1">{todayUnfinished.sessionTitle}</h2>
-                    <p className="text-xs text-zinc-500 mb-3">{todayUnfinished.planName} · {todayUnfinished.workoutData?.length || 0} Blöcke</p>
+                    <p className="text-xs text-zinc-500 mb-3">{todayUnfinished.planName} · {t('training.blocks', { count: String(todayUnfinished.workoutData?.length || 0) })}</p>
                     <button
                       onClick={() => {
-                        // Navigate to today in the calendar and auto-start
                         const todayIdx = weekDates.findIndex(d => d.toISOString().split('T')[0] === todayKey);
                         if (todayIdx >= 0) setSelectedDayIndex(todayIdx);
                         const firstBlock = todayUnfinished.workoutData?.[0];
@@ -1146,61 +1145,58 @@ const AthleteTrainingView: React.FC = () => {
                       }}
                       className="flex items-center gap-2 px-5 py-3 bg-[#00FF00] text-black rounded-xl font-bold hover:bg-[#00FF00]/90 transition-colors text-sm"
                     >
-                      <Play size={18} /> EINHEIT STARTEN
+                      <Play size={18} /> {t('training.startUnit')}
                     </button>
                   </div>
                 );
               } else if (todayAny?.completed) {
-                // All today's sessions completed
                 return (
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-full bg-[#00FF00]/20 flex items-center justify-center">
                       <Check size={24} className="text-[#00FF00]" />
                     </div>
                     <div>
-                      <h2 className="text-lg font-bold text-white">Training erledigt!</h2>
-                      <p className="text-xs text-zinc-500">{todayAny.sessionTitle} abgeschlossen</p>
+                      <h2 className="text-lg font-bold text-white">{t('training.trainingDone')}</h2>
+                      <p className="text-xs text-zinc-500">{t('training.sessionCompleted', { name: todayAny.sessionTitle })}</p>
                     </div>
                   </div>
                 );
               } else if (isModusA) {
-                // Mode A: No session today, has programs
                 return (
                   <div>
-                    <h2 className="text-lg font-bold text-white mb-1">Kein Training geplant</h2>
+                    <h2 className="text-lg font-bold text-white mb-1">{t('training.noTrainingPlanned')}</h2>
                     <p className="text-xs text-zinc-500 mb-3">
                       {programCards.some(p => p.status === 'active') 
-                        ? 'Dein nächstes Training kommt bald. Du kannst auch eine eigene Session erstellen.'
-                        : 'Starte eines deiner Programme oder füge eine eigene Session hinzu.'}
+                        ? t('training.modeAEmpty')
+                        : t('training.modeAEmptyUnstarted')}
                     </p>
                     <div className="flex gap-2 flex-wrap">
                       <button
                         onClick={addSession}
                         className="flex items-center gap-2 px-4 py-2.5 bg-[#00FF00] text-black rounded-xl font-bold hover:bg-[#00FF00]/90 transition-colors text-sm"
                       >
-                        <Plus size={16} /> Session hinzufügen
+                        <Plus size={16} /> {t('training.addSession')}
                       </button>
                     </div>
                   </div>
                 );
               } else {
-                // Mode B: Free user, no programs
                 return (
                   <div>
-                    <h2 className="text-lg font-bold text-white mb-1">Bereit zum Trainieren?</h2>
-                    <p className="text-xs text-zinc-500 mb-3">Erstelle deine eigene Session oder entdecke unsere Trainingspläne.</p>
+                    <h2 className="text-lg font-bold text-white mb-1">{t('training.readyToTrain')}</h2>
+                    <p className="text-xs text-zinc-500 mb-3">{t('training.modeBEmpty')}</p>
                     <div className="flex gap-2 flex-wrap">
                       <button
                         onClick={addSession}
                         className="flex items-center gap-2 px-4 py-2.5 bg-[#00FF00] text-black rounded-xl font-bold hover:bg-[#00FF00]/90 transition-colors text-sm"
                       >
-                        <Plus size={16} /> SESSION HINZUFÜGEN
+                        <Plus size={16} /> {t('training.addSession')}
                       </button>
                       <button
                         onClick={() => window.location.hash = '#/shop'}
                         className="flex items-center gap-2 px-4 py-2.5 bg-zinc-800 text-white rounded-xl font-bold hover:bg-zinc-700 transition-colors text-sm border border-zinc-700"
                       >
-                        <ShoppingBag size={16} /> Pläne entdecken
+                        <ShoppingBag size={16} /> {t('training.discoverPlans')}
                       </button>
                     </div>
                   </div>
@@ -1211,17 +1207,16 @@ const AthleteTrainingView: React.FC = () => {
         </div>
       )}
 
-      {/* === MEINE PROGRAMME (Mode A only) === */}
+      {/* === My Programs (Mode A only) === */}
       {!loading && programCards.length > 0 && (
         <div>
-          <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 px-1">Meine Programme</h3>
+          <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 px-1">{t('training.myPrograms')}</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {programCards.map(card => (
               <div
                 key={card.assignedPlanId}
                 className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl overflow-hidden hover:border-zinc-700 transition-all group"
               >
-                {/* Thumbnail */}
                 {card.thumbnail ? (
                   <div className="h-28 bg-zinc-900 overflow-hidden">
                     <img src={card.thumbnail} alt={card.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
@@ -1235,12 +1230,11 @@ const AthleteTrainingView: React.FC = () => {
                 <div className="p-4">
                   <h4 className="font-bold text-white text-sm truncate mb-1">{card.title}</h4>
                   
-                  {/* Status line + progress */}
                   <div className="mb-3">
                     <p className="text-[11px]">
-                      {card.status === 'not_started' && <span className="text-zinc-500">Noch nicht gestartet</span>}
-                      {card.status === 'active' && <span className="text-[#00FF00]">Aktiv · Programm läuft</span>}
-                      {card.status === 'today_session' && <span className="text-[#00FF00] font-bold">Heute: Einheit verfügbar</span>}
+                      {card.status === 'not_started' && <span className="text-zinc-500">{t('training.notStarted')}</span>}
+                      {card.status === 'active' && <span className="text-[#00FF00]">{t('training.activeRunning')}</span>}
+                      {card.status === 'today_session' && <span className="text-[#00FF00] font-bold">{t('training.todayAvailable')}</span>}
                     </p>
                     {card.progressPercent != null && card.progressPercent > 0 && (
                       <div className="mt-1.5 flex items-center gap-2">
@@ -1252,13 +1246,12 @@ const AthleteTrainingView: React.FC = () => {
                     )}
                   </div>
                   
-                  {/* Action button */}
                   {card.status === 'not_started' && card.planId && (
                     <button
                       onClick={() => setStartProgramModal({ productId: card.productId || '', planId: card.planId, productTitle: card.title })}
                       className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-[#00FF00] text-black rounded-xl font-bold text-xs hover:bg-[#00FF00]/90 transition-colors"
                     >
-                      <Play size={14} /> JETZT STARTEN
+                      <Play size={14} /> {t('training.startNow')}
                     </button>
                   )}
                   {card.status === 'active' && (
@@ -1269,7 +1262,7 @@ const AthleteTrainingView: React.FC = () => {
                       }}
                       className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-zinc-800 text-white rounded-xl font-bold text-xs hover:bg-zinc-700 transition-colors border border-zinc-700"
                     >
-                      <ArrowRight size={14} /> FORTSETZEN
+                      <ArrowRight size={14} /> {t('training.continue')}
                     </button>
                   )}
                   {card.status === 'today_session' && card.todaySession && (
@@ -1282,7 +1275,7 @@ const AthleteTrainingView: React.FC = () => {
                       }}
                       className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-[#00FF00] text-black rounded-xl font-bold text-xs hover:bg-[#00FF00]/90 transition-colors"
                     >
-                      <Play size={14} /> EINHEIT STARTEN
+                      <Play size={14} /> {t('training.startUnit')}
                     </button>
                   )}
                 </div>
@@ -1396,7 +1389,7 @@ const AthleteTrainingView: React.FC = () => {
         <div>
           <h2 className="text-2xl font-extrabold text-white">
             {DAYS_FULL[selectedDayIndex]}
-            {isToday && <span className="text-[#00FF00] ml-2">Heute</span>}
+            {isToday && <span className="text-[#00FF00] ml-2">{t('training.today')}</span>}
           </h2>
           <p className="text-zinc-500 text-sm">
             {selectedDate.toLocaleDateString('de-DE', { day: 'numeric', month: 'long' })}
@@ -1408,32 +1401,32 @@ const AthleteTrainingView: React.FC = () => {
           className="flex items-center gap-2 px-4 py-2 bg-[#00FF00] text-black rounded-xl font-bold hover:bg-[#00FF00]/90 transition-colors"
         >
           <Plus size={18} />
-          <span className="hidden sm:inline">Session</span>
+          <span className="hidden sm:inline">{t('training.session')}</span>
         </button>
       </div>
 
       {/* Workouts for Selected Day */}
       {loading ? (
-        <div className="text-center py-12 text-zinc-500">Lädt...</div>
+        <div className="text-center py-12 text-zinc-500">{t('common.loading')}</div>
       ) : selectedDayWorkouts.length === 0 ? (
         <div className="bg-[#1C1C1E] border border-zinc-800 border-dashed rounded-2xl p-6 text-center">
           <Dumbbell size={36} className="mx-auto mb-3 text-zinc-700" />
-          <h3 className="text-base font-bold text-white mb-1">Kein Training geplant</h3>
+          <h3 className="text-base font-bold text-white mb-1">{t('training.noTrainingPlanned')}</h3>
           <p className="text-zinc-500 text-xs mb-4">
             {isModusA 
-              ? 'Starte ein Programm oder füge eine eigene Session hinzu.' 
-              : 'Erstelle eine eigene Session für diesen Tag.'}
+              ? t('training.emptyDayModeA') 
+              : t('training.emptyDayModeB')}
           </p>
           <div className="flex gap-2 justify-center flex-wrap">
             <Button onClick={addSession} className="text-sm">
-              <Plus size={16} className="mr-1" /> Session hinzufügen
+              <Plus size={16} className="mr-1" /> {t('training.addSession')}
             </Button>
             {!isModusA && (
               <button
                 onClick={() => window.location.hash = '#/shop'}
                 className="flex items-center gap-1 px-3 py-2 text-xs text-zinc-400 hover:text-white transition-colors"
               >
-                <ShoppingBag size={14} /> Pläne entdecken
+                <ShoppingBag size={14} /> {t('training.discoverPlans')}
               </button>
             )}
           </div>
@@ -2351,14 +2344,14 @@ const AthleteTrainingView: React.FC = () => {
         <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
           <div className="bg-[#1C1C1E] border border-zinc-800 w-full max-w-sm rounded-2xl p-6">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-white">Programm starten</h3>
+              <h3 className="text-lg font-bold text-white">{t('training.startProgram')}</h3>
               <button onClick={() => setStartProgramModal(null)} className="text-zinc-500 hover:text-white"><X size={20} /></button>
             </div>
             <p className="text-sm text-zinc-400 mb-4">
-              <span className="text-white font-bold">{startProgramModal.productTitle}</span> ab welchem Datum starten?
+              {t('training.startDateQuestion', { name: startProgramModal.productTitle })}
             </p>
             <div className="mb-4">
-              <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider block mb-1">Startdatum</label>
+              <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider block mb-1">{t('training.startDate')}</label>
               <input
                 type="date"
                 value={startDate}
@@ -2372,13 +2365,13 @@ const AthleteTrainingView: React.FC = () => {
                 onClick={() => setStartProgramModal(null)}
                 className="flex-1 py-3 bg-zinc-800 text-white rounded-xl font-bold hover:bg-zinc-700 transition-colors text-sm"
               >
-                Abbrechen
+                {t('common.cancel')}
               </button>
               <button
                 onClick={() => handleStartProgram(startProgramModal.productId, startProgramModal.planId)}
                 className="flex-1 py-3 bg-[#00FF00] text-black rounded-xl font-bold hover:bg-[#00FF00]/90 transition-colors text-sm flex items-center justify-center gap-2"
               >
-                <Play size={16} /> Starten
+                <Play size={16} /> {t('training.start')}
               </button>
             </div>
           </div>

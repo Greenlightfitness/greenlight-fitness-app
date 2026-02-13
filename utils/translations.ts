@@ -392,6 +392,33 @@ export const translations = {
       loading: "Loading Library...",
       noExercises: "No exercises found.",
       add: "Add"
+    },
+    training: {
+      today: "Today",
+      startUnit: "Start Session",
+      trainingDone: "Training Complete!",
+      sessionCompleted: "{name} completed",
+      noTrainingPlanned: "No training planned",
+      readyToTrain: "Ready to train?",
+      modeAEmpty: "Your next session is coming soon. You can also create a custom session.",
+      modeAEmptyUnstarted: "Start one of your programs or add a custom session.",
+      modeBEmpty: "Create your own session or explore our training plans.",
+      addSession: "Add Session",
+      discoverPlans: "Discover Plans",
+      myPrograms: "My Programs",
+      notStarted: "Not started yet",
+      activeRunning: "Active · Program running",
+      todayAvailable: "Today: Session available",
+      startNow: "Start Now",
+      continue: "Continue",
+      startProgram: "Start Program",
+      startDateQuestion: "Start {name} from which date?",
+      startDate: "Start Date",
+      start: "Start",
+      blocks: "{count} Blocks",
+      emptyDayModeA: "Start a program or add a custom session.",
+      emptyDayModeB: "Create a custom session for this day.",
+      session: "Session"
     }
   },
   de: {
@@ -785,6 +812,33 @@ export const translations = {
       loading: "Lade Bibliothek...",
       noExercises: "Keine Übungen gefunden.",
       add: "Hinzufügen"
+    },
+    training: {
+      today: "Heute",
+      startUnit: "Training Starten",
+      trainingDone: "Training erledigt!",
+      sessionCompleted: "{name} abgeschlossen",
+      noTrainingPlanned: "Kein Training geplant",
+      readyToTrain: "Bereit zum Trainieren?",
+      modeAEmpty: "Dein nächstes Training kommt bald. Du kannst auch eine eigene Session erstellen.",
+      modeAEmptyUnstarted: "Starte eines deiner Programme oder füge eine eigene Session hinzu.",
+      modeBEmpty: "Erstelle deine eigene Session oder entdecke unsere Trainingspläne.",
+      addSession: "Session hinzufügen",
+      discoverPlans: "Pläne entdecken",
+      myPrograms: "Meine Programme",
+      notStarted: "Noch nicht gestartet",
+      activeRunning: "Aktiv · Programm läuft",
+      todayAvailable: "Heute: Einheit verfügbar",
+      startNow: "Jetzt Starten",
+      continue: "Fortsetzen",
+      startProgram: "Programm starten",
+      startDateQuestion: "{name} ab welchem Datum starten?",
+      startDate: "Startdatum",
+      start: "Starten",
+      blocks: "{count} Blöcke",
+      emptyDayModeA: "Starte ein Programm oder füge eine eigene Session hinzu.",
+      emptyDayModeB: "Erstelle eine eigene Session für diesen Tag.",
+      session: "Session"
     }
   }
 };
