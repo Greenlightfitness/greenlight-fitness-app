@@ -152,8 +152,9 @@ const AthleteTrainingView: React.FC = () => {
 
       const workoutMap: Record<string, DayWorkout[]> = {};
       
-      // Process assigned plans
+      // Process assigned plans (skip PAUSED plans)
       assignedPlans.forEach((plan: any) => {
+        if (plan.schedule_status === 'PAUSED') return;
         if (plan.schedule && plan.structure?.weeks) {
           Object.entries(plan.schedule).forEach(([dateKey, sessionId]) => {
             // Find the session in the structure
@@ -979,6 +980,137 @@ const AthleteTrainingView: React.FC = () => {
   const todayKey = new Date().toISOString().split('T')[0];
   const todayWorkouts = workouts[todayKey] || [];
 
+  // === Plan Management ===
+  const [schedulePicker, setSchedulePicker] = useState<any | null>(null);
+  const [selectedDays, setSelectedDays] = useState<number[]>([]);
+  const [scheduleStartDate, setScheduleStartDate] = useState<string>(todayKey);
+  const [generatingSchedule, setGeneratingSchedule] = useState(false);
+
+  // Pending plans: need schedule setup
+  const pendingPlans = useMemo(() => {
+    return assignedPlans.filter((p: any) => {
+      const hasSchedule = p.schedule && Object.keys(p.schedule).length > 0;
+      return !hasSchedule && p.schedule_status !== 'PAUSED' && p.structure?.weeks?.length > 0;
+    });
+  }, [assignedPlans]);
+
+  // Active plans with schedule (for pause management)
+  const activePlans = useMemo(() => {
+    return assignedPlans.filter((p: any) => 
+      p.schedule_status === 'ACTIVE' && p.schedule && Object.keys(p.schedule).length > 0
+    );
+  }, [assignedPlans]);
+
+  const pausedPlans = useMemo(() => {
+    return assignedPlans.filter((p: any) => p.schedule_status === 'PAUSED');
+  }, [assignedPlans]);
+
+  // Count sessions per week for a plan
+  const getSessionsPerWeek = (plan: any): number => {
+    if (!plan.structure?.weeks?.[0]?.sessions) return 0;
+    return plan.structure.weeks[0].sessions.length;
+  };
+
+  // Get default day-of-week from plan sessions
+  const getDefaultDays = (plan: any): number[] => {
+    if (!plan.structure?.weeks?.[0]?.sessions) return [];
+    return plan.structure.weeks[0].sessions
+      .map((s: any) => s.dayOfWeek ?? s.order ?? 0)
+      .sort((a: number, b: number) => a - b);
+  };
+
+  // Open schedule picker for a plan
+  const openSchedulePicker = (plan: any) => {
+    const defaultDays = getDefaultDays(plan);
+    setSelectedDays(defaultDays);
+    setScheduleStartDate(plan.start_date || todayKey);
+    setSchedulePicker(plan);
+  };
+
+  // Toggle a day in selectedDays
+  const toggleDay = (day: number) => {
+    const required = getSessionsPerWeek(schedulePicker);
+    setSelectedDays(prev => {
+      if (prev.includes(day)) return prev.filter(d => d !== day);
+      if (prev.length >= required) return prev; // can't select more than needed
+      return [...prev, day].sort((a, b) => a - b);
+    });
+  };
+
+  // Generate schedule: map sessions to chosen days for the entire plan
+  const handleGenerateSchedule = async () => {
+    if (!schedulePicker || !user) return;
+    const plan = schedulePicker;
+    const sessionsPerWeek = getSessionsPerWeek(plan);
+    if (selectedDays.length !== sessionsPerWeek) return;
+
+    setGeneratingSchedule(true);
+    try {
+      const schedule: Record<string, string> = {};
+      const start = new Date(scheduleStartDate);
+      // Find the Monday of the start week
+      const startDay = start.getDay();
+      const mondayOffset = startDay === 0 ? -6 : 1 - startDay;
+      const weekStart = new Date(start);
+      weekStart.setDate(weekStart.getDate() + mondayOffset);
+
+      plan.structure.weeks.forEach((week: any, weekIndex: number) => {
+        // Sort sessions by their original order
+        const sessions = [...(week.sessions || [])].sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0));
+        
+        // Map each session to the corresponding selected day
+        sessions.forEach((session: any, sessionIndex: number) => {
+          if (sessionIndex >= selectedDays.length) return;
+          const targetDay = selectedDays[sessionIndex]; // 0=Mon, 1=Tue, ..., 6=Sun
+          const sessionDate = new Date(weekStart);
+          sessionDate.setDate(sessionDate.getDate() + (weekIndex * 7) + targetDay);
+          const dateKey = sessionDate.toISOString().split('T')[0];
+          schedule[dateKey] = session.id;
+        });
+      });
+
+      // Update the assigned plan in DB
+      const { error } = await supabase
+        .from('assigned_plans')
+        .update({ schedule, schedule_status: 'ACTIVE' })
+        .eq('id', plan.id);
+
+      if (error) throw error;
+      setSchedulePicker(null);
+      await loadWorkouts();
+    } catch (error) {
+      console.error('Error generating schedule:', error);
+    } finally {
+      setGeneratingSchedule(false);
+    }
+  };
+
+  // Pause a plan
+  const handlePausePlan = async (planId: string) => {
+    try {
+      await supabase
+        .from('assigned_plans')
+        .update({ schedule_status: 'PAUSED' })
+        .eq('id', planId);
+      await loadWorkouts();
+    } catch (error) {
+      console.error('Error pausing plan:', error);
+    }
+  };
+
+  // Resume a plan
+  const handleResumePlan = async (planId: string) => {
+    try {
+      await supabase
+        .from('assigned_plans')
+        .update({ schedule_status: 'ACTIVE' })
+        .eq('id', planId);
+      await loadWorkouts();
+    } catch (error) {
+      console.error('Error resuming plan:', error);
+    }
+  };
+
   return (
     <div className="space-y-4 animate-in fade-in">
       {/* === Today Hero Section === */}
@@ -1048,6 +1180,161 @@ const AthleteTrainingView: React.FC = () => {
                 );
               }
             })()}
+          </div>
+        </div>
+      )}
+
+      {/* === Pending Plans: Need Schedule Setup === */}
+      {!loading && pendingPlans.length > 0 && pendingPlans.map((plan: any) => (
+        <div key={plan.id} className="bg-gradient-to-r from-amber-500/10 to-amber-500/5 border border-amber-500/30 rounded-2xl p-4">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center shrink-0 mt-0.5">
+              <ClipboardList size={20} className="text-amber-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-bold text-white mb-0.5">{plan.plan_name}</h3>
+              <p className="text-xs text-zinc-400 mb-2">
+                {t('dashboard.pendingScheduleDesc')}
+              </p>
+              <p className="text-[11px] text-zinc-500 mb-3">
+                {t('dashboard.daysPerWeek')} <span className="text-white font-bold">{getSessionsPerWeek(plan)}</span>
+              </p>
+              <button
+                onClick={() => openSchedulePicker(plan)}
+                className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-black rounded-xl font-bold text-xs hover:bg-amber-400 transition-colors"
+              >
+                <Play size={14} /> {t('dashboard.confirmSchedule')}
+              </button>
+            </div>
+          </div>
+        </div>
+      ))}
+
+      {/* === Active & Paused Plans Management === */}
+      {!loading && (activePlans.length > 0 || pausedPlans.length > 0) && (
+        <div className="space-y-2">
+          {activePlans.map((plan: any) => (
+            <div key={plan.id} className="flex items-center justify-between bg-[#1C1C1E] border border-zinc-800 rounded-xl px-4 py-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-2 h-2 rounded-full bg-[#00FF00] shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-white truncate">{plan.plan_name}</p>
+                  <p className="text-[10px] text-zinc-500">{t('dashboard.active')} · {getSessionsPerWeek(plan)}x/{t('dashboard.week')}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => openSchedulePicker(plan)}
+                  title={t('dashboard.scheduleSession')}
+                  className="p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors"
+                >
+                  <Pencil size={14} />
+                </button>
+                <button
+                  onClick={() => handlePausePlan(plan.id)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-zinc-400 bg-zinc-800 rounded-lg hover:bg-zinc-700 hover:text-white transition-colors"
+                >
+                  <Pause size={12} /> {t('common.cancel')}
+                </button>
+              </div>
+            </div>
+          ))}
+          {pausedPlans.map((plan: any) => (
+            <div key={plan.id} className="flex items-center justify-between bg-[#1C1C1E] border border-zinc-800/50 rounded-xl px-4 py-3 opacity-70">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-2 h-2 rounded-full bg-zinc-600 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-zinc-400 truncate">{plan.plan_name}</p>
+                  <p className="text-[10px] text-zinc-600">Pausiert</p>
+                </div>
+              </div>
+              <button
+                onClick={() => handleResumePlan(plan.id)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#00FF00] bg-[#00FF00]/10 rounded-lg hover:bg-[#00FF00]/20 transition-colors"
+              >
+                <Play size={12} /> {t('training.continue')}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* === Schedule Picker Modal === */}
+      {schedulePicker && (
+        <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-[#1C1C1E] border border-zinc-800 w-full max-w-md rounded-2xl p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-white">{t('dashboard.scheduleSession')}</h3>
+              <button onClick={() => setSchedulePicker(null)} className="text-zinc-500 hover:text-white"><X size={20} /></button>
+            </div>
+            
+            <p className="text-sm text-zinc-400 mb-1">{schedulePicker.plan_name}</p>
+            <p className="text-xs text-zinc-500 mb-4">
+              {t('dashboard.selectDays', { count: String(getSessionsPerWeek(schedulePicker)) })}
+            </p>
+
+            {/* Start Date */}
+            <div className="mb-4">
+              <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider block mb-1">{t('training.startDate')}</label>
+              <input
+                type="date"
+                value={scheduleStartDate}
+                onChange={(e) => setScheduleStartDate(e.target.value)}
+                className="w-full bg-zinc-900 border border-zinc-700 text-white rounded-xl px-4 py-3 focus:border-[#00FF00] outline-none text-sm"
+              />
+            </div>
+            
+            {/* Day Picker */}
+            <div className="grid grid-cols-7 gap-2 mb-6">
+              {[
+                { key: 0, label: t('dashboard.monday') },
+                { key: 1, label: t('dashboard.tuesday') },
+                { key: 2, label: t('dashboard.wednesday') },
+                { key: 3, label: t('dashboard.thursday') },
+                { key: 4, label: t('dashboard.friday') },
+                { key: 5, label: t('dashboard.saturday') },
+                { key: 6, label: t('dashboard.sunday') },
+              ].map(({ key, label }) => {
+                const isSelected = selectedDays.includes(key);
+                const isFull = selectedDays.length >= getSessionsPerWeek(schedulePicker) && !isSelected;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => toggleDay(key)}
+                    disabled={isFull}
+                    className={`flex flex-col items-center py-3 rounded-xl text-xs font-bold transition-all ${
+                      isSelected
+                        ? 'bg-[#00FF00] text-black'
+                        : isFull
+                          ? 'bg-zinc-900 text-zinc-700 cursor-not-allowed'
+                          : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <p className="text-xs text-zinc-500 text-center mb-4">
+              {selectedDays.length}/{getSessionsPerWeek(schedulePicker)} {t('dashboard.day')}
+            </p>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setSchedulePicker(null)}
+                className="flex-1 py-3 bg-zinc-800 text-white rounded-xl font-bold hover:bg-zinc-700 transition-colors text-sm"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                onClick={handleGenerateSchedule}
+                disabled={selectedDays.length !== getSessionsPerWeek(schedulePicker) || generatingSchedule}
+                className="flex-1 py-3 bg-[#00FF00] text-black rounded-xl font-bold hover:bg-[#00FF00]/90 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {generatingSchedule ? t('dashboard.generatingSchedule') : t('dashboard.confirmSchedule')}
+              </button>
+            </div>
           </div>
         </div>
       )}
