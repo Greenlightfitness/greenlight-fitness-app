@@ -414,10 +414,10 @@ const Planner: React.FC = () => {
           {(userProfile?.role === UserRole.ADMIN || userProfile?.role === UserRole.COACH) && (
             <button
               onClick={() => setShowAIAssistant(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-violet-500/20"
+              className="flex items-center gap-2 px-4 py-2.5 bg-[#00FF00]/10 border border-[#00FF00]/30 hover:bg-[#00FF00]/20 text-[#00FF00] rounded-xl font-bold text-sm transition-all shadow-lg shadow-[#00FF00]/10"
             >
               <Sparkles size={16} /> AI Builder
-              <span className="text-[9px] font-bold bg-white/20 px-1.5 py-0.5 rounded ml-0.5">ALPHA</span>
+              <span className="text-[9px] font-bold bg-[#00FF00]/20 px-1.5 py-0.5 rounded ml-0.5">ALPHA</span>
             </button>
           )}
           <Button onClick={() => setShowCreateForm(!showCreateForm)} className="flex items-center gap-2 shadow-lg shadow-[#00FF00]/10">

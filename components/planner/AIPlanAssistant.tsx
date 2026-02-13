@@ -128,7 +128,7 @@ const AIPlanAssistant: React.FC<AIPlanAssistantProps> = ({ isOpen, onClose, onPl
         setMessages(prev => [...prev, {
           id: generateId(),
           role: 'system',
-          content: '⚠️ Der Gemini API-Key ist noch nicht hinterlegt. Bitte im Supabase Dashboard unter **Edge Functions → Secrets** den Key `GEMINI_API_KEY` setzen.',
+          content: '⚠️ Der API-Key ist noch nicht hinterlegt. Bitte im Supabase Dashboard unter **Edge Functions → Secrets** den Key `CLAUDE_AI_KEY` setzen.',
           timestamp: new Date(),
         }]);
       } else {
@@ -254,17 +254,17 @@ const AIPlanAssistant: React.FC<AIPlanAssistantProps> = ({ isOpen, onClose, onPl
       <div className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose} />
 
       {/* Drawer */}
-      <div className="fixed right-0 top-0 bottom-0 z-[71] w-full max-w-lg bg-[#0A0A0A] border-l border-zinc-800 flex flex-col animate-in slide-in-from-right duration-300">
+      <div className="fixed right-0 top-0 bottom-0 z-[71] w-full sm:max-w-lg bg-[#0A0A0A] border-l border-zinc-800 flex flex-col animate-in slide-in-from-right duration-300">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-zinc-800 bg-[#0A0A0A]">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center">
-              <Sparkles size={18} className="text-white" />
+            <div className="w-9 h-9 rounded-xl bg-[#00FF00]/20 flex items-center justify-center">
+              <Sparkles size={18} className="text-[#00FF00]" />
             </div>
             <div>
               <h3 className="text-white font-bold text-base">AI Plan Builder</h3>
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-bold text-violet-400 bg-violet-500/10 px-1.5 py-0.5 rounded">ALPHA</span>
+                <span className="text-[10px] font-bold text-[#00FF00] bg-[#00FF00]/10 px-1.5 py-0.5 rounded">ALPHA</span>
                 <span className="text-[10px] text-zinc-500">Planungs-Assistent</span>
               </div>
             </div>
@@ -281,7 +281,7 @@ const AIPlanAssistant: React.FC<AIPlanAssistantProps> = ({ isOpen, onClose, onPl
             <div>
               <p className="text-xs font-bold text-amber-300">API-Key nicht konfiguriert</p>
               <p className="text-[11px] text-amber-400/70 mt-0.5">
-                Supabase Dashboard → Edge Functions → Secrets → <code className="bg-amber-500/10 px-1 rounded">GEMINI_API_KEY</code> hinterlegen.
+                Supabase Dashboard → Edge Functions → Secrets → <code className="bg-amber-500/10 px-1 rounded">CLAUDE_AI_KEY</code> hinterlegen.
               </p>
             </div>
           </div>
@@ -293,7 +293,7 @@ const AIPlanAssistant: React.FC<AIPlanAssistantProps> = ({ isOpen, onClose, onPl
             <div key={msg.id}>
               {msg.role === 'user' ? (
                 <div className="flex justify-end">
-                  <div className="bg-violet-600 text-white px-4 py-2.5 rounded-2xl rounded-tr-md max-w-[85%] text-sm">
+                  <div className="bg-[#00FF00]/20 text-white px-4 py-2.5 rounded-2xl rounded-tr-md max-w-[85%] text-sm border border-[#00FF00]/20">
                     {msg.content}
                   </div>
                 </div>
@@ -314,7 +314,7 @@ const AIPlanAssistant: React.FC<AIPlanAssistantProps> = ({ isOpen, onClose, onPl
                     <div className="bg-zinc-900 border border-zinc-800 text-zinc-200 px-4 py-2.5 rounded-2xl rounded-tl-md max-w-[85%] text-sm leading-relaxed">
                       {msg.content.split(/(\*\*.*?\*\*)/).map((part, i) =>
                         part.startsWith('**') && part.endsWith('**')
-                          ? <strong key={i} className="text-violet-300">{part.slice(2, -2)}</strong>
+                          ? <strong key={i} className="text-[#00FF00]">{part.slice(2, -2)}</strong>
                           : <span key={i}>{part}</span>
                       )}
                     </div>
@@ -327,7 +327,7 @@ const AIPlanAssistant: React.FC<AIPlanAssistantProps> = ({ isOpen, onClose, onPl
                       <div className="p-3 border-b border-zinc-800 bg-zinc-900">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <Layers size={14} className="text-violet-400" />
+                            <Layers size={14} className="text-[#00FF00]" />
                             <span className="text-sm font-bold text-white">{msg.planData.planName}</span>
                           </div>
                           <div className="flex items-center gap-1.5 text-[10px] text-zinc-500">
@@ -397,7 +397,7 @@ const AIPlanAssistant: React.FC<AIPlanAssistantProps> = ({ isOpen, onClose, onPl
                         <button
                           onClick={() => handleSavePlan(msg.planData)}
                           disabled={isSaving}
-                          className="w-full py-2.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                          className="w-full py-2.5 bg-[#00FF00] hover:bg-[#00FF00]/80 text-black rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-50"
                         >
                           {isSaving ? (
                             <><Loader2 size={14} className="animate-spin" /> Speichern...</>
@@ -417,7 +417,7 @@ const AIPlanAssistant: React.FC<AIPlanAssistantProps> = ({ isOpen, onClose, onPl
           {isLoading && (
             <div className="flex justify-start">
               <div className="bg-zinc-900 border border-zinc-800 px-4 py-3 rounded-2xl rounded-tl-md flex items-center gap-2">
-                <Loader2 size={14} className="animate-spin text-violet-400" />
+                <Loader2 size={14} className="animate-spin text-[#00FF00]" />
                 <span className="text-xs text-zinc-400">Generiere Trainingsplan...</span>
               </div>
             </div>
@@ -451,7 +451,7 @@ const AIPlanAssistant: React.FC<AIPlanAssistantProps> = ({ isOpen, onClose, onPl
                 onKeyDown={handleKeyDown}
                 placeholder="Beschreibe deinen Trainingsplan..."
                 rows={1}
-                className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-600 resize-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none"
+                className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-600 resize-none focus:border-[#00FF00] focus:ring-1 focus:ring-[#00FF00]/50 outline-none"
                 style={{ minHeight: '40px', maxHeight: '120px' }}
               />
             </div>
@@ -460,7 +460,7 @@ const AIPlanAssistant: React.FC<AIPlanAssistantProps> = ({ isOpen, onClose, onPl
             <button
               onClick={handleSend}
               disabled={!input.trim() || isLoading}
-              className="shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white flex items-center justify-center transition-all disabled:opacity-30 hover:from-violet-500 hover:to-fuchsia-500"
+              className="shrink-0 w-10 h-10 rounded-xl bg-[#00FF00] text-black flex items-center justify-center transition-all disabled:opacity-30 hover:bg-[#00FF00]/80"
             >
               <Send size={16} />
             </button>

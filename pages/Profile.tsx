@@ -456,9 +456,9 @@ const Profile: React.FC = () => {
 
   const handleFieldChange = (field: string, value: string) => setForm(prev => ({ ...prev, [field]: value }));
 
-  const displayName = userProfile?.firstName
-    ? `${userProfile.firstName} ${userProfile.lastName || ''}`.trim()
-    : userProfile?.nickname || userProfile?.email?.split('@')[0] || 'User';
+  const displayName = form.firstName
+    ? `${form.firstName} ${form.lastName || ''}`.trim()
+    : form.nickname || userProfile?.email?.split('@')[0] || 'User';
 
   const goBack = () => { setSubPage(null); setEditing(false); };
 
@@ -889,7 +889,7 @@ const Profile: React.FC = () => {
               <div className="flex-1 text-left min-w-0">
                 <span className="text-white text-sm font-medium block">Über mich / Biografie</span>
                 <span className="text-zinc-500 text-xs truncate block">
-                  {userProfile?.biography ? userProfile.biography.substring(0, 50) + (userProfile.biography.length > 50 ? '...' : '') : 'Noch nicht ausgefüllt'}
+                  {form.biography ? form.biography.substring(0, 50) + (form.biography.length > 50 ? '...' : '') : 'Noch nicht ausgefüllt'}
                 </span>
               </div>
               <ChevronRight size={16} className="text-zinc-600 shrink-0" />
@@ -905,7 +905,7 @@ const Profile: React.FC = () => {
               <div className="flex-1 text-left min-w-0">
                 <span className="text-white text-sm font-medium block">Körperdaten</span>
                 <span className="text-zinc-500 text-xs truncate block">
-                  {userProfile?.weight && userProfile?.height ? `${userProfile.weight} kg · ${userProfile.height} cm` : 'Noch nicht ausgefüllt'}
+                  {form.weight && form.height ? `${form.weight} kg · ${form.height} cm` : 'Noch nicht ausgefüllt'}
                 </span>
               </div>
               <ChevronRight size={16} className="text-zinc-600 shrink-0" />
