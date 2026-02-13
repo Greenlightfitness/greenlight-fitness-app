@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { supabase, getAssignedPlans, getExercises, autoTrackStrengthGoals, autoTrackConsistencyGoals, getUserPurchases } from '../services/supabase';
+import { supabase, getAssignedPlans, getExercises, autoTrackStrengthGoals, autoTrackConsistencyGoals } from '../services/supabase';
 import { ChevronLeft, ChevronRight, Plus, Check, Play, Dumbbell, X, ChevronDown, ChevronUp, Search, Trash2, Trophy, Repeat, Link, Layers, Timer, Square, Pause, ClipboardList, Pencil, CheckCircle, Bookmark, Lock, Zap, TrendingUp, ShoppingBag, ArrowRight, Calendar } from 'lucide-react';
 import Button from './Button';
 import { Exercise, BlockType, WorkoutSet, WorkoutExercise, WorkoutBlock } from '../types';
@@ -94,8 +94,7 @@ const AthleteTrainingView: React.FC = () => {
   // Confirmation dialog for starting session while another is active
   const [startConfirm, setStartConfirm] = useState<{ workoutId: string; blockId: string } | null>(null);
   
-  // Purchased programs state
-  const [purchases, setPurchases] = useState<any[]>([]);
+  // Assigned programs state
   const [assignedPlans, setAssignedPlans] = useState<any[]>([]);
   const [startProgramModal, setStartProgramModal] = useState<{ productId: string; planId: string; productTitle: string } | null>(null);
   const [startDate, setStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -123,10 +122,6 @@ const AthleteTrainingView: React.FC = () => {
     setLoading(true);
     
     try {
-      // Load purchases (products the athlete bought)
-      const purchaseData = await getUserPurchases(user.id);
-      setPurchases(purchaseData);
-
       // Load assigned plans with scheduled sessions
       const assignedPlans = await getAssignedPlans(user.id);
       setAssignedPlans(assignedPlans);
@@ -981,44 +976,61 @@ const AthleteTrainingView: React.FC = () => {
     return { completedSessions, totalSessions, totalDuration, totalSets };
   }, [workouts, weekDates]);
 
-  // === MEINE PROGRAMME: Compute program status per purchase ===
+  // === MEINE PROGRAMME: Compute program status from assigned_plans (source of truth) ===
   const todayKey = new Date().toISOString().split('T')[0];
   const todayWorkouts = workouts[todayKey] || [];
-  const hasPurchasedPrograms = purchases.some(p => p.products?.type === 'PLAN' || p.products?.plan_id);
-  const isModusA = hasPurchasedPrograms; // Mode A: has purchased programs
+  const isModusA = assignedPlans.length > 0; // Mode A: has assigned programs
+
+  // Product thumbnails cache (loaded lazily)
+  const [productThumbnails, setProductThumbnails] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    // Fetch product thumbnails for assigned plans that have original_plan_id
+    const fetchThumbnails = async () => {
+      const planIds = assignedPlans
+        .map((ap: any) => ap.original_plan_id)
+        .filter(Boolean);
+      if (planIds.length === 0) return;
+      const { data } = await supabase
+        .from('products')
+        .select('plan_id, thumbnail_url')
+        .in('plan_id', planIds);
+      if (data) {
+        const map: Record<string, string> = {};
+        data.forEach((p: any) => { if (p.thumbnail_url) map[p.plan_id] = p.thumbnail_url; });
+        setProductThumbnails(map);
+      }
+    };
+    if (assignedPlans.length > 0) fetchThumbnails();
+  }, [assignedPlans]);
 
   const programCards = useMemo(() => {
-    return purchases
-      .filter(p => p.products?.plan_id) // only products with a linked plan
-      .map(purchase => {
-        const product = purchase.products;
-        const planId = product.plan_id;
-        // Find assigned plan for this product/plan
-        const assigned = assignedPlans.find(
-          (ap: any) => ap.original_plan_id === planId || ap.product_id === product.id
-        );
-        // Check if today has a session from this plan
-        const todaySessionFromPlan = todayWorkouts.find(
-          w => !w.isCustom && assigned && w.id.startsWith(assigned.id)
-        );
-        
-        let status: 'not_started' | 'active' | 'today_session' = 'not_started';
-        if (todaySessionFromPlan) status = 'today_session';
-        else if (assigned && assigned.schedule && Object.keys(assigned.schedule).length > 0) status = 'active';
-        else if (assigned) status = 'active'; // assigned but maybe no schedule yet
-        
-        return {
-          purchaseId: purchase.id,
-          productId: product.id,
-          planId,
-          title: product.title,
-          thumbnail: product.thumbnail_url,
-          status,
-          assignedPlan: assigned,
-          todaySession: todaySessionFromPlan,
-        };
-      });
-  }, [purchases, assignedPlans, todayWorkouts]);
+    return assignedPlans.map((plan: any) => {
+      // Check if today has a session from this plan
+      const todaySessionFromPlan = todayWorkouts.find(
+        w => !w.isCustom && w.id.startsWith(plan.id)
+      );
+
+      const scheduleKeys = plan.schedule ? Object.keys(plan.schedule) : [];
+      let status: 'not_started' | 'active' | 'today_session' = 'not_started';
+      if (todaySessionFromPlan) status = 'today_session';
+      else if (plan.schedule_status === 'ACTIVE' && scheduleKeys.length > 0) status = 'active';
+      else if (plan.schedule_status === 'ACTIVE') status = 'active';
+
+      return {
+        assignedPlanId: plan.id,
+        productId: plan.product_id,
+        planId: plan.original_plan_id,
+        title: plan.plan_name,
+        thumbnail: productThumbnails[plan.original_plan_id] || null,
+        status,
+        assignedPlan: plan,
+        todaySession: todaySessionFromPlan,
+        progressPercent: plan.progress_percentage ? Math.round(plan.progress_percentage) : null,
+        scheduleStatus: plan.schedule_status,
+      };
+    });
+  }, [assignedPlans, todayWorkouts, productThumbnails]);
 
   // Start a purchased program (create assigned plan)
   const handleStartProgram = async (productId: string, planId: string) => {
@@ -1153,23 +1165,18 @@ const AthleteTrainingView: React.FC = () => {
                 );
               } else if (isModusA) {
                 // Mode A: No session today, has programs
-                const unstartedProgram = programCards.find(p => p.status === 'not_started');
                 return (
                   <div>
                     <h2 className="text-lg font-bold text-white mb-1">Kein Training geplant</h2>
-                    <p className="text-xs text-zinc-500 mb-3">Starte eines deiner Programme oder füge eine eigene Session hinzu.</p>
+                    <p className="text-xs text-zinc-500 mb-3">
+                      {programCards.some(p => p.status === 'active') 
+                        ? 'Dein nächstes Training kommt bald. Du kannst auch eine eigene Session erstellen.'
+                        : 'Starte eines deiner Programme oder füge eine eigene Session hinzu.'}
+                    </p>
                     <div className="flex gap-2 flex-wrap">
-                      {unstartedProgram && (
-                        <button
-                          onClick={() => setStartProgramModal({ productId: unstartedProgram.productId, planId: unstartedProgram.planId, productTitle: unstartedProgram.title })}
-                          className="flex items-center gap-2 px-4 py-2.5 bg-[#00FF00] text-black rounded-xl font-bold hover:bg-[#00FF00]/90 transition-colors text-sm"
-                        >
-                          <Play size={16} /> Programm starten
-                        </button>
-                      )}
                       <button
                         onClick={addSession}
-                        className="flex items-center gap-2 px-4 py-2.5 bg-zinc-800 text-white rounded-xl font-bold hover:bg-zinc-700 transition-colors text-sm border border-zinc-700"
+                        className="flex items-center gap-2 px-4 py-2.5 bg-[#00FF00] text-black rounded-xl font-bold hover:bg-[#00FF00]/90 transition-colors text-sm"
                       >
                         <Plus size={16} /> Session hinzufügen
                       </button>
@@ -1211,7 +1218,7 @@ const AthleteTrainingView: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {programCards.map(card => (
               <div
-                key={card.purchaseId}
+                key={card.assignedPlanId}
                 className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl overflow-hidden hover:border-zinc-700 transition-all group"
               >
                 {/* Thumbnail */}
@@ -1228,17 +1235,27 @@ const AthleteTrainingView: React.FC = () => {
                 <div className="p-4">
                   <h4 className="font-bold text-white text-sm truncate mb-1">{card.title}</h4>
                   
-                  {/* Status line */}
-                  <p className="text-[11px] mb-3">
-                    {card.status === 'not_started' && <span className="text-zinc-500">Noch nicht gestartet</span>}
-                    {card.status === 'active' && <span className="text-[#00FF00]">Aktiv · Programm läuft</span>}
-                    {card.status === 'today_session' && <span className="text-[#00FF00] font-bold">Heute: Einheit verfügbar</span>}
-                  </p>
+                  {/* Status line + progress */}
+                  <div className="mb-3">
+                    <p className="text-[11px]">
+                      {card.status === 'not_started' && <span className="text-zinc-500">Noch nicht gestartet</span>}
+                      {card.status === 'active' && <span className="text-[#00FF00]">Aktiv · Programm läuft</span>}
+                      {card.status === 'today_session' && <span className="text-[#00FF00] font-bold">Heute: Einheit verfügbar</span>}
+                    </p>
+                    {card.progressPercent != null && card.progressPercent > 0 && (
+                      <div className="mt-1.5 flex items-center gap-2">
+                        <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                          <div className="h-full bg-[#00FF00] rounded-full transition-all" style={{ width: `${card.progressPercent}%` }} />
+                        </div>
+                        <span className="text-[10px] text-zinc-500 font-bold">{card.progressPercent}%</span>
+                      </div>
+                    )}
+                  </div>
                   
                   {/* Action button */}
-                  {card.status === 'not_started' && (
+                  {card.status === 'not_started' && card.planId && (
                     <button
-                      onClick={() => setStartProgramModal({ productId: card.productId, planId: card.planId, productTitle: card.title })}
+                      onClick={() => setStartProgramModal({ productId: card.productId || '', planId: card.planId, productTitle: card.title })}
                       className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-[#00FF00] text-black rounded-xl font-bold text-xs hover:bg-[#00FF00]/90 transition-colors"
                     >
                       <Play size={14} /> JETZT STARTEN
