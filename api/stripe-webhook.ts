@@ -129,6 +129,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             });
             
             console.log('💾 Purchase recorded for user:', profile.id);
+
+            // === ADMIN NOTIFICATION: New purchase ===
+            try {
+              const productTitle = product?.title || 'Produkt';
+              const amountStr = session.amount_total
+                ? `${(session.amount_total / 100).toFixed(2)} ${(session.currency || 'EUR').toUpperCase()}`
+                : 'Gratis';
+
+              // Find all admins
+              const { data: admins } = await supabase
+                .from('profiles')
+                .select('id')
+                .eq('role', 'ADMIN');
+
+              if (admins && admins.length > 0) {
+                const notifications = admins.map((admin: any) => ({
+                  user_id: admin.id,
+                  type: 'purchase',
+                  title: 'Neuer Kauf',
+                  message: `${customerEmail} hat "${productTitle}" gekauft (${amountStr})`,
+                  read: false,
+                }));
+                await supabase.from('notifications').insert(notifications);
+                console.log(`🔔 Admin notifications sent to ${admins.length} admin(s)`);
+              }
+            } catch (notifErr) {
+              console.error('⚠️ Admin notification failed (non-blocking):', notifErr);
+            }
           }
         }
         break;

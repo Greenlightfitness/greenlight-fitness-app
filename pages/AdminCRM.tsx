@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   getAllUsersForCRM, getUsersByRole, assignAthleteToCoach, endCoachingRelationship,
   updateProfile, getProducts, grantCoachingManually, createCoachingRelationship,
-  createInvitation, revokePurchase, revokeAssignedPlan
+  createInvitation, revokePurchase, revokeAssignedPlan, createNotification
 } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -263,6 +263,14 @@ const AdminCRM: React.FC = () => {
         body: `${getUserName(selectedUser)} wurde ${getUserName(coach)} zugewiesen.`,
         tag: 'coach-assigned',
       });
+
+      // In-App Bell notification for the coach
+      createNotification({
+        user_id: selectedCoachId,
+        type: 'coach_assignment',
+        title: 'Neuer Athlet zugewiesen',
+        message: `${getUserName(selectedUser)} wurde dir als Athlet zugewiesen.`,
+      }).catch(err => console.error('Coach notification failed:', err));
 
       await fetchData();
       setShowAssignModal(false);

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getAthletesWithCoaching, getUsersByRole, getAllUsers, assignAthleteToCoach, endCoachingRelationship, updateProfile, getProducts, grantCoachingManually, createCoachingRelationship, createInvitation } from '../services/supabase';
+import { getAthletesWithCoaching, getUsersByRole, getAllUsers, assignAthleteToCoach, endCoachingRelationship, updateProfile, getProducts, grantCoachingManually, createCoachingRelationship, createInvitation, createNotification } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { UserRole } from '../types';
@@ -137,11 +137,19 @@ const AdminAthleteAssignment: React.FC = () => {
         console.warn('Email notification failed (non-critical):', emailErr);
       }
       
-      // Push notification
+      // Push notification (local browser)
       showLocalNotification('Coach zugewiesen', {
         body: `${athleteName} wurde ${coachName} zugewiesen.`,
         tag: 'coach-assigned',
       });
+
+      // In-App Bell notification for the coach
+      createNotification({
+        user_id: selectedCoachId,
+        type: 'coach_assignment',
+        title: 'Neuer Athlet zugewiesen',
+        message: `${athleteName} wurde dir als Athlet zugewiesen.`,
+      }).catch(err => console.error('Coach notification failed:', err));
       
       await fetchData();
       setShowAssignModal(false);

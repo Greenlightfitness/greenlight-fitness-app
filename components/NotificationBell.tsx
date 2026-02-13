@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, supabase } from '../services/supabase';
-import { Bell, Check, CheckCheck, Calendar, CalendarCheck, CalendarX, Clock, X, MessageSquare } from 'lucide-react';
+import { Bell, Check, CheckCheck, Calendar, CalendarCheck, CalendarX, Clock, X, MessageSquare, UserPlus, ShoppingCart } from 'lucide-react';
 import { showLocalNotification } from '../services/notifications';
 
 const ICON_MAP: Record<string, React.ReactNode> = {
@@ -10,6 +10,8 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   appointment_cancelled: <CalendarX size={14} className="text-red-400" />,
   appointment_reminder: <Clock size={14} className="text-yellow-400" />,
   chat_message: <MessageSquare size={14} className="text-[#00FF00]" />,
+  coach_assignment: <UserPlus size={14} className="text-blue-400" />,
+  purchase: <ShoppingCart size={14} className="text-[#00FF00]" />,
 };
 
 const NotificationBell: React.FC = () => {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase, getProducts, getAssignedPlans, getWeeksByPlan, getSessionsByWeek, createAssignedPlan, createAppointment, getUserPurchases, getCoachingApproval, createCoachingApproval, createCoachingRelationship, getAppointments } from '../services/supabase';
+import { supabase, getProducts, getAssignedPlans, getWeeksByPlan, getSessionsByWeek, createAssignedPlan, createAppointment, getUserPurchases, getCoachingApproval, createCoachingApproval, createCoachingRelationship, getAppointments, createNotification } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Product, AssignedPlan, TrainingWeek, TrainingSession, TrainingPlan, ProductCategory, ProductType, Appointment, CoachingApproval } from '../types';
@@ -235,6 +235,36 @@ const Shop: React.FC = () => {
                 coach_id: product.coachId,
                 product_id: product.id,
             });
+
+            // Notify the coach about the new athlete
+            if (product.coachId) {
+              const athleteName = userProfile?.firstName
+                ? `${userProfile.firstName} ${userProfile.lastName || ''}`.trim()
+                : user.email?.split('@')[0] || 'Ein Athlet';
+              createNotification({
+                user_id: product.coachId,
+                type: 'coach_assignment',
+                title: 'Neuer Coaching-Athlet',
+                message: `${athleteName} hat "${product.title}" gebucht.`,
+              }).catch(err => console.error('Coach notification failed:', err));
+            }
+
+            // Notify admins about the purchase (free products don't go through Stripe webhook)
+            try {
+              const { data: admins } = await supabase.from('profiles').select('id').eq('role', 'ADMIN');
+              if (admins && admins.length > 0) {
+                const athleteEmail = user.email || 'Unbekannt';
+                await supabase.from('notifications').insert(
+                  admins.map((a: any) => ({
+                    user_id: a.id,
+                    type: 'purchase',
+                    title: 'Neuer Kauf',
+                    message: `${athleteEmail} hat "${product.title}" gebucht`,
+                    read: false,
+                  }))
+                );
+              }
+            } catch (e) { console.error('Admin purchase notif failed:', e); }
             
             alert("Coaching erfolgreich gebucht! Dein Coach wird sich bei dir melden, um deinen individuellen Plan zu erstellen.");
             setSelectedProduct(null);
