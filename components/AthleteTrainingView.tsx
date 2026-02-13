@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { supabase, getAssignedPlans, getExercises, autoTrackStrengthGoals, autoTrackConsistencyGoals } from '../services/supabase';
-import { ChevronLeft, ChevronRight, Plus, Check, Play, Dumbbell, X, ChevronDown, ChevronUp, Search, Trash2, Trophy, Repeat, Link, Layers, Timer, Square, Pause, ClipboardList, Pencil, CheckCircle, Bookmark, Lock, Zap, TrendingUp, ShoppingBag, ArrowRight, Calendar } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Check, Play, Dumbbell, X, ChevronDown, ChevronUp, Search, Trash2, Trophy, Repeat, Link, Layers, Timer, Square, Pause, ClipboardList, Pencil, CheckCircle, Bookmark, Lock, Zap, TrendingUp, ShoppingBag } from 'lucide-react';
 import Button from './Button';
 import { Exercise, BlockType, WorkoutSet, WorkoutExercise, WorkoutBlock } from '../types';
 
@@ -98,8 +98,6 @@ const AthleteTrainingView: React.FC = () => {
   
   // Assigned programs state
   const [assignedPlans, setAssignedPlans] = useState<any[]>([]);
-  const [startProgramModal, setStartProgramModal] = useState<{ productId: string; planId: string; productTitle: string } | null>(null);
-  const [startDate, setStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
   // Get week dates
   const weekDates = useMemo(() => {
@@ -978,142 +976,8 @@ const AthleteTrainingView: React.FC = () => {
     return { completedSessions, totalSessions, totalDuration, totalSets };
   }, [workouts, weekDates]);
 
-  // === MEINE PROGRAMME: Compute program status from assigned_plans (source of truth) ===
   const todayKey = new Date().toISOString().split('T')[0];
   const todayWorkouts = workouts[todayKey] || [];
-  const isModusA = assignedPlans.length > 0; // Mode A: has assigned programs
-
-  // Product thumbnails cache (loaded lazily)
-  const [productThumbnails, setProductThumbnails] = useState<Record<string, string>>({});
-
-  useEffect(() => {
-    // Fetch product thumbnails for assigned plans that have original_plan_id
-    const fetchThumbnails = async () => {
-      const planIds = assignedPlans
-        .map((ap: any) => ap.original_plan_id)
-        .filter(Boolean);
-      if (planIds.length === 0) return;
-      const { data } = await supabase
-        .from('products')
-        .select('plan_id, thumbnail_url')
-        .in('plan_id', planIds);
-      if (data) {
-        const map: Record<string, string> = {};
-        data.forEach((p: any) => { if (p.thumbnail_url) map[p.plan_id] = p.thumbnail_url; });
-        setProductThumbnails(map);
-      }
-    };
-    if (assignedPlans.length > 0) fetchThumbnails();
-  }, [assignedPlans]);
-
-  const programCards = useMemo(() => {
-    return assignedPlans.map((plan: any) => {
-      // Check if today has a session from this plan
-      const todaySessionFromPlan = todayWorkouts.find(
-        w => !w.isCustom && w.id.startsWith(plan.id)
-      );
-
-      const scheduleKeys = plan.schedule ? Object.keys(plan.schedule) : [];
-      let status: 'not_started' | 'active' | 'today_session' = 'not_started';
-      if (todaySessionFromPlan) status = 'today_session';
-      else if (plan.schedule_status === 'ACTIVE' && scheduleKeys.length > 0) status = 'active';
-      else if (plan.schedule_status === 'ACTIVE') status = 'active';
-
-      return {
-        assignedPlanId: plan.id,
-        productId: plan.product_id,
-        planId: plan.original_plan_id,
-        title: plan.plan_name,
-        thumbnail: productThumbnails[plan.original_plan_id] || null,
-        status,
-        assignedPlan: plan,
-        todaySession: todaySessionFromPlan,
-        progressPercent: plan.progress_percentage ? Math.round(plan.progress_percentage) : null,
-        scheduleStatus: plan.schedule_status,
-      };
-    });
-  }, [assignedPlans, todayWorkouts, productThumbnails]);
-
-  // Start a purchased program (create assigned plan)
-  const handleStartProgram = async (productId: string, planId: string) => {
-    if (!user) return;
-    try {
-      // Fetch the plan structure
-      const { data: plan } = await supabase
-        .from('plans')
-        .select('*')
-        .eq('id', planId)
-        .single();
-      if (!plan) { alert('Plan nicht gefunden.'); return; }
-
-      // Fetch weeks and sessions
-      const { data: weeks } = await supabase
-        .from('weeks')
-        .select('*')
-        .eq('plan_id', planId)
-        .order('order');
-      
-      const weekIds = (weeks || []).map((w: any) => w.id);
-      const { data: sessions } = await supabase
-        .from('sessions')
-        .select('*')
-        .in('week_id', weekIds.length > 0 ? weekIds : ['__none__'])
-        .order('order');
-
-      // Build structure
-      const structure = {
-        weeks: (weeks || []).map((w: any) => ({
-          id: w.id,
-          order: w.order,
-          focus: w.focus,
-          sessions: (sessions || [])
-            .filter((s: any) => s.week_id === w.id)
-            .map((s: any) => ({
-              id: s.id,
-              dayOfWeek: s.day_of_week,
-              title: s.title,
-              description: s.description,
-              order: s.order,
-              workoutData: s.workout_data || [],
-            })),
-        })),
-      };
-
-      // Build auto-schedule: map sessions to dates starting from startDate
-      const schedule: Record<string, string> = {};
-      const start = new Date(startDate);
-      structure.weeks.forEach((week: any) => {
-        week.sessions.forEach((session: any) => {
-          const dayOffset = session.dayOfWeek ?? session.order ?? 0;
-          const weekOffset = (week.order - 1) * 7;
-          const sessionDate = new Date(start);
-          sessionDate.setDate(sessionDate.getDate() + weekOffset + dayOffset);
-          schedule[sessionDate.toISOString().split('T')[0]] = session.id;
-        });
-      });
-
-      // Create assigned plan
-      await supabase.from('assigned_plans').insert({
-        athlete_id: user.id,
-        coach_id: plan.coach_id,
-        original_plan_id: planId,
-        product_id: productId,
-        plan_name: plan.name,
-        description: plan.description,
-        assignment_type: 'FLEX',
-        schedule_status: 'ACTIVE',
-        start_date: startDate,
-        schedule,
-        structure,
-      });
-
-      setStartProgramModal(null);
-      await loadWorkouts();
-    } catch (error) {
-      console.error('Error starting program:', error);
-      alert('Fehler beim Starten des Programms.');
-    }
-  };
 
   return (
     <div className="space-y-4 animate-in fade-in">
@@ -1161,25 +1025,6 @@ const AthleteTrainingView: React.FC = () => {
                     </div>
                   </div>
                 );
-              } else if (isModusA) {
-                return (
-                  <div>
-                    <h2 className="text-lg font-bold text-white mb-1">{t('training.noTrainingPlanned')}</h2>
-                    <p className="text-xs text-zinc-500 mb-3">
-                      {programCards.some(p => p.status === 'active') 
-                        ? t('training.modeAEmpty')
-                        : t('training.modeAEmptyUnstarted')}
-                    </p>
-                    <div className="flex gap-2 flex-wrap">
-                      <button
-                        onClick={addSession}
-                        className="flex items-center gap-2 px-4 py-2.5 bg-[#00FF00] text-black rounded-xl font-bold hover:bg-[#00FF00]/90 transition-colors text-sm"
-                      >
-                        <Plus size={16} /> {t('training.addSession')}
-                      </button>
-                    </div>
-                  </div>
-                );
               } else {
                 return (
                   <div>
@@ -1203,84 +1048,6 @@ const AthleteTrainingView: React.FC = () => {
                 );
               }
             })()}
-          </div>
-        </div>
-      )}
-
-      {/* === My Programs (Mode A only) === */}
-      {!loading && programCards.length > 0 && (
-        <div>
-          <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 px-1">{t('training.myPrograms')}</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {programCards.map(card => (
-              <div
-                key={card.assignedPlanId}
-                className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl overflow-hidden hover:border-zinc-700 transition-all group"
-              >
-                {card.thumbnail ? (
-                  <div className="h-28 bg-zinc-900 overflow-hidden">
-                    <img src={card.thumbnail} alt={card.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                  </div>
-                ) : (
-                  <div className="h-28 bg-gradient-to-br from-zinc-800 to-zinc-900 flex items-center justify-center">
-                    <Dumbbell size={32} className="text-zinc-700" />
-                  </div>
-                )}
-                
-                <div className="p-4">
-                  <h4 className="font-bold text-white text-sm truncate mb-1">{card.title}</h4>
-                  
-                  <div className="mb-3">
-                    <p className="text-[11px]">
-                      {card.status === 'not_started' && <span className="text-zinc-500">{t('training.notStarted')}</span>}
-                      {card.status === 'active' && <span className="text-[#00FF00]">{t('training.activeRunning')}</span>}
-                      {card.status === 'today_session' && <span className="text-[#00FF00] font-bold">{t('training.todayAvailable')}</span>}
-                    </p>
-                    {card.progressPercent != null && card.progressPercent > 0 && (
-                      <div className="mt-1.5 flex items-center gap-2">
-                        <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                          <div className="h-full bg-[#00FF00] rounded-full transition-all" style={{ width: `${card.progressPercent}%` }} />
-                        </div>
-                        <span className="text-[10px] text-zinc-500 font-bold">{card.progressPercent}%</span>
-                      </div>
-                    )}
-                  </div>
-                  
-                  {card.status === 'not_started' && card.planId && (
-                    <button
-                      onClick={() => setStartProgramModal({ productId: card.productId || '', planId: card.planId, productTitle: card.title })}
-                      className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-[#00FF00] text-black rounded-xl font-bold text-xs hover:bg-[#00FF00]/90 transition-colors"
-                    >
-                      <Play size={14} /> {t('training.startNow')}
-                    </button>
-                  )}
-                  {card.status === 'active' && (
-                    <button
-                      onClick={() => {
-                        const todayIdx = weekDates.findIndex(d => d.toISOString().split('T')[0] === todayKey);
-                        if (todayIdx >= 0) setSelectedDayIndex(todayIdx);
-                      }}
-                      className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-zinc-800 text-white rounded-xl font-bold text-xs hover:bg-zinc-700 transition-colors border border-zinc-700"
-                    >
-                      <ArrowRight size={14} /> {t('training.continue')}
-                    </button>
-                  )}
-                  {card.status === 'today_session' && card.todaySession && (
-                    <button
-                      onClick={() => {
-                        const todayIdx = weekDates.findIndex(d => d.toISOString().split('T')[0] === todayKey);
-                        if (todayIdx >= 0) setSelectedDayIndex(todayIdx);
-                        const firstBlock = card.todaySession?.workoutData?.[0];
-                        if (firstBlock) handleStartBlock(card.todaySession!.id, firstBlock.id);
-                      }}
-                      className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-[#00FF00] text-black rounded-xl font-bold text-xs hover:bg-[#00FF00]/90 transition-colors"
-                    >
-                      <Play size={14} /> {t('training.startUnit')}
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
           </div>
         </div>
       )}
@@ -1412,23 +1179,11 @@ const AthleteTrainingView: React.FC = () => {
         <div className="bg-[#1C1C1E] border border-zinc-800 border-dashed rounded-2xl p-6 text-center">
           <Dumbbell size={36} className="mx-auto mb-3 text-zinc-700" />
           <h3 className="text-base font-bold text-white mb-1">{t('training.noTrainingPlanned')}</h3>
-          <p className="text-zinc-500 text-xs mb-4">
-            {isModusA 
-              ? t('training.emptyDayModeA') 
-              : t('training.emptyDayModeB')}
-          </p>
+          <p className="text-zinc-500 text-xs mb-4">{t('training.emptyDayModeB')}</p>
           <div className="flex gap-2 justify-center flex-wrap">
             <Button onClick={addSession} className="text-sm">
               <Plus size={16} className="mr-1" /> {t('training.addSession')}
             </Button>
-            {!isModusA && (
-              <button
-                onClick={() => window.location.hash = '#/shop'}
-                className="flex items-center gap-1 px-3 py-2 text-xs text-zinc-400 hover:text-white transition-colors"
-              >
-                <ShoppingBag size={14} /> {t('training.discoverPlans')}
-              </button>
-            )}
           </div>
         </div>
       ) : (
@@ -2334,45 +2089,6 @@ const AthleteTrainingView: React.FC = () => {
                   Trotzdem starten
                 </button>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Start Program Modal */}
-      {startProgramModal && (
-        <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-[#1C1C1E] border border-zinc-800 w-full max-w-sm rounded-2xl p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-white">{t('training.startProgram')}</h3>
-              <button onClick={() => setStartProgramModal(null)} className="text-zinc-500 hover:text-white"><X size={20} /></button>
-            </div>
-            <p className="text-sm text-zinc-400 mb-4">
-              {t('training.startDateQuestion', { name: startProgramModal.productTitle })}
-            </p>
-            <div className="mb-4">
-              <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider block mb-1">{t('training.startDate')}</label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                min={new Date().toISOString().split('T')[0]}
-                className="w-full bg-zinc-900 border border-zinc-700 text-white rounded-xl px-4 py-3 focus:border-[#00FF00] outline-none"
-              />
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setStartProgramModal(null)}
-                className="flex-1 py-3 bg-zinc-800 text-white rounded-xl font-bold hover:bg-zinc-700 transition-colors text-sm"
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                onClick={() => handleStartProgram(startProgramModal.productId, startProgramModal.planId)}
-                className="flex-1 py-3 bg-[#00FF00] text-black rounded-xl font-bold hover:bg-[#00FF00]/90 transition-colors text-sm flex items-center justify-center gap-2"
-              >
-                <Play size={16} /> {t('training.start')}
-              </button>
             </div>
           </div>
         </div>
