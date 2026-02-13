@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useNavigate, Link } from 'react-router-dom';
-import { signOut, updateProfile, uploadFile, getPublicUrl, requestDataDeletion, exportUserData, createAuditLog, getAssignedPlans, requestDataExport, getExportRequests } from '../services/supabase';
-import { Camera, Check, LogOut, Globe, Settings, Download, Trash2, FileText, AlertTriangle, RefreshCw, CreditCard, Receipt, ExternalLink, Heart, Loader2, Save, ChevronRight, ArrowLeft, Bell, User2, Scale, Calculator, BookOpen, CheckCircle2, Mail, Shield, Clock } from 'lucide-react';
+import { supabase, signOut, updateProfile, uploadFile, getPublicUrl, requestDataDeletion, exportUserData, createAuditLog, getAssignedPlans, requestDataExport, getExportRequests } from '../services/supabase';
+import { Camera, Check, LogOut, Globe, Settings, Download, Trash2, FileText, AlertTriangle, RefreshCw, CreditCard, Receipt, ExternalLink, Heart, Loader2, Save, ChevronRight, ArrowLeft, Bell, User2, Scale, Calculator, BookOpen, CheckCircle2, Mail, Shield, Clock, Pause, Play, Pencil, X, ClipboardList, AlertCircle } from 'lucide-react';
 import { UserRole } from '../types';
 import Button from '../components/Button';
 import CalculatorsModal from '../components/CalculatorsModal';
@@ -53,6 +53,16 @@ const Profile: React.FC = () => {
   const [purchases, setPurchases] = useState<any[]>([]);
   const [assignedPlans, setAssignedPlans] = useState<any[]>([]);
   const [portalLoading, setPortalLoading] = useState(false);
+
+  // Plan Management State
+  const [schedulePicker, setSchedulePicker] = useState<any | null>(null);
+  const [selectedDays, setSelectedDays] = useState<number[]>([]);
+  const [scheduleStartDate, setScheduleStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [generatingSchedule, setGeneratingSchedule] = useState(false);
+  const [pauseModal, setPauseModal] = useState<any | null>(null);
+  const [pauseDuration, setPauseDuration] = useState<number>(1); // weeks
+  const [pauseChecks, setPauseChecks] = useState({ understand: false, payment: false, once: false });
+  const [pausing, setPausing] = useState(false);
 
   // Inline edit state
   const [editing, setEditing] = useState(false);
@@ -144,6 +154,136 @@ const Profile: React.FC = () => {
       setPortalLoading(false);
     }
   };
+
+  // --- Plan Management Helpers ---
+  const getSessionsPerWeek = (plan: any): number => {
+    if (!plan.structure?.weeks?.[0]?.sessions) return 0;
+    return plan.structure.weeks[0].sessions.length;
+  };
+
+  const getDefaultDays = (plan: any): number[] => {
+    if (!plan.structure?.weeks?.[0]?.sessions) return [];
+    return plan.structure.weeks[0].sessions
+      .map((s: any) => s.dayOfWeek ?? s.order ?? 0)
+      .sort((a: number, b: number) => a - b);
+  };
+
+  const openSchedulePicker = (plan: any) => {
+    const defaultDays = getDefaultDays(plan);
+    setSelectedDays(defaultDays);
+    setScheduleStartDate(plan.start_date || new Date().toISOString().split('T')[0]);
+    setSchedulePicker(plan);
+  };
+
+  const toggleDay = (day: number) => {
+    if (!schedulePicker) return;
+    const required = getSessionsPerWeek(schedulePicker);
+    setSelectedDays(prev => {
+      if (prev.includes(day)) return prev.filter(d => d !== day);
+      if (prev.length >= required) return prev;
+      return [...prev, day].sort((a, b) => a - b);
+    });
+  };
+
+  const handleGenerateSchedule = async () => {
+    if (!schedulePicker || !user) return;
+    const plan = schedulePicker;
+    const sessionsPerWeek = getSessionsPerWeek(plan);
+    if (selectedDays.length !== sessionsPerWeek) return;
+    setGeneratingSchedule(true);
+    try {
+      const schedule: Record<string, string> = {};
+      const start = new Date(scheduleStartDate);
+      const startDay = start.getDay();
+      const mondayOffset = startDay === 0 ? -6 : 1 - startDay;
+      const weekStart = new Date(start);
+      weekStart.setDate(weekStart.getDate() + mondayOffset);
+      plan.structure.weeks.forEach((week: any, weekIndex: number) => {
+        const sessions = [...(week.sessions || [])].sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0));
+        sessions.forEach((session: any, sessionIndex: number) => {
+          if (sessionIndex >= selectedDays.length) return;
+          const targetDay = selectedDays[sessionIndex];
+          const sessionDate = new Date(weekStart);
+          sessionDate.setDate(sessionDate.getDate() + (weekIndex * 7) + targetDay);
+          const dateKey = sessionDate.toISOString().split('T')[0];
+          schedule[dateKey] = session.id;
+        });
+      });
+      const { error } = await supabase
+        .from('assigned_plans')
+        .update({ schedule, schedule_status: 'ACTIVE' })
+        .eq('id', plan.id);
+      if (error) throw error;
+      setSchedulePicker(null);
+      await loadSubscriptionData();
+    } catch (error) {
+      console.error('Error generating schedule:', error);
+    } finally {
+      setGeneratingSchedule(false);
+    }
+  };
+
+  const canPause = (plan: any): boolean => {
+    if (!plan.last_pause_date) return true;
+    const lastPause = new Date(plan.last_pause_date);
+    const now = new Date();
+    const diffDays = Math.floor((now.getTime() - lastPause.getTime()) / (1000 * 60 * 60 * 24));
+    return diffDays >= 30;
+  };
+
+  const daysSinceLastPause = (plan: any): number => {
+    if (!plan.last_pause_date) return 999;
+    const lastPause = new Date(plan.last_pause_date);
+    return Math.floor((new Date().getTime() - lastPause.getTime()) / (1000 * 60 * 60 * 24));
+  };
+
+  const openPauseModal = (plan: any) => {
+    setPauseModal(plan);
+    setPauseDuration(1);
+    setPauseChecks({ understand: false, payment: false, once: false });
+  };
+
+  const handlePausePlan = async () => {
+    if (!pauseModal || !user) return;
+    if (!pauseChecks.understand || !pauseChecks.payment || !pauseChecks.once) return;
+    setPausing(true);
+    try {
+      const now = new Date();
+      const pauseUntil = new Date(now);
+      pauseUntil.setDate(pauseUntil.getDate() + (pauseDuration * 7));
+      const { error } = await supabase
+        .from('assigned_plans')
+        .update({
+          schedule_status: 'PAUSED',
+          paused_at: now.toISOString(),
+          pause_until: pauseUntil.toISOString(),
+          last_pause_date: now.toISOString(),
+          pause_reason: `Manuell pausiert für ${pauseDuration} Woche(n)`,
+        })
+        .eq('id', pauseModal.id);
+      if (error) throw error;
+      setPauseModal(null);
+      await loadSubscriptionData();
+    } catch (error) {
+      console.error('Error pausing plan:', error);
+    } finally {
+      setPausing(false);
+    }
+  };
+
+  const handleResumePlan = async (planId: string) => {
+    try {
+      await supabase
+        .from('assigned_plans')
+        .update({ schedule_status: 'ACTIVE', paused_at: null, pause_until: null })
+        .eq('id', planId);
+      await loadSubscriptionData();
+    } catch (error) {
+      console.error('Error resuming plan:', error);
+    }
+  };
+
+  const DAY_LABELS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 
   // --- Avatar Upload ---
   const handleAvatarSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -851,21 +991,57 @@ const Profile: React.FC = () => {
           {assignedPlans.length > 0 && (
             <div className="p-4 border-b border-zinc-800">
               <div className="flex items-center gap-3 mb-3">
-                <Receipt size={16} className="text-[#00FF00]" />
-                <span className="text-white font-medium text-sm">Meine Pläne ({assignedPlans.length})</span>
+                <ClipboardList size={16} className="text-[#00FF00]" />
+                <span className="text-white font-medium text-sm">Meine Programme ({assignedPlans.length})</span>
               </div>
-              <div className="space-y-2 max-h-40 overflow-y-auto">
-                {assignedPlans.map((plan: any) => (
-                  <div key={plan.id} className="flex items-center justify-between bg-zinc-900 rounded-xl p-3">
-                    <div>
-                      <p className="text-white text-sm font-medium">{plan.plan_name || 'Trainingsplan'}</p>
-                      <p className="text-zinc-500 text-xs">
-                        {plan.schedule_status === 'ACTIVE' ? 'Aktiv' : plan.schedule_status === 'COMPLETED' ? 'Abgeschlossen' : 'Pausiert'}
-                      </p>
+              <div className="space-y-2">
+                {assignedPlans.map((plan: any) => {
+                  const hasSchedule = plan.schedule && Object.keys(plan.schedule).length > 0;
+                  const isPending = !hasSchedule && plan.schedule_status !== 'PAUSED' && plan.structure?.weeks?.length > 0;
+                  const isActive = plan.schedule_status === 'ACTIVE' && hasSchedule;
+                  const isPaused = plan.schedule_status === 'PAUSED';
+                  return (
+                    <div key={plan.id} className={`rounded-xl p-3 border ${isPending ? 'bg-amber-500/5 border-amber-500/20' : isPaused ? 'bg-zinc-900/50 border-zinc-800/50 opacity-60' : 'bg-zinc-900 border-zinc-800'}`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className={`w-2 h-2 rounded-full shrink-0 ${isPending ? 'bg-amber-400' : isActive ? 'bg-[#00FF00]' : 'bg-zinc-600'}`} />
+                          <div className="min-w-0">
+                            <p className="text-white text-sm font-medium truncate">{plan.plan_name || 'Trainingsplan'}</p>
+                            <p className="text-zinc-500 text-[10px]">
+                              {isPending ? 'Noch nicht aktiviert' : isActive ? `Aktiv · ${getSessionsPerWeek(plan)}x/Woche` : isPaused ? `Pausiert${plan.pause_until ? ` bis ${new Date(plan.pause_until).toLocaleDateString('de-DE')}` : ''}` : plan.schedule_status}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {isPending && (
+                            <button onClick={() => openSchedulePicker(plan)} className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1.5 rounded-lg hover:bg-amber-500/20 transition-colors">
+                              Aktivieren
+                            </button>
+                          )}
+                          {isActive && (
+                            <>
+                              <button onClick={() => openSchedulePicker(plan)} className="p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors" title="Umplanen">
+                                <Pencil size={12} />
+                              </button>
+                              {canPause(plan) ? (
+                                <button onClick={() => openPauseModal(plan)} className="p-1.5 text-zinc-500 hover:text-amber-400 rounded-lg hover:bg-amber-500/10 transition-colors" title="Pausieren">
+                                  <Pause size={12} />
+                                </button>
+                              ) : (
+                                <span className="text-[9px] text-zinc-600 px-1" title={`Nächste Pause in ${30 - daysSinceLastPause(plan)} Tagen`}>⏳</span>
+                              )}
+                            </>
+                          )}
+                          {isPaused && (
+                            <button onClick={() => handleResumePlan(plan.id)} className="text-[10px] font-bold text-[#00FF00] bg-[#00FF00]/10 px-2.5 py-1.5 rounded-lg hover:bg-[#00FF00]/20 transition-colors flex items-center gap-1">
+                              <Play size={10} /> Fortsetzen
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    {plan.progress_percentage > 0 && <span className="text-xs text-[#00FF00] font-bold">{Math.round(plan.progress_percentage)}%</span>}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -956,6 +1132,139 @@ const Profile: React.FC = () => {
               </Button>
             </div>
             <p className="text-zinc-600 text-xs text-center mt-4">Bearbeitung innerhalb von 30 Tagen (Art. 17 DSGVO).</p>
+          </div>
+        </div>
+      )}
+
+      {/* === SCHEDULE PICKER MODAL === */}
+      {schedulePicker && (
+        <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-[#1C1C1E] border border-zinc-800 w-full max-w-md rounded-2xl p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-white">Trainingstage festlegen</h3>
+              <button onClick={() => setSchedulePicker(null)} className="text-zinc-500 hover:text-white"><X size={20} /></button>
+            </div>
+            <p className="text-sm text-zinc-400 mb-1">{schedulePicker.plan_name}</p>
+            <p className="text-xs text-zinc-500 mb-4">Wähle {getSessionsPerWeek(schedulePicker)} Tage pro Woche für deine Sessions.</p>
+            <div className="mb-4">
+              <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider block mb-1">Startdatum</label>
+              <input type="date" value={scheduleStartDate} onChange={(e) => setScheduleStartDate(e.target.value)}
+                className="w-full bg-zinc-900 border border-zinc-700 text-white rounded-xl px-4 py-3 focus:border-[#00FF00] outline-none text-sm" />
+            </div>
+            <div className="grid grid-cols-7 gap-2 mb-6">
+              {DAY_LABELS.map((label, key) => {
+                const isSelected = selectedDays.includes(key);
+                const isFull = selectedDays.length >= getSessionsPerWeek(schedulePicker) && !isSelected;
+                return (
+                  <button key={key} onClick={() => toggleDay(key)} disabled={isFull}
+                    className={`flex flex-col items-center py-3 rounded-xl text-xs font-bold transition-all ${
+                      isSelected ? 'bg-[#00FF00] text-black'
+                        : isFull ? 'bg-zinc-900 text-zinc-700 cursor-not-allowed'
+                        : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'
+                    }`}>{label}</button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-zinc-500 text-center mb-4">{selectedDays.length}/{getSessionsPerWeek(schedulePicker)} Tage ausgewählt</p>
+            <div className="flex gap-2">
+              <button onClick={() => setSchedulePicker(null)} className="flex-1 py-3 bg-zinc-800 text-white rounded-xl font-bold hover:bg-zinc-700 transition-colors text-sm">Abbrechen</button>
+              <button onClick={handleGenerateSchedule} disabled={selectedDays.length !== getSessionsPerWeek(schedulePicker) || generatingSchedule}
+                className="flex-1 py-3 bg-[#00FF00] text-black rounded-xl font-bold hover:bg-[#00FF00]/90 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                {generatingSchedule ? 'Wird erstellt...' : 'Bestätigen'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* === PAUSE CONFIRMATION MODAL === */}
+      {pauseModal && (
+        <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-[#1C1C1E] border border-zinc-800 w-full max-w-md rounded-2xl overflow-hidden">
+            <div className="p-6 border-b border-zinc-800">
+              <div className="flex justify-between items-start">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center">
+                    <Pause size={20} className="text-amber-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-white">Training pausieren</h3>
+                    <p className="text-xs text-zinc-500">{pauseModal.plan_name}</p>
+                  </div>
+                </div>
+                <button onClick={() => setPauseModal(null)} className="text-zinc-500 hover:text-white"><X size={20} /></button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* Duration Picker */}
+              <div>
+                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider block mb-2">Pausendauer</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {[1, 2, 3, 4].map(weeks => (
+                    <button key={weeks} onClick={() => setPauseDuration(weeks)}
+                      className={`py-3 rounded-xl text-sm font-bold transition-all ${
+                        pauseDuration === weeks ? 'bg-amber-500 text-black' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                      }`}>
+                      {weeks} Wo.
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] text-zinc-600 mt-1.5">
+                  Pause bis: {(() => { const d = new Date(); d.setDate(d.getDate() + pauseDuration * 7); return d.toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' }); })()}
+                </p>
+              </div>
+
+              {/* Checklist */}
+              <div className="space-y-2">
+                <label className="flex items-start gap-3 p-3 bg-zinc-900 rounded-xl cursor-pointer hover:bg-zinc-800/80 transition-colors"
+                  onClick={() => setPauseChecks(p => ({ ...p, understand: !p.understand }))}>
+                  <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-colors ${pauseChecks.understand ? 'bg-amber-500 border-amber-500' : 'border-zinc-600'}`}>
+                    {pauseChecks.understand && <Check size={12} className="text-black" />}
+                  </div>
+                  <span className="text-xs text-zinc-300">Ich verstehe, dass mein Trainingsplan für den gewählten Zeitraum pausiert wird und keine Sessions im Kalender erscheinen.</span>
+                </label>
+
+                <label className="flex items-start gap-3 p-3 bg-zinc-900 rounded-xl cursor-pointer hover:bg-zinc-800/80 transition-colors"
+                  onClick={() => setPauseChecks(p => ({ ...p, payment: !p.payment }))}>
+                  <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-colors ${pauseChecks.payment ? 'bg-amber-500 border-amber-500' : 'border-zinc-600'}`}>
+                    {pauseChecks.payment && <Check size={12} className="text-black" />}
+                  </div>
+                  <span className="text-xs text-zinc-300">Mir ist bewusst, dass laufende Abonnement-Zahlungen separat über das Kundenportal verwaltet werden müssen. Die Pause betrifft nur den Trainingsplan.</span>
+                </label>
+
+                <label className="flex items-start gap-3 p-3 bg-zinc-900 rounded-xl cursor-pointer hover:bg-zinc-800/80 transition-colors"
+                  onClick={() => setPauseChecks(p => ({ ...p, once: !p.once }))}>
+                  <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-colors ${pauseChecks.once ? 'bg-amber-500 border-amber-500' : 'border-zinc-600'}`}>
+                    {pauseChecks.once && <Check size={12} className="text-black" />}
+                  </div>
+                  <span className="text-xs text-zinc-300">Ich weiß, dass ich diese Funktion nur einmal pro 30 Tage nutzen kann.</span>
+                </label>
+              </div>
+
+              {/* Legal Disclaimer */}
+              <div className="p-3 bg-zinc-900/50 border border-zinc-800 rounded-xl">
+                <div className="flex items-start gap-2">
+                  <AlertCircle size={14} className="text-zinc-500 shrink-0 mt-0.5" />
+                  <div className="text-[10px] text-zinc-500 space-y-1">
+                    <p><strong className="text-zinc-400">Hinweis:</strong> Die Trainingsplan-Pause hat keinen Einfluss auf bestehende Zahlungsvereinbarungen. Abonnements und Ratenzahlungen laufen unverändert weiter, sofern sie nicht separat im Kundenportal gekündigt oder pausiert werden.</p>
+                    <p>Nach Ablauf der Pause wird dein Plan automatisch fortgesetzt. Du kannst die Pause jederzeit vorzeitig beenden.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 p-6 border-t border-zinc-800">
+              <button onClick={() => setPauseModal(null)} className="flex-1 py-3 bg-zinc-800 text-white rounded-xl font-bold hover:bg-zinc-700 transition-colors text-sm">
+                Abbrechen
+              </button>
+              <button onClick={handlePausePlan}
+                disabled={!pauseChecks.understand || !pauseChecks.payment || !pauseChecks.once || pausing}
+                className="flex-1 py-3 bg-amber-500 text-black rounded-xl font-bold hover:bg-amber-400 transition-colors text-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                <Pause size={14} />
+                {pausing ? 'Wird pausiert...' : `${pauseDuration} Wo. pausieren`}
+              </button>
+            </div>
           </div>
         </div>
       )}
