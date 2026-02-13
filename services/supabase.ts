@@ -2771,3 +2771,32 @@ export const disableAllEmailNotifications = async (userId: string): Promise<void
     );
   if (error) throw error;
 };
+
+// ============ AI PLAN BUILDER ============
+
+export const generateAIPlan = async (prompt: string, context?: any) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Nicht authentifiziert');
+
+  const response = await fetch(
+    `${supabaseUrl}/functions/v1/ai-plan-generate`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+        'apikey': supabaseAnonKey,
+      },
+      body: JSON.stringify({ prompt, context }),
+    }
+  );
+
+  const data = await response.json();
+  if (!response.ok) {
+    if (data.code === 'API_KEY_MISSING') {
+      throw new Error('API_KEY_MISSING');
+    }
+    throw new Error(data.error || 'AI-Generierung fehlgeschlagen');
+  }
+  return data;
+};

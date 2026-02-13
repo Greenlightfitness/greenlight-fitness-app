@@ -5,9 +5,10 @@ import { TrainingPlan, TrainingWeek, TrainingSession, AssignedPlan, UserProfile,
 import Button from '../components/Button';
 import Input from '../components/Input';
 import PlanEditor from '../components/planner/PlanEditor';
+import AIPlanAssistant from '../components/planner/AIPlanAssistant';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { useLanguage } from '../context/LanguageContext';
-import { Calendar as CalendarIcon, Plus, Trash2, ChevronRight, FileText, Copy, Send, X, Users, ArrowRight, Filter, ShieldCheck } from 'lucide-react';
+import { Calendar as CalendarIcon, Plus, Trash2, ChevronRight, FileText, Copy, Send, X, Users, ArrowRight, Filter, ShieldCheck, Sparkles } from 'lucide-react';
 
 const Planner: React.FC = () => {
   const { user, userProfile } = useAuth();
@@ -44,6 +45,9 @@ const Planner: React.FC = () => {
   const [assignStartDate, setAssignStartDate] = useState('');
   const [assignmentType, setAssignmentType] = useState<AssignmentType>('ONE_TO_ONE');
   const [isAssigning, setIsAssigning] = useState(false);
+
+  // AI Plan Builder
+  const [showAIAssistant, setShowAIAssistant] = useState(false);
 
   useEffect(() => {
     if (user && view === 'list') {
@@ -308,6 +312,13 @@ const Planner: React.FC = () => {
         onCancel={() => setDeleteConfirm({ isOpen: false, planId: null })}
       />
 
+      {/* AI Plan Assistant Drawer */}
+      <AIPlanAssistant
+        isOpen={showAIAssistant}
+        onClose={() => setShowAIAssistant(false)}
+        onPlanCreated={() => fetchPlans()}
+      />
+
       {assignModal.isOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in duration-200">
             <div className="bg-[#1C1C1E] border border-zinc-800 w-full max-w-lg rounded-3xl shadow-2xl relative overflow-hidden">
@@ -399,9 +410,20 @@ const Planner: React.FC = () => {
           <h1 className="text-4xl font-extrabold text-white tracking-tight">{t('planner.title')}</h1>
           <p className="text-zinc-400 mt-2 text-lg">{t('planner.subtitle')}</p>
         </div>
-        <Button onClick={() => setShowCreateForm(!showCreateForm)} className="flex items-center gap-2 shadow-lg shadow-[#00FF00]/10">
-          <Plus size={20} /> {t('planner.createPlan')}
-        </Button>
+        <div className="flex items-center gap-3">
+          {(userProfile?.role === UserRole.ADMIN || userProfile?.role === UserRole.COACH) && (
+            <button
+              onClick={() => setShowAIAssistant(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-violet-500/20"
+            >
+              <Sparkles size={16} /> AI Builder
+              <span className="text-[9px] font-bold bg-white/20 px-1.5 py-0.5 rounded ml-0.5">ALPHA</span>
+            </button>
+          )}
+          <Button onClick={() => setShowCreateForm(!showCreateForm)} className="flex items-center gap-2 shadow-lg shadow-[#00FF00]/10">
+            <Plus size={20} /> {t('planner.createPlan')}
+          </Button>
+        </div>
       </div>
 
       {/* ADMIN FILTER */}
