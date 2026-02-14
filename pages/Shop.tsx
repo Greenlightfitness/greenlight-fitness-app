@@ -266,9 +266,17 @@ const Shop: React.FC = () => {
               }
             } catch (e) { console.error('Admin purchase notif failed:', e); }
             
+            // Record the purchase to prevent re-buying
+            await supabase.from('purchases').insert({
+              user_id: user.id,
+              product_id: product.id,
+              status: 'completed',
+            });
+
             alert("Coaching erfolgreich gebucht! Dein Coach wird sich bei dir melden, um deinen individuellen Plan zu erstellen.");
             setSelectedProduct(null);
             fetchCoachingApprovals();
+            fetchPurchases();
             return;
         }
         
@@ -315,9 +323,17 @@ const Shop: React.FC = () => {
             structure: { weeks: weeksData }
         });
 
+        // Record the purchase to prevent re-buying
+        await supabase.from('purchases').insert({
+          user_id: user.id,
+          product_id: product.id,
+          status: 'completed',
+        });
+
         alert("Kauf erfolgreich! Gehe zu deinem Hub, um deinen Trainingsplan einzurichten.");
         setSelectedProduct(null);
         fetchOwnedPlans();
+        fetchPurchases();
         
     } catch (error) {
         console.error("Purchase processing failed:", error);
@@ -342,18 +358,24 @@ const Shop: React.FC = () => {
     if (success === 'true' && productId) {
       // Finde das Produkt und weise den Plan zu
       const product = products.find(p => p.id === productId);
-      if (product && !ownedPlanIds.has(product.planId)) {
+      const alreadyOwned = product && (
+        ownedPlanIds.has(product.planId) || purchasedProductIds.has(product.id)
+      );
+      if (product && !alreadyOwned) {
+        // Clean URL first to prevent re-trigger on re-render
+        window.history.replaceState({}, '', '/shop');
         handlePurchaseSuccess(product);
+      } else if (product) {
+        // Already owned, just clean URL
+        window.history.replaceState({}, '', '/shop');
       }
-      // URL bereinigen
-      window.history.replaceState({}, '', '/shop');
     }
     
     if (params.get('canceled') === 'true') {
       alert("Zahlung abgebrochen.");
       window.history.replaceState({}, '', '/shop');
     }
-  }, [products, ownedPlanIds]);
+  }, [products, ownedPlanIds, purchasedProductIds]);
 
   const handleBookAppointment = async (dateOverride?: string, timeOverride?: string) => {
       const bookDate = dateOverride || selectedDate;
