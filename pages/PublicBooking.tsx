@@ -69,22 +69,78 @@ const PublicBooking: React.FC = () => {
     setStep('confirm');
   };
 
+  // Build calendar URLs for email
+  const buildCalendarUrls = (date: string, time: string, durationMinutes: number, title: string, description: string) => {
+    const [h, m] = time.split(':').map(Number);
+    const start = new Date(date + 'T00:00:00');
+    start.setHours(h, m, 0, 0);
+    const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
+
+    const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+
+    const googleCalendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${fmt(start)}/${fmt(end)}&details=${encodeURIComponent(description)}`;
+
+    const outlookCalendarUrl = `https://outlook.live.com/calendar/0/action/compose?subject=${encodeURIComponent(title)}&startdt=${start.toISOString()}&enddt=${end.toISOString()}&body=${encodeURIComponent(description)}`;
+
+    const icsContent = [
+      'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Greenlight Fitness//Booking//DE',
+      'BEGIN:VEVENT',
+      `DTSTART:${fmt(start)}`, `DTEND:${fmt(end)}`,
+      `SUMMARY:${title}`, `DESCRIPTION:${description.replace(/\n/g, '\\n')}`,
+      'END:VEVENT', 'END:VCALENDAR'
+    ].join('\r\n');
+    const icsDownloadUrl = `data:text/calendar;charset=utf-8,${encodeURIComponent(icsContent)}`;
+
+    return { googleCalendarUrl, outlookCalendarUrl, icsDownloadUrl };
+  };
+
   const handleSubmitBooking = async () => {
     if (!bookerName.trim() || !bookerEmail.trim() || !selectedCalendar || !selectedDate || !selectedTime) return;
     setSubmitting(true);
     setErrorMsg('');
 
     try {
+      const durationMinutes = selectedCalendar.slot_duration_minutes || 30;
+
       await createPublicAppointment({
         coach_id: coach.id,
         calendar_id: selectedCalendar.id,
         date: selectedDate,
         time: selectedTime,
-        duration_minutes: selectedCalendar.slot_duration_minutes || 30,
+        duration_minutes: durationMinutes,
         booker_name: bookerName.trim(),
         booker_email: bookerEmail.trim(),
         notes: notes.trim() || undefined,
       });
+
+      // Send confirmation email with calendar links
+      try {
+        const title = `${selectedCalendar.name} – ${coachDisplayName}`;
+        const description = `Termin bei ${coachDisplayName}\n${selectedCalendar.name}\nDauer: ${durationMinutes} Min`;
+        const calUrls = buildCalendarUrls(selectedDate, selectedTime, durationMinutes, title, description);
+
+        await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'booking_confirmation',
+            to: bookerEmail.trim(),
+            data: {
+              bookerName: bookerName.trim(),
+              coachName: coachDisplayName,
+              calendarName: selectedCalendar.name,
+              date: selectedDate,
+              time: selectedTime,
+              durationMinutes,
+              notes: notes.trim() || undefined,
+              ...calUrls,
+            },
+          }),
+        });
+      } catch (emailErr) {
+        console.error('Failed to send confirmation email:', emailErr);
+      }
+
       setStep('success');
     } catch (e: any) {
       console.error(e);

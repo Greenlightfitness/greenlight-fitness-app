@@ -37,6 +37,8 @@ import {
   AdminChurnAlertData,
   AdminNewPurchaseData,
   CoachNewAthleteData,
+  BookingConfirmationData,
+  BookingReminderData,
 } from '../emails/templates';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -94,6 +96,8 @@ type EmailDataMap = {
   admin_churn_alert: AdminChurnAlertData;
   admin_new_purchase: AdminNewPurchaseData;
   coach_new_athlete: CoachNewAthleteData;
+  booking_confirmation: BookingConfirmationData;
+  booking_reminder: BookingReminderData;
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

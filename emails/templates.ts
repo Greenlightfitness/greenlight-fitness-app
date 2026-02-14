@@ -1880,6 +1880,149 @@ export const coachNewAthlete = (data: CoachNewAthleteData): { subject: string; h
   `,
 });
 
+// =============================================================================
+// BOOKING EMAILS
+// =============================================================================
+
+export interface BookingConfirmationData {
+  bookerName: string;
+  coachName: string;
+  calendarName: string;
+  date: string;       // "2026-02-20"
+  time: string;       // "10:00"
+  durationMinutes: number;
+  notes?: string;
+  // Pre-built by caller:
+  googleCalendarUrl: string;
+  outlookCalendarUrl: string;
+  icsDownloadUrl: string;
+}
+
+export interface BookingReminderData {
+  bookerName: string;
+  coachName: string;
+  calendarName: string;
+  date: string;
+  time: string;
+  durationMinutes: number;
+}
+
+const formatBookingDate = (dateStr: string): string => {
+  const d = new Date(dateStr + 'T00:00:00');
+  const days = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
+  const months = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+  return `${days[d.getDay()]}, ${d.getDate()}. ${months[d.getMonth()]} ${d.getFullYear()}`;
+};
+
+const bookingConfirmation = (data: BookingConfirmationData) => ({
+  subject: `Termin bestätigt: ${data.calendarName} am ${formatBookingDate(data.date)}`,
+  html: `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin: 0; padding: 0; background-color: ${baseStyles.backgroundColor}; font-family: ${baseStyles.fontFamily};">
+  <div style="max-width: 600px; margin: 0 auto; padding: 40px 24px;">
+    <div style="text-align: center; margin-bottom: 32px;">
+      ${iconBox('✅', 'rgba(0, 255, 0, 0.1)')}
+      <h1 style="color: #FFFFFF; font-size: 24px; font-weight: bold; margin: 0 0 8px 0;">Termin bestätigt!</h1>
+      <p style="color: #71717A; font-size: 14px; margin: 0;">Dein Termin wurde erfolgreich gebucht</p>
+    </div>
+    <p style="color: #FFFFFF; font-size: 16px; margin: 0 0 24px 0;">Hallo ${data.bookerName},</p>
+    <p style="color: #A1A1AA; font-size: 14px; margin: 0 0 24px 0;">
+      dein Termin bei <strong style="color: #FFFFFF;">${data.coachName}</strong> ist bestätigt. Hier sind die Details:
+    </p>
+    <div style="${cardStyles} border-color: ${accentColor};">
+      <p style="color: ${accentColor}; font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 16px 0;">TERMINDETAILS</p>
+      <div style="background: #27272A; border-radius: 12px; padding: 16px;">
+        <table cellpadding="0" cellspacing="0" border="0" width="100%">
+          ${dataRow('Terminart', data.calendarName, '#FFFFFF')}
+          ${dataRow('Datum', formatBookingDate(data.date), '#FFFFFF')}
+          ${dataRow('Uhrzeit', data.time + ' Uhr', '#FFFFFF')}
+          ${dataRow('Dauer', data.durationMinutes + ' Minuten', '#71717A')}
+          ${dataRow('Coach', data.coachName, '#71717A', !data.notes)}
+          ${data.notes ? dataRow('Nachricht', data.notes, '#71717A', true) : ''}
+        </table>
+      </div>
+    </div>
+
+    <!-- Calendar Integration -->
+    <div style="${cardStyles}">
+      <p style="color: #FFFFFF; font-size: 14px; font-weight: bold; margin: 0 0 16px 0;">📅 Zum Kalender hinzufügen</p>
+      <table cellpadding="0" cellspacing="0" border="0" width="100%">
+        <tr>
+          <td style="padding: 6px 0;">
+            <a href="${data.googleCalendarUrl}" target="_blank" style="display: inline-block; padding: 12px 20px; background: #27272A; border: 1px solid #3F3F46; border-radius: 10px; color: #FFFFFF; font-size: 14px; font-weight: bold; text-decoration: none; width: 100%; box-sizing: border-box; text-align: center;">
+              📎 Google Kalender
+            </a>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 6px 0;">
+            <a href="${data.outlookCalendarUrl}" target="_blank" style="display: inline-block; padding: 12px 20px; background: #27272A; border: 1px solid #3F3F46; border-radius: 10px; color: #FFFFFF; font-size: 14px; font-weight: bold; text-decoration: none; width: 100%; box-sizing: border-box; text-align: center;">
+              📎 Outlook / Office 365
+            </a>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 6px 0;">
+            <a href="${data.icsDownloadUrl}" target="_blank" style="display: inline-block; padding: 12px 20px; background: #27272A; border: 1px solid #3F3F46; border-radius: 10px; color: #FFFFFF; font-size: 14px; font-weight: bold; text-decoration: none; width: 100%; box-sizing: border-box; text-align: center;">
+              📎 Apple Kalender / ICS-Datei
+            </a>
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    ${infoBox('⏰', 'Du erhältst 15 Minuten vor dem Termin eine Erinnerung per E-Mail.', 'rgba(59, 130, 246, 0.05)', '#3B82F6')}
+    <p style="color: #A1A1AA; font-size: 14px; margin: 32px 0 0 0; text-align: center;">
+      Sportliche Grüße,<br><strong style="color: #FFFFFF;">Dein Greenlight Fitness Team</strong>
+    </p>
+    ${getFooter()}
+  </div>
+</body>
+</html>
+  `,
+});
+
+const bookingReminder = (data: BookingReminderData) => ({
+  subject: `⏰ In 15 Min: ${data.calendarName} mit ${data.coachName}`,
+  html: `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin: 0; padding: 0; background-color: ${baseStyles.backgroundColor}; font-family: ${baseStyles.fontFamily};">
+  <div style="max-width: 600px; margin: 0 auto; padding: 40px 24px;">
+    <div style="text-align: center; margin-bottom: 32px;">
+      ${iconBox('⏰', 'rgba(234, 179, 8, 0.1)')}
+      <h1 style="color: #FFFFFF; font-size: 24px; font-weight: bold; margin: 0 0 8px 0;">Termin in 15 Minuten!</h1>
+      <p style="color: #71717A; font-size: 14px; margin: 0;">Dein Termin beginnt gleich</p>
+    </div>
+    <p style="color: #FFFFFF; font-size: 16px; margin: 0 0 24px 0;">Hallo ${data.bookerName},</p>
+    <p style="color: #A1A1AA; font-size: 14px; margin: 0 0 24px 0;">
+      dein Termin bei <strong style="color: #FFFFFF;">${data.coachName}</strong> beginnt in <strong style="color: #EAB308;">15 Minuten</strong>.
+    </p>
+    <div style="${cardStyles} border-color: #EAB308;">
+      <p style="color: #EAB308; font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 16px 0;">DEIN TERMIN</p>
+      <div style="background: #27272A; border-radius: 12px; padding: 16px;">
+        <table cellpadding="0" cellspacing="0" border="0" width="100%">
+          ${dataRow('Terminart', data.calendarName, '#FFFFFF')}
+          ${dataRow('Uhrzeit', data.time + ' Uhr', '#FFFFFF')}
+          ${dataRow('Dauer', data.durationMinutes + ' Minuten', '#71717A')}
+          ${dataRow('Coach', data.coachName, '#71717A', true)}
+        </table>
+      </div>
+    </div>
+    ${infoBox('💡', 'Stelle sicher, dass du pünktlich bereit bist. Bei Fragen melde dich direkt bei deinem Coach.', 'rgba(0, 255, 0, 0.05)', accentColor)}
+    <p style="color: #A1A1AA; font-size: 14px; margin: 32px 0 0 0; text-align: center;">
+      Viel Erfolg!<br><strong style="color: #FFFFFF;">Dein Greenlight Fitness Team</strong>
+    </p>
+    ${getFooter()}
+  </div>
+</body>
+</html>
+  `,
+});
+
 export const emailTemplates = {
   price_change_notice: priceChangeNotice,
   cancellation_confirmed: cancellationConfirmed,
@@ -1908,6 +2051,9 @@ export const emailTemplates = {
   // Admin & Coach Notifications
   admin_new_purchase: adminNewPurchase,
   coach_new_athlete: coachNewAthlete,
+  // Booking Emails
+  booking_confirmation: bookingConfirmation,
+  booking_reminder: bookingReminder,
 };
 
 export type EmailType = keyof typeof emailTemplates;
