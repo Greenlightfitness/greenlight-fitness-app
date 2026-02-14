@@ -26,7 +26,7 @@ const supabase = createClient(
 );
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'Greenlight Fitness <noreply@greenlight-fitness.de>';
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'Greenlight Fitness <noreply@mail.greenlight-fitness.de>';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Only allow GET (cron) or POST
