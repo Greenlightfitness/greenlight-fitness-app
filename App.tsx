@@ -23,6 +23,9 @@ import WorkoutHistory from './pages/WorkoutHistory';
 import Legal from './pages/Legal';
 import PublicBooking from './pages/PublicBooking';
 import ApiDocs from './pages/ApiDocs';
+import PurchaseConfirmation from './pages/PurchaseConfirmation';
+import CoachingIntake from './pages/CoachingIntake';
+import CoachingDossier from './pages/CoachingDossier';
 import Layout from './components/Layout';
 import PWAInstallPrompt from './components/PWAInstallPrompt';
 import CoachOnboarding from './components/CoachOnboarding';
@@ -110,6 +113,8 @@ const App: React.FC = () => {
                  <Route path="/shop" element={<Shop />} />
                  <Route path="/chat" element={<Chat />} />
                  <Route path="/history" element={<WorkoutHistory />} />
+                 <Route path="/purchase-confirmation" element={<PurchaseConfirmation />} />
+                 <Route path="/coaching-intake" element={<CoachingIntake />} />
               </Route>
               
               {/* Shared Routes (Coach, Admin AND Athlete now for self-planning) */}
@@ -118,12 +123,13 @@ const App: React.FC = () => {
                 <Route path="/planner" element={<Planner />} />
               </Route>
 
-              {/* Coach & Admin: Calendar, Chat, Products (read-only for Coach), CRM */}
+              {/* Coach & Admin: Calendar, Chat, Products (read-only for Coach), CRM, Dossier */}
               <Route element={<ProtectedRoute allowedRoles={[UserRole.COACH, UserRole.ADMIN]} />}>
                 <Route path="/calendar" element={<CoachCalendarSetup />} />
                 <Route path="/coach/chat" element={<CoachChatPage />} />
                 <Route path="/admin/products" element={<AdminProducts />} />
                 <Route path="/admin/crm" element={<AdminCRM />} />
+                <Route path="/coaching/:athleteId" element={<CoachingDossier />} />
               </Route>
 
               {/* Admin Only (User Management) */}

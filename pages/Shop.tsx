@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { supabase, getProducts, getAssignedPlans, getWeeksByPlan, getSessionsByWeek, createAssignedPlan, createAppointment, getUserPurchases, getCoachingApproval, createCoachingApproval, createCoachingRelationship, getAppointments, createNotification } from '../services/supabase';
+import { useNavigate } from 'react-router-dom';
+import { supabase, getProducts, getAssignedPlans, getWeeksByPlan, getSessionsByWeek, createAssignedPlan, createAppointment, getUserPurchases, getCoachingApproval, createCoachingApproval, createCoachingRelationship, getAppointments, createNotification, createPurchaseConfirmation } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Product, AssignedPlan, TrainingWeek, TrainingSession, TrainingPlan, ProductCategory, ProductType, Appointment, CoachingApproval } from '../types';
@@ -19,6 +20,7 @@ const CATEGORIES: { id: ProductCategory | 'ALL'; label: string }[] = [
 const Shop: React.FC = () => {
   const { user } = useAuth();
   const { t } = useLanguage();
+  const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState<string | null>(null);
@@ -178,6 +180,7 @@ const Shop: React.FC = () => {
         calendarId: d.calendar_id,
         requiresConsultation: d.requires_consultation ?? false,
         consultationCalendarMode: d.consultation_calendar_mode || 'all',
+        intakeFormEnabled: d.intake_form_enabled ?? false,
       } as any)));
     } catch (error) {
       console.error("Error fetching products:", error);
@@ -236,24 +239,48 @@ const Shop: React.FC = () => {
                 product_id: product.id,
             });
 
-            // Notify the coach about the new athlete
+            // Notify the coach about the new athlete (In-App + Email)
             if (product.coachId) {
-              const athleteName = userProfile?.firstName
-                ? `${userProfile.firstName} ${userProfile.lastName || ''}`.trim()
-                : user.email?.split('@')[0] || 'Ein Athlet';
+              const athleteName = user.email?.split('@')[0] || 'Ein Athlet';
+
+              // In-App Bell notification
               createNotification({
                 user_id: product.coachId,
                 type: 'coach_assignment',
                 title: 'Neuer Coaching-Athlet',
                 message: `${athleteName} hat "${product.title}" gebucht.`,
               }).catch(err => console.error('Coach notification failed:', err));
+
+              // Email notification to coach
+              try {
+                const { data: coachProfile } = await supabase.from('profiles').select('email, first_name').eq('id', product.coachId).maybeSingle();
+                if (coachProfile?.email) {
+                  fetch('/api/send-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      type: 'coach_new_athlete',
+                      to: coachProfile.email,
+                      data: {
+                        coachName: coachProfile.first_name || 'Coach',
+                        athleteName,
+                        athleteEmail: user.email || '',
+                        assignDate: new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+                        reason: `Kauf: ${product.title}`,
+                        dashboardLink: 'https://greenlight-fitness-app.vercel.app/',
+                      },
+                    }),
+                  }).catch(err => console.error('Coach email failed:', err));
+                }
+              } catch (e) { console.error('Coach email lookup failed:', e); }
             }
 
             // Notify admins about the purchase (free products don't go through Stripe webhook)
             try {
-              const { data: admins } = await supabase.from('profiles').select('id').eq('role', 'ADMIN');
+              const { data: admins } = await supabase.from('profiles').select('id, email, first_name').eq('role', 'ADMIN');
               if (admins && admins.length > 0) {
                 const athleteEmail = user.email || 'Unbekannt';
+                // In-App Bell notifications
                 await supabase.from('notifications').insert(
                   admins.map((a: any) => ({
                     user_id: a.id,
@@ -263,20 +290,85 @@ const Shop: React.FC = () => {
                     read: false,
                   }))
                 );
+                // Email notifications to admins
+                for (const admin of admins) {
+                  if (admin.email) {
+                    fetch('/api/send-email', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        type: 'admin_new_purchase',
+                        to: admin.email,
+                        data: {
+                          adminName: admin.first_name || 'Admin',
+                          customerEmail: athleteEmail,
+                          customerName: user.email?.split('@')[0] || '',
+                          productName: product.title,
+                          amount: product.price ? `${product.price.toFixed(2)} EUR` : 'Gratis',
+                          purchaseDate: new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                          dashboardLink: 'https://greenlight-fitness-app.vercel.app/admin/crm',
+                        },
+                      }),
+                    }).catch(err => console.error('Admin email failed:', err));
+                  }
+                }
               }
             } catch (e) { console.error('Admin purchase notif failed:', e); }
             
             // Record the purchase to prevent re-buying
-            await supabase.from('purchases').insert({
+            const { data: purchaseRecord } = await supabase.from('purchases').insert({
               user_id: user.id,
               product_id: product.id,
               status: 'completed',
+            }).select().single();
+
+            // Get the coaching relationship for intake form link
+            const { data: newRelationship } = await supabase
+              .from('coaching_relationships')
+              .select('id')
+              .eq('athlete_id', user.id)
+              .eq('product_id', product.id)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .single();
+
+            // Create purchase confirmation (§312i BGB)
+            const confirmationNumber = `GL-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+            const intakeEnabled = (product as any).intakeFormEnabled ?? false;
+            const confirmation = await createPurchaseConfirmation({
+              user_id: user.id,
+              product_id: product.id,
+              purchase_id: purchaseRecord?.id,
+              confirmation_number: confirmationNumber,
+              product_title: product.title,
+              product_type: product.type,
+              amount: product.price || 0,
+              currency: product.currency || 'EUR',
+              interval: product.interval,
+              status: 'PENDING_COACH',
+              coach_id: product.coachId,
+              metadata: {
+                coaching_relationship_id: newRelationship?.id,
+                intake_form_enabled: intakeEnabled,
+              },
             });
 
-            alert("Coaching erfolgreich gebucht! Dein Coach wird sich bei dir melden, um deinen individuellen Plan zu erstellen.");
+            // Create pending intake record if intake form is enabled
+            if (intakeEnabled && newRelationship?.id) {
+              try {
+                await supabase.from('coaching_intake').insert({
+                  athlete_id: user.id,
+                  coaching_relationship_id: newRelationship.id,
+                  product_id: product.id,
+                  status: 'PENDING',
+                });
+              } catch (e) { console.error('Intake creation failed:', e); }
+            }
+
             setSelectedProduct(null);
             fetchCoachingApprovals();
             fetchPurchases();
+            navigate(`/purchase-confirmation?id=${confirmation.id}`);
             return;
         }
         
@@ -324,16 +416,31 @@ const Shop: React.FC = () => {
         });
 
         // Record the purchase to prevent re-buying
-        await supabase.from('purchases').insert({
+        const { data: planPurchaseRecord } = await supabase.from('purchases').insert({
           user_id: user.id,
           product_id: product.id,
           status: 'completed',
+        }).select().single();
+
+        // Create purchase confirmation (§312i BGB)
+        const planConfNumber = `GL-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+        const planConfirmation = await createPurchaseConfirmation({
+          user_id: user.id,
+          product_id: product.id,
+          purchase_id: planPurchaseRecord?.id,
+          confirmation_number: planConfNumber,
+          product_title: product.title,
+          product_type: product.type,
+          amount: product.price || 0,
+          currency: product.currency || 'EUR',
+          interval: product.interval,
+          status: 'CONFIRMED',
         });
 
-        alert("Kauf erfolgreich! Gehe zu deinem Hub, um deinen Trainingsplan einzurichten.");
         setSelectedProduct(null);
         fetchOwnedPlans();
         fetchPurchases();
+        navigate(`/purchase-confirmation?id=${planConfirmation.id}`);
         
     } catch (error) {
         console.error("Purchase processing failed:", error);

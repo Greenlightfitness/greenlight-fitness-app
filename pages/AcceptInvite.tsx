@@ -132,6 +132,37 @@ const AcceptInvite: React.FC = () => {
           is_manual_grant: true,
           grant_reason: 'Einladung akzeptiert',
         });
+
+        // Notify coach: In-App + Email
+        const athleteDisplayName = user.email?.split('@')[0] || 'Ein Athlet';
+        await supabase.from('notifications').insert({
+          user_id: invitation.invitedBy,
+          type: 'coach_assignment',
+          title: 'Einladung angenommen',
+          message: `${athleteDisplayName} hat deine Einladung angenommen.`,
+          read: false,
+        });
+
+        // Email to coach
+        const { data: coachP } = await supabase.from('profiles').select('email, first_name').eq('id', invitation.invitedBy).maybeSingle();
+        if (coachP?.email) {
+          fetch('/api/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'coach_new_athlete',
+              to: coachP.email,
+              data: {
+                coachName: coachP.first_name || 'Coach',
+                athleteName: athleteDisplayName,
+                athleteEmail: user.email || '',
+                assignDate: new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+                reason: 'Einladung akzeptiert',
+                dashboardLink: 'https://greenlight-fitness-app.vercel.app/',
+              },
+            }),
+          }).catch(() => {});
+        }
       }
 
       setStatus('accepted');
@@ -197,6 +228,35 @@ const AcceptInvite: React.FC = () => {
             is_manual_grant: true,
             grant_reason: 'Einladung akzeptiert',
           });
+
+          // Notify coach: In-App + Email
+          await supabase.from('notifications').insert({
+            user_id: invitation.invitedBy,
+            type: 'coach_assignment',
+            title: 'Einladung angenommen',
+            message: `${firstName || email.split('@')[0]} hat deine Einladung angenommen.`,
+            read: false,
+          });
+
+          const { data: coachP } = await supabase.from('profiles').select('email, first_name').eq('id', invitation.invitedBy).maybeSingle();
+          if (coachP?.email) {
+            fetch('/api/send-email', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                type: 'coach_new_athlete',
+                to: coachP.email,
+                data: {
+                  coachName: coachP.first_name || 'Coach',
+                  athleteName: firstName || email.split('@')[0],
+                  athleteEmail: email,
+                  assignDate: new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+                  reason: 'Einladung akzeptiert (neuer User)',
+                  dashboardLink: 'https://greenlight-fitness-app.vercel.app/',
+                },
+              }),
+            }).catch(() => {});
+          }
         }
 
         setStatus('accepted');

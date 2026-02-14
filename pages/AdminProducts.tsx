@@ -107,6 +107,10 @@ const AdminProducts: React.FC = () => {
         stripePriceId: d.stripe_price_id || null,
         requiresConsultation: d.requires_consultation ?? false,
         consultationCalendarMode: d.consultation_calendar_mode || 'all',
+        coachingDurationWeeks: d.coaching_duration_weeks || null,
+        sessionsPerWeek: d.sessions_per_week || null,
+        intakeFormEnabled: d.intake_form_enabled ?? false,
+        defaultCoachId: d.default_coach_id || null,
       } as Product)));
 
       const planData = await getPlans();
@@ -352,6 +356,11 @@ const AdminProducts: React.FC = () => {
         stripe_price_id: stripeData?.stripe_price_id || null,
         requires_consultation: formData.requiresConsultation ?? false,
         consultation_calendar_mode: formData.consultationCalendarMode || 'all',
+        // 1:1 Coaching specific fields
+        coaching_duration_weeks: (formData as any).coachingDurationWeeks || null,
+        sessions_per_week: (formData as any).sessionsPerWeek || null,
+        intake_form_enabled: (formData as any).intakeFormEnabled ?? false,
+        default_coach_id: (formData as any).defaultCoachId || null,
       };
       
       console.log("Saving product with payload:", payload);
@@ -1084,6 +1093,89 @@ const AdminProducts: React.FC = () => {
             </button>
           </div>
         </section>
+
+        {/* SECTION 6b: 1:1 Coaching Konfiguration */}
+        {formData.type === 'COACHING_1ON1' && (
+          <section className="bg-[#1C1C1E] border border-blue-500/20 rounded-2xl p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-blue-500/10">
+                <Users size={20} className="text-blue-400" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-white">1:1 Coaching Einstellungen</h2>
+                <p className="text-xs text-zinc-500">Spezifische Konfiguration für das persönliche Coaching</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              {/* Coaching Duration */}
+              <div>
+                <label className="text-zinc-400 text-sm block mb-1">Coaching-Dauer</label>
+                <select
+                  value={(formData as any).coachingDurationWeeks || ''}
+                  onChange={e => setFormData(prev => ({ ...prev, coachingDurationWeeks: e.target.value ? Number(e.target.value) : undefined } as any))}
+                  className="w-full bg-[#121212] border border-zinc-800 text-white rounded-xl px-4 py-3 focus:border-[#00FF00] outline-none text-sm"
+                >
+                  <option value="">Laufend (Abo)</option>
+                  <option value="4">4 Wochen</option>
+                  <option value="8">8 Wochen</option>
+                  <option value="12">12 Wochen</option>
+                  <option value="16">16 Wochen</option>
+                  <option value="24">24 Wochen</option>
+                </select>
+              </div>
+
+              {/* Sessions per Week */}
+              <div>
+                <label className="text-zinc-400 text-sm block mb-1">Sessions / Woche</label>
+                <select
+                  value={(formData as any).sessionsPerWeek || 3}
+                  onChange={e => setFormData(prev => ({ ...prev, sessionsPerWeek: Number(e.target.value) } as any))}
+                  className="w-full bg-[#121212] border border-zinc-800 text-white rounded-xl px-4 py-3 focus:border-[#00FF00] outline-none text-sm"
+                >
+                  {[1,2,3,4,5,6,7].map(n => (
+                    <option key={n} value={n}>{n}x pro Woche</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Intake Form Toggle */}
+            <div className="flex items-center justify-between p-3 bg-zinc-900 rounded-xl mb-4">
+              <div>
+                <p className="text-white text-sm font-bold">Intake-Fragebogen</p>
+                <p className="text-zinc-500 text-xs">Athlet füllt nach Kauf einen Fragebogen aus (Verletzungen, Ziele, Zeiten)</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFormData(prev => ({ ...prev, intakeFormEnabled: !(prev as any).intakeFormEnabled } as any))}
+                className={`w-14 h-8 rounded-full transition-all relative ${(formData as any).intakeFormEnabled ? 'bg-[#00FF00]' : 'bg-zinc-700'}`}
+              >
+                <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-transform ${(formData as any).intakeFormEnabled ? 'left-7' : 'left-1'}`} />
+              </button>
+            </div>
+
+            {/* Default Coach (optional) */}
+            <div>
+              <label className="text-zinc-400 text-sm block mb-1">Standard-Coach (optional)</label>
+              <select
+                value={(formData as any).defaultCoachId || ''}
+                onChange={e => setFormData(prev => ({ ...prev, defaultCoachId: e.target.value || undefined } as any))}
+                className="w-full bg-[#121212] border border-zinc-800 text-white rounded-xl px-4 py-3 focus:border-[#00FF00] outline-none text-sm"
+              >
+                <option value="">Admin entscheidet nach Kauf</option>
+                {allCalendars.map((cal: any) => {
+                  const p = cal.profiles;
+                  const name = p ? `${p.first_name || ''} ${p.last_name || ''}`.trim() || p.email : 'Coach';
+                  return (
+                    <option key={cal.coach_id} value={cal.coach_id}>{name}</option>
+                  );
+                }).filter((v: any, i: number, a: any[]) => a.findIndex((t: any) => t.key === v.key) === i)}
+              </select>
+              <p className="text-zinc-600 text-xs mt-1">Wird automatisch als Coach zugewiesen, wenn gesetzt.</p>
+            </div>
+          </section>
+        )}
 
         {/* SECTION 7: Kalender-Zuordnung */}
         {(formData.type === 'COACHING_1ON1') && (

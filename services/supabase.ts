@@ -2800,3 +2800,131 @@ export const generateAIPlan = async (prompt: string, context?: any) => {
   }
   return data;
 };
+
+// ============ PURCHASE CONFIRMATIONS (§312i BGB) ============
+
+export const createPurchaseConfirmation = async (confirmation: {
+  user_id: string;
+  product_id: string;
+  purchase_id?: string;
+  confirmation_number: string;
+  product_title: string;
+  product_type?: string;
+  amount?: number;
+  currency?: string;
+  interval?: string;
+  status?: string;
+  coach_id?: string;
+  metadata?: Record<string, any>;
+}) => {
+  const { data, error } = await supabase
+    .from('purchase_confirmations')
+    .insert(confirmation)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const getPurchaseConfirmation = async (confirmationId: string) => {
+  const { data, error } = await supabase
+    .from('purchase_confirmations')
+    .select('*')
+    .eq('id', confirmationId)
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const getPurchaseConfirmationByNumber = async (confirmationNumber: string) => {
+  const { data, error } = await supabase
+    .from('purchase_confirmations')
+    .select('*')
+    .eq('confirmation_number', confirmationNumber)
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const getUserPurchaseConfirmations = async (userId: string) => {
+  const { data, error } = await supabase
+    .from('purchase_confirmations')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+};
+
+// ============ COACHING INTAKE ============
+
+export const createCoachingIntake = async (intake: {
+  athlete_id: string;
+  coaching_relationship_id: string;
+  product_id?: string;
+  experience_level?: string;
+  training_history?: string;
+  injuries?: string;
+  available_days?: number[];
+  preferred_times?: string[];
+  sessions_per_week?: number;
+  exercise_preferences?: { likes: string[]; dislikes: string[] };
+  goals_text?: string;
+  goal_categories?: string[];
+  timeframe_weeks?: number;
+  additional_notes?: string;
+  status?: string;
+}) => {
+  const { data, error } = await supabase
+    .from('coaching_intake')
+    .insert(intake)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const getCoachingIntake = async (coachingRelationshipId: string) => {
+  const { data, error } = await supabase
+    .from('coaching_intake')
+    .select('*')
+    .eq('coaching_relationship_id', coachingRelationshipId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+};
+
+export const updateCoachingIntake = async (id: string, updates: Record<string, any>) => {
+  const { data, error } = await supabase
+    .from('coaching_intake')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const getCoachingIntakeByAthlete = async (athleteId: string) => {
+  const { data, error } = await supabase
+    .from('coaching_intake')
+    .select('*')
+    .eq('athlete_id', athleteId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+};
+
+export const getPendingCoachingIntakes = async () => {
+  const { data, error } = await supabase
+    .from('coaching_intake')
+    .select(`
+      *,
+      athlete:profiles!coaching_intake_athlete_id_fkey(id, email, first_name, last_name, avatar_url),
+      coaching_relationship:coaching_relationships!coaching_intake_coaching_relationship_id_fkey(id, coach_id, status, product_id)
+    `)
+    .in('status', ['PENDING', 'SUBMITTED'])
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+};

@@ -606,6 +606,26 @@ const Legal: React.FC = () => {
       </section>
 
       <section className="mb-8">
+        <h2 className="text-xl font-bold text-white mb-4">§ 6a Besondere Bedingungen für 1:1 Coaching</h2>
+        <p className="mb-2">(1) 1:1 Coaching-Produkte umfassen die persönliche Betreuung eines Athleten durch einen zugewiesenen Coach. Der Leistungsumfang (Anzahl Sessions pro Woche, Coaching-Dauer, enthaltene Leistungen) ergibt sich aus der jeweiligen Produktbeschreibung im Shop.</p>
+        <p className="mb-2">(2) Nach dem Kauf eines 1:1 Coaching-Produkts wird dem Athleten innerhalb von 24 Stunden ein persönlicher Coach zugewiesen. Der Athlet erhält eine Benachrichtigung über die Zuweisung.</p>
+        <p className="mb-2">(3) Der Athlet wird aufgefordert, einen Intake-Fragebogen auszufüllen, sofern dies für das gekaufte Produkt vorgesehen ist. Der Fragebogen dient der Erfassung relevanter Informationen (Trainingserfahrung, Verletzungen, Ziele, verfügbare Trainingszeiten, Übungsvorlieben) zur Erstellung eines individuellen Trainingsplans.</p>
+        <p className="mb-2">(4) Der Coach erstellt auf Basis des Intake-Fragebogens und in Abstimmung mit dem Athleten einen maßgeschneiderten Trainingsplan. Anpassungen des Plans erfolgen im Rahmen der regelmäßigen Coaching-Betreuung.</p>
+        <p className="mb-2">(5) Die Kommunikation zwischen Coach und Athlet erfolgt über die plattformeigene Chat-Funktion. Coaches sind nicht verpflichtet, außerhalb der Plattform erreichbar zu sein.</p>
+        <p className="mb-2">(6) Das Coaching-Verhältnis kann von beiden Seiten jederzeit beendet werden. Bei Abonnements gelten die Kündigungsfristen gem. § 7 Abs. 4. Eine vorzeitige Kündigung durch den Athleten begründet keinen anteiligen Erstattungsanspruch für die laufende Abrechnungsperiode, es sei denn, es liegt ein wichtiger Grund vor.</p>
+        <p className="mb-2">(7) Der Anbieter garantiert nicht den Erfolg bestimmter Trainingsziele. Die Erreichung von Fitnesszielen hängt von zahlreichen Faktoren ab, die außerhalb des Einflussbereichs des Coaches liegen (Ernährung, Schlaf, Konsistenz, individuelle Voraussetzungen).</p>
+        <p>(8) Coaching-Notizen, Intake-Daten und trainingsrelevante Informationen werden vertraulich behandelt und unterliegen den Regelungen der Datenschutzerklärung (Art. 9 DSGVO für Gesundheitsdaten).</p>
+      </section>
+
+      <section className="mb-8">
+        <h2 className="text-xl font-bold text-white mb-4">§ 6b Kaufbestätigung und Vertragsbestätigung (§312i BGB)</h2>
+        <p className="mb-2">(1) Nach jedem erfolgreichen Kauf (Trainingsplan, Coaching-Paket, Abonnement) erhält der Nutzer unverzüglich eine elektronische Kaufbestätigung mit einer eindeutigen Bestätigungsnummer, den wesentlichen Vertragsbestandteilen (Produktbezeichnung, Preis, Zahlungsintervall) und dem Datum des Vertragsschlusses.</p>
+        <p className="mb-2">(2) Die Kaufbestätigung wird in der App dauerhaft unter „Meine Käufe" abrufbar gespeichert und kann als Nachweis des Vertragsschlusses herangezogen werden.</p>
+        <p className="mb-2">(3) Bei 1:1 Coaching-Produkten enthält die Kaufbestätigung zusätzlich eine Checkliste der nächsten Schritte (Coach-Zuordnung, Intake-Fragebogen, Planungsbeginn) sowie den Hinweis auf die 24-Stunden-Frist für die Coach-Zuweisung.</p>
+        <p>(4) Der Nutzer wird auf sein Widerrufsrecht (§ 8), die geltenden AGB und die Datenschutzerklärung hingewiesen.</p>
+      </section>
+
+      <section className="mb-8">
         <h2 className="text-xl font-bold text-white mb-4">§ 7 Zahlungen und Abonnements</h2>
         <p className="mb-2">(1) Kostenpflichtige Leistungen (Trainingspläne, Coaching-Pakete, Abonnements) werden über den integrierten Shop angeboten. Preise werden inkl. gesetzlicher MwSt. angezeigt.</p>
         <p className="mb-2">(2) Die Zahlungsabwicklung erfolgt über Stripe Payments Europe, Ltd. Der Nutzer akzeptiert mit Nutzung des Zahlungsdienstes die <a href="https://stripe.com/de/legal" target="_blank" rel="noopener" className="text-[#00FF00]">Stripe Nutzungsbedingungen</a>.</p>

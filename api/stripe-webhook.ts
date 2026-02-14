@@ -1,6 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
+import { Resend } from 'resend';
+import { adminNewPurchase } from '../emails/templates';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
   apiVersion: '2023-10-16' as any,
@@ -10,6 +12,9 @@ const supabase = createClient(
   process.env.VITE_SUPABASE_URL || 'https://lfpcyhrccefbeowsgojv.supabase.co',
   process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 );
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'Greenlight Fitness <noreply@greenlight-fitness.de>';
 
 // Webhook secret from Stripe Dashboard
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
@@ -130,20 +135,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             
             console.log('💾 Purchase recorded for user:', profile.id);
 
-            // === ADMIN NOTIFICATION: New purchase ===
+            // === ADMIN NOTIFICATION: New purchase (In-App + Email + Push) ===
             try {
               const productTitle = product?.title || 'Produkt';
               const amountStr = session.amount_total
                 ? `${(session.amount_total / 100).toFixed(2)} ${(session.currency || 'EUR').toUpperCase()}`
                 : 'Gratis';
 
-              // Find all admins
+              // Find all admins (with email + name for email sending)
               const { data: admins } = await supabase
                 .from('profiles')
-                .select('id')
+                .select('id, email, first_name, last_name')
                 .eq('role', 'ADMIN');
 
               if (admins && admins.length > 0) {
+                // 1. In-App Bell Notifications
                 const notifications = admins.map((admin: any) => ({
                   user_id: admin.id,
                   type: 'purchase',
@@ -152,7 +158,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                   read: false,
                 }));
                 await supabase.from('notifications').insert(notifications);
-                console.log(`🔔 Admin notifications sent to ${admins.length} admin(s)`);
+
+                // 2. Email Notifications to all admins
+                const purchaseDate = new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                const customerName = session.customer_details?.name || '';
+                for (const admin of admins) {
+                  if (admin.email) {
+                    try {
+                      const emailData = adminNewPurchase({
+                        adminName: admin.first_name || 'Admin',
+                        customerEmail: customerEmail || '',
+                        customerName,
+                        productName: productTitle,
+                        amount: amountStr,
+                        purchaseDate,
+                        dashboardLink: 'https://greenlight-fitness-app.vercel.app/admin/crm',
+                      });
+                      await resend.emails.send({
+                        from: FROM_EMAIL,
+                        to: [admin.email],
+                        subject: emailData.subject,
+                        html: emailData.html,
+                      });
+                    } catch (emailErr) {
+                      console.error(`⚠️ Admin email to ${admin.email} failed:`, emailErr);
+                    }
+                  }
+                }
+
+                console.log(`🔔 Admin notifications (in-app + email) sent to ${admins.length} admin(s)`);
               }
             } catch (notifErr) {
               console.error('⚠️ Admin notification failed (non-blocking):', notifErr);

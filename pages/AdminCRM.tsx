@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { showLocalNotification } from '../services/notifications';
 import ConfirmActionModal, { ConfirmActionConfig, getRoleChangeConfig, getUnassignConfig, getRevokePurchaseConfig, getRevokePlanConfig } from '../components/ConfirmActionModal';
+import Coaching1on1Queue from '../components/Coaching1on1Queue';
 
 interface CRMUser {
   id: string;
@@ -266,18 +267,46 @@ const AdminCRM: React.FC = () => {
       await assignAthleteToCoach(selectedUser.id, selectedCoachId, assignReason || 'Admin-Zuweisung');
 
       const coach = coaches.find(c => c.id === selectedCoachId);
+      const athleteName = getUserName(selectedUser);
+      const coachName = getUserName(coach);
+
+      // Admin's local push notification (confirmation on this device)
       showLocalNotification('Coach zugewiesen', {
-        body: `${getUserName(selectedUser)} wurde ${getUserName(coach)} zugewiesen.`,
+        body: `${athleteName} wurde ${coachName} zugewiesen.`,
         tag: 'coach-assigned',
       });
 
-      // In-App Bell notification for the coach
+      // 1. In-App Bell notification for the coach
       createNotification({
         user_id: selectedCoachId,
         type: 'coach_assignment',
         title: 'Neuer Athlet zugewiesen',
-        message: `${getUserName(selectedUser)} wurde dir als Athlet zugewiesen.`,
+        message: `${athleteName} wurde dir als Athlet zugewiesen.`,
       }).catch(err => console.error('Coach notification failed:', err));
+
+      // 2. Email notification to the coach
+      const coachEmail = coach?.email;
+      if (coachEmail) {
+        fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'coach_new_athlete',
+            to: coachEmail,
+            data: {
+              coachName: coachName,
+              athleteName: athleteName,
+              athleteEmail: selectedUser.email || '',
+              assignDate: new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+              reason: assignReason || 'Admin-Zuweisung',
+              dashboardLink: 'https://greenlight-fitness-app.vercel.app/',
+            },
+          }),
+        }).catch(err => console.error('Coach email notification failed:', err));
+      }
+
+      // 3. Also notify all admins (in-app) about the assignment
+      // (The assigning admin already sees the local notification above)
 
       await fetchData();
       setShowAssignModal(false);
@@ -475,6 +504,16 @@ const AdminCRM: React.FC = () => {
           </div>
         ))}
       </div>
+
+      {/* 1:1 Coaching Queue (Admin only) */}
+      {!isCoach && (
+        <div className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl p-6">
+          <Coaching1on1Queue onViewAthlete={(athleteId) => {
+            const found = allUsers.find(u => u.id === athleteId);
+            if (found) setDetailUser(found);
+          }} />
+        </div>
+      )}
 
       {/* Filter Bar */}
       <div className="bg-[#1C1C1E] border border-zinc-800 rounded-2xl p-4">

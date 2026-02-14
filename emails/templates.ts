@@ -1768,6 +1768,118 @@ export const subscriptionRenewed = (data: SubscriptionRenewedData): { subject: s
   `,
 });
 
+// =============================================================================
+// Admin: New Purchase Notification
+// =============================================================================
+
+export interface AdminNewPurchaseData {
+  adminName: string;
+  customerEmail: string;
+  customerName: string;
+  productName: string;
+  amount: string;
+  purchaseDate: string;
+  dashboardLink: string;
+}
+
+export const adminNewPurchase = (data: AdminNewPurchaseData): { subject: string; html: string } => ({
+  subject: `💰 Neuer Kauf: ${data.productName} von ${data.customerName || data.customerEmail}`,
+  html: `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin: 0; padding: 0; background-color: #0A0A0A; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+  <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+    <div style="text-align: center; margin-bottom: 32px;">
+      <span style="color: ${accentColor}; font-size: 24px; font-weight: bold;">⚡ GREENLIGHT</span>
+    </div>
+    <div style="text-align: center; margin-bottom: 32px;">
+      ${iconBox('💰', 'rgba(0, 255, 0, 0.1)')}
+      <h1 style="color: ${accentColor}; font-size: 24px; font-weight: bold; margin: 0 0 8px 0;">Neuer Kauf!</h1>
+      <p style="color: #71717A; font-size: 14px; margin: 0;">Ein Kunde hat soeben eingekauft</p>
+    </div>
+    <p style="color: #FFFFFF; font-size: 16px; margin: 0 0 24px 0;">Hallo ${data.adminName},</p>
+    <p style="color: #A1A1AA; font-size: 14px; margin: 0 0 24px 0;">
+      es gibt eine neue Bestellung in deinem Shop!
+    </p>
+    <div style="${cardStyles} border-color: ${accentColor};">
+      <p style="color: ${accentColor}; font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 16px 0;">KAUFDETAILS</p>
+      <div style="background: #27272A; border-radius: 12px; padding: 16px;">
+        ${dataRow('Kunde', data.customerName || data.customerEmail, '#FFFFFF')}
+        ${dataRow('E-Mail', data.customerEmail, '#71717A')}
+        ${dataRow('Produkt', data.productName, '#FFFFFF')}
+        ${dataRow('Betrag', data.amount, accentColor)}
+        ${dataRow('Datum', data.purchaseDate, '#71717A', true)}
+      </div>
+    </div>
+    ${primaryButton('Zum Dashboard →', data.dashboardLink)}
+    <p style="color: #A1A1AA; font-size: 14px; margin: 32px 0 0 0; text-align: center;">
+      Sportliche Grüße,<br><strong style="color: #FFFFFF;">Dein Greenlight Fitness System</strong>
+    </p>
+    ${getFooter()}
+  </div>
+</body>
+</html>
+  `,
+});
+
+// =============================================================================
+// Coach: New Athlete Assigned Notification
+// =============================================================================
+
+export interface CoachNewAthleteData {
+  coachName: string;
+  athleteName: string;
+  athleteEmail: string;
+  assignDate: string;
+  reason: string;
+  dashboardLink: string;
+}
+
+export const coachNewAthlete = (data: CoachNewAthleteData): { subject: string; html: string } => ({
+  subject: `🆕 Neuer Athlet zugewiesen: ${data.athleteName}`,
+  html: `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin: 0; padding: 0; background-color: #0A0A0A; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+  <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+    <div style="text-align: center; margin-bottom: 32px;">
+      <span style="color: ${accentColor}; font-size: 24px; font-weight: bold;">⚡ GREENLIGHT</span>
+    </div>
+    <div style="text-align: center; margin-bottom: 32px;">
+      ${iconBox('🆕', 'rgba(59, 130, 246, 0.1)')}
+      <h1 style="color: #FFFFFF; font-size: 24px; font-weight: bold; margin: 0 0 8px 0;">Neuer Athlet!</h1>
+      <p style="color: #71717A; font-size: 14px; margin: 0;">Dir wurde ein neuer Athlet zugewiesen</p>
+    </div>
+    <p style="color: #FFFFFF; font-size: 16px; margin: 0 0 24px 0;">Hallo ${data.coachName},</p>
+    <p style="color: #A1A1AA; font-size: 14px; margin: 0 0 24px 0;">
+      dir wurde ein neuer Athlet zugewiesen. Mach dich mit dem Profil vertraut und lege los!
+    </p>
+    <div style="${cardStyles} border-color: #3B82F6;">
+      <p style="color: #3B82F6; font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 16px 0;">NEUER ATHLET</p>
+      <div style="margin-bottom: 16px; text-align: center;">
+        ${avatarCircle(data.athleteName.charAt(0).toUpperCase(), 56)}
+      </div>
+      <div style="background: #27272A; border-radius: 12px; padding: 16px;">
+        ${dataRow('Name', data.athleteName, '#FFFFFF')}
+        ${dataRow('E-Mail', data.athleteEmail, '#71717A')}
+        ${dataRow('Zugewiesen am', data.assignDate, '#71717A')}
+        ${dataRow('Grund', data.reason, '#71717A', true)}
+      </div>
+    </div>
+    ${primaryButton('Athlet ansehen →', data.dashboardLink)}
+    ${infoBox('💡', 'Tipp: Sende deinem neuen Athleten eine Willkommensnachricht über den Chat!', 'rgba(0, 255, 0, 0.05)', accentColor)}
+    <p style="color: #A1A1AA; font-size: 14px; margin: 32px 0 0 0; text-align: center;">
+      Sportliche Grüße,<br><strong style="color: #FFFFFF;">Dein Greenlight Fitness System</strong>
+    </p>
+    ${getFooter()}
+  </div>
+</body>
+</html>
+  `,
+});
+
 export const emailTemplates = {
   price_change_notice: priceChangeNotice,
   cancellation_confirmed: cancellationConfirmed,
@@ -1793,6 +1905,9 @@ export const emailTemplates = {
   coach_churn_risk_alert: coachChurnRiskAlert,
   admin_weekly_report: adminWeeklyReport,
   admin_churn_alert: adminChurnAlert,
+  // Admin & Coach Notifications
+  admin_new_purchase: adminNewPurchase,
+  coach_new_athlete: coachNewAthlete,
 };
 
 export type EmailType = keyof typeof emailTemplates;
