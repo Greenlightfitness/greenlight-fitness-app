@@ -375,27 +375,39 @@ const CoachingDossier: React.FC = () => {
                   </button>
                 </div>
 
-                {/* Weekly Structure Preview */}
-                {activePlan.structure?.weeks && (
-                  <div className="space-y-2">
-                    {activePlan.structure.weeks.map((week: any, i: number) => (
-                      <div key={i} className="bg-zinc-900 rounded-lg p-3">
-                        <p className="text-white font-bold text-xs mb-1">Woche {week.order || i + 1}{week.focus ? ` — ${week.focus}` : ''}</p>
-                        <div className="flex gap-1 flex-wrap">
-                          {week.sessions?.map((s: any, j: number) => {
-                            const dayNames = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
-                            const exCount = (s.workoutData || s.workout_data || []).reduce((acc: number, b: any) => acc + (b.exercises?.length || 0), 0);
-                            return (
-                              <span key={j} className="text-[10px] bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded">
-                                {dayNames[s.dayOfWeek] || `Tag ${s.dayOfWeek}`}: {s.title || 'Session'}{exCount > 0 ? ` (${exCount})` : ''}
-                              </span>
-                            );
-                          })}
+                {/* Weekly Structure Preview (show draft for coach) */}
+                {(() => {
+                  const previewWeeks = (activePlan.draft_structure || activePlan.structure)?.weeks;
+                  const pubWeeks: number[] = activePlan.published_weeks || [];
+                  if (!previewWeeks || previewWeeks.length === 0) return <p className="text-zinc-600 text-xs">Noch keine Wochen angelegt.</p>;
+                  return (
+                    <div className="space-y-2">
+                      {previewWeeks.map((week: any, i: number) => (
+                        <div key={i} className="bg-zinc-900 rounded-lg p-3">
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="text-white font-bold text-xs">Woche {week.order || i + 1}{week.focus ? ` — ${week.focus}` : ''}</p>
+                            {pubWeeks.includes(i) ? (
+                              <span className="text-[9px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded font-bold">Veröffentlicht</span>
+                            ) : (
+                              <span className="text-[9px] bg-zinc-800 text-zinc-600 px-1.5 py-0.5 rounded font-bold">Entwurf</span>
+                            )}
+                          </div>
+                          <div className="flex gap-1 flex-wrap">
+                            {week.sessions?.map((s: any, j: number) => {
+                              const dayNames = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+                              const exCount = (s.workoutData || s.workout_data || []).reduce((acc: number, b: any) => acc + (b.exercises?.length || 0), 0);
+                              return (
+                                <span key={j} className="text-[10px] bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded">
+                                  {dayNames[s.dayOfWeek] || `Tag ${s.dayOfWeek}`}: {s.title || 'Session'}{exCount > 0 ? ` (${exCount})` : ''}
+                                </span>
+                              );
+                            })}
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             ) : (
               <div className="text-center py-12 bg-[#1C1C1E] border border-zinc-800 rounded-xl">
