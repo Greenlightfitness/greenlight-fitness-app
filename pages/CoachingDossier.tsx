@@ -50,8 +50,8 @@ const CoachingDossier: React.FC = () => {
         { data: bodyData },
       ] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', athleteId).single(),
-        supabase.from('coaching_relationships').select('*, product:products(id, title, type, coaching_duration_weeks, sessions_per_week, intake_form_enabled)').eq('athlete_id', athleteId).eq('coach_id', user!.id).eq('status', 'ACTIVE').maybeSingle(),
-        supabase.from('assigned_plans').select('*').eq('athlete_id', athleteId).eq('status', 'ACTIVE').order('created_at', { ascending: false }).limit(1),
+        supabase.from('coaching_relationships').select('*, product:products(id, title, type, coaching_duration_weeks, sessions_per_week, intake_form_enabled)').eq('athlete_id', athleteId).eq('status', 'ACTIVE').order('created_at', { ascending: false }).limit(1).maybeSingle(),
+        supabase.from('assigned_plans').select('*').eq('athlete_id', athleteId).eq('schedule_status', 'ACTIVE').order('created_at', { ascending: false }).limit(1),
         supabase.from('goals').select('*, exercise:exercises(id, name)').eq('athlete_id', athleteId).eq('status', 'ACTIVE').order('created_at', { ascending: false }),
         supabase.from('daily_wellness').select('*').eq('athlete_id', athleteId).order('date', { ascending: false }).limit(14),
         supabase.from('weekly_stats').select('*').eq('athlete_id', athleteId).order('week_start', { ascending: false }).limit(8),
