@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { getExerciseById } from '../../services/supabase';
 import { WorkoutBlock, WorkoutExercise, WorkoutSet, BlockType, Exercise } from '../../types';
 import Button from '../Button';
@@ -25,9 +26,28 @@ const DraftSessionBuilder: React.FC<DraftSessionBuilderProps> = ({ session, onCl
   const [title, setTitle] = useState(session.title);
   const [description, setDescription] = useState(session.description || '');
   
-  const [workoutData, setWorkoutData] = useState<WorkoutBlock[]>(
-      session.workoutData ? JSON.parse(JSON.stringify(session.workoutData)) : []
-  );
+  const [workoutData, setWorkoutData] = useState<WorkoutBlock[]>(() => {
+    const raw = session.workoutData ? JSON.parse(JSON.stringify(session.workoutData)) : [];
+    // Normalize blocks to ensure they have required properties
+    return raw.map((block: any, i: number) => ({
+      ...block,
+      id: block.id || generateId(),
+      name: block.name || `Block ${String.fromCharCode(65 + i)}`,
+      type: block.type === 'NORMAL' ? 'Normal' : (block.type || 'Normal'),
+      exercises: (block.exercises || []).map((ex: any) => ({
+        ...ex,
+        id: ex.id || generateId(),
+        name: ex.name || ex.exerciseName || 'Übung',
+        exerciseId: ex.exerciseId || ex.exercise_id || '',
+        visibleMetrics: ex.visibleMetrics || ['reps', 'weight', 'rpe'],
+        sets: (ex.sets || []).map((s: any) => ({
+          ...s,
+          id: s.id || generateId(),
+          type: s.type || 'Normal',
+        })),
+      })),
+    }));
+  });
   
   const [isExerciseSelectorOpen, setIsExerciseSelectorOpen] = useState(false);
   const [targetBlockId, setTargetBlockId] = useState<string | null>(null);
@@ -294,8 +314,8 @@ const DraftSessionBuilder: React.FC<DraftSessionBuilderProps> = ({ session, onCl
     setSaving(false);
   };
 
-  return (
-    <div className="fixed inset-0 z-[50] bg-[#121212] flex flex-col animate-in fade-in duration-200">
+  const content = (
+    <div className="fixed inset-0 z-[60] bg-[#121212] flex flex-col animate-in fade-in duration-200">
       
       <ConfirmationModal 
         isOpen={!!deleteData}
@@ -662,6 +682,8 @@ const DraftSessionBuilder: React.FC<DraftSessionBuilderProps> = ({ session, onCl
       />
     </div>
   );
+
+  return createPortal(content, document.body);
 };
 
 export default DraftSessionBuilder;
