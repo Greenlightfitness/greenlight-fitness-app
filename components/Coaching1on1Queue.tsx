@@ -83,19 +83,16 @@ const Coaching1on1Queue: React.FC<Coaching1on1QueueProps> = ({ onViewAthlete }) 
 
       // Also fetch intake status for each relationship
       const withIntake = await Promise.all((data || []).map(async (item: any) => {
-        // Only fetch intake for 1:1 coaching products
-        if (item.product?.type !== 'COACHING_1ON1') return null;
-        
         const { data: intake } = await supabase
           .from('coaching_intake')
           .select('id, status, submitted_at, experience_level, sessions_per_week, injuries, goals_text')
           .eq('coaching_relationship_id', item.id)
           .maybeSingle();
 
-        return { ...item, intake };
+        return { ...item, intake: intake || null };
       }));
 
-      setItems(withIntake.filter(Boolean) as QueueItem[]);
+      setItems(withIntake as QueueItem[]);
     } catch (e) {
       console.error('Error fetching 1:1 queue:', e);
     } finally {

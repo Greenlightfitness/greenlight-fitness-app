@@ -338,12 +338,12 @@ const Layout: React.FC = () => {
       </div>
 
       {/* ============ DESKTOP TOP BAR (notification bell, top-right) ============ */}
-      <div className="hidden md:flex fixed top-0 right-0 left-64 h-14 items-center justify-end px-6 bg-[#000000]/80 backdrop-blur-md z-20 border-b border-zinc-800/30">
+      <div className="hidden md:flex fixed top-4 right-6 z-20">
         <NotificationBell />
       </div>
 
       {/* ============ MAIN CONTENT ============ */}
-      <main className="flex-1 md:ml-64 p-4 md:p-6 pt-20 md:pt-[4.5rem] pb-28 md:pb-8 bg-[#000000] min-w-0 safe-area-top">
+      <main className="flex-1 md:ml-64 p-4 md:p-6 pt-20 md:pt-6 pb-28 md:pb-8 bg-[#000000] min-w-0 safe-area-top">
         <Outlet />
       </main>
     </div>
