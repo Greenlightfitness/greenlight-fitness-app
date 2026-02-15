@@ -159,10 +159,11 @@ const SessionBuilder: React.FC<SessionBuilderProps> = ({ planId, weekId, session
     setWorkoutData(workoutData.map(block => {
       if (block.id !== targetBlockId) return block;
       
-      // Use defaults if available, otherwise fallback to 3 blank sets
+      // Use defaults if available; Circuit gets 1 set, others get 3
+      const defaultCount = block.type === 'Circuit' ? 1 : 3;
       const initialSets: WorkoutSet[] = (ex.defaultSets && ex.defaultSets.length > 0) 
         ? ex.defaultSets.map(s => ({ ...s, id: generateId() })) // Ensure unique IDs
-        : Array(3).fill(null).map(() => ({
+        : Array(defaultCount).fill(null).map(() => ({
             id: generateId(),
             type: 'Normal',
             reps: '',
@@ -758,7 +759,7 @@ const SessionBuilder: React.FC<SessionBuilderProps> = ({ planId, weekId, session
                                                                         <input className="bg-zinc-950 border border-zinc-800 rounded px-2 py-1 w-16 text-center text-zinc-300 focus:border-[#00FF00] outline-none" value={set.rest || ''} onChange={(e) => updateSet(block.id, exercise.id, set.id, 'rest', e.target.value)} placeholder="s" />
                                                                     </td>
                                                                     <td className="p-2 text-right">
-                                                                        <button onClick={() => removeSet(block.id, exercise.id, set.id)} className="text-zinc-600 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                        <button onClick={() => removeSet(block.id, exercise.id, set.id)} className="text-zinc-600 hover:text-red-500 opacity-0 group-hover/row:opacity-100 transition-opacity">
                                                                             <X size={14} />
                                                                         </button>
                                                                     </td>

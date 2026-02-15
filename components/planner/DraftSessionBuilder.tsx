@@ -162,9 +162,11 @@ const DraftSessionBuilder: React.FC<DraftSessionBuilderProps> = ({ session, onCl
     if (!targetBlockId) return;
     setWorkoutData(workoutData.map(block => {
       if (block.id !== targetBlockId) return block;
+      // Circuit gets 1 set, others get 3
+      const defaultCount = block.type === 'Circuit' ? 1 : 3;
       const initialSets: WorkoutSet[] = (ex.defaultSets && ex.defaultSets.length > 0) 
         ? ex.defaultSets.map(s => ({ ...s, id: generateId() }))
-        : Array(3).fill(null).map(() => ({
+        : Array(defaultCount).fill(null).map(() => ({
             id: generateId(),
             type: 'Normal',
             reps: '',
@@ -646,7 +648,7 @@ const DraftSessionBuilder: React.FC<DraftSessionBuilderProps> = ({ session, onCl
                                                                             value={set.rest || ''} onChange={(e) => updateSet(block.id, exercise.id, set.id, 'rest', e.target.value)} placeholder="s" />
                                                                     </td>
                                                                     <td className="p-2 text-right">
-                                                                        <button onClick={() => removeSet(block.id, exercise.id, set.id)} className="text-zinc-600 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                        <button onClick={() => removeSet(block.id, exercise.id, set.id)} className="text-zinc-600 hover:text-red-500 opacity-0 group-hover/row:opacity-100 transition-opacity">
                                                                             <X size={14} />
                                                                         </button>
                                                                     </td>
