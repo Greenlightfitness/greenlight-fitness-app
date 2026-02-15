@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import {
   supabase, createAssignedPlan, updateAssignedPlan, getPlans,
-  getWeeksByPlan, getSessionsByWeek, createSession as createSessionDB
+  getWeeksByPlan, getSessionsByWeek, createSession as createSessionDB,
+  getAthleteSchedulePreferences
 } from '../services/supabase';
 import { TrainingSession } from '../types';
 import DraftSessionBuilder from './planner/DraftSessionBuilder';
@@ -14,7 +15,7 @@ import {
   Plus, Trash2, Save, Loader2, ChevronDown, ChevronUp, Dumbbell,
   Calendar, Copy, FileText, X, Check, Layers, GripVertical,
   Pencil, ChevronLeft, Download, AlertTriangle, Eye, EyeOff,
-  ClipboardList, Send, Lock, Unlock, Moon
+  ClipboardList, Send, Lock, Unlock, Moon, Heart
 } from 'lucide-react';
 
 interface AthletePlanEditorProps {
@@ -95,10 +96,34 @@ const AthletePlanEditor: React.FC<AthletePlanEditorProps> = ({
   const [templates, setTemplates] = useState<any[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
 
+  // Athlete preferred training days (visual hint for coach)
+  const [athletePreferredDays, setAthletePreferredDays] = useState<number[]>([]);
+  const [athletePreferredTime, setAthletePreferredTime] = useState<string>('');
+
   // Auto-save timer
   const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
   // Track plan ID (survives across saves for new plans)
   const planIdRef = useRef<string | null>(existingPlan?.id || null);
+
+  // Load athlete's preferred training days
+  useEffect(() => {
+    const loadPrefs = async () => {
+      try {
+        const prefs = await getAthleteSchedulePreferences(athleteId);
+        if (Array.isArray(prefs) && prefs.length > 0) {
+          // Use the first preference set found
+          setAthletePreferredDays(prefs[0].available_days || []);
+          setAthletePreferredTime(prefs[0].preferred_time_of_day || '');
+        } else if (prefs && !Array.isArray(prefs)) {
+          setAthletePreferredDays(prefs.available_days || []);
+          setAthletePreferredTime(prefs.preferred_time_of_day || '');
+        }
+      } catch (e) {
+        // Preferences table might not exist yet — ignore
+      }
+    };
+    if (athleteId) loadPrefs();
+  }, [athleteId]);
 
   // ============ INIT ============
   useEffect(() => {
@@ -733,6 +758,17 @@ const AthletePlanEditor: React.FC<AthletePlanEditorProps> = ({
         )}
       </div>
 
+      {/* Athlete Preference Hint */}
+      {athletePreferredDays.length > 0 && (
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-pink-500/5 border border-pink-500/20 rounded-xl">
+          <Heart size={14} className="text-pink-400 shrink-0" />
+          <p className="text-xs text-pink-300">
+            <strong className="text-pink-400">{athleteName}</strong> trainiert bevorzugt: {athletePreferredDays.map(d => ['Mo','Di','Mi','Do','Fr','Sa','So'][d]).join(', ')}
+            {athletePreferredTime && <span className="text-pink-400/60"> · {athletePreferredTime === 'morning' ? 'Morgens' : athletePreferredTime === 'afternoon' ? 'Nachmittags' : 'Abends'}</span>}
+          </p>
+        </div>
+      )}
+
       {/* Weekly Schedule Grid — matches PlanEditor exactly */}
       <div className="flex-1 bg-[#000000] rounded-3xl border border-zinc-800 select-none shadow-2xl overflow-hidden flex flex-col">
         <div className="grid grid-cols-1 md:grid-cols-7 h-full overflow-y-auto md:divide-x divide-zinc-800 scrollbar-hide">
@@ -745,7 +781,12 @@ const AthletePlanEditor: React.FC<AthletePlanEditorProps> = ({
                 {/* Day Header */}
                 <div className="p-4 border-b border-zinc-800/50 flex justify-between items-center bg-[#1C1C1E]/80 backdrop-blur-sm sticky top-0 z-20">
                   <div className="flex items-center gap-2">
-                    <span className={`font-bold uppercase text-[10px] tracking-widest ${isRestDay ? 'text-blue-400' : 'text-zinc-500'}`}>{dayName}</span>
+                    <span className={`font-bold uppercase text-[10px] tracking-widest ${isRestDay ? 'text-blue-400' : athletePreferredDays.includes(index) ? 'text-pink-400' : 'text-zinc-500'}`}>{dayName}</span>
+                    {athletePreferredDays.includes(index) && !isRestDay && (
+                      <span className="text-[8px] bg-pink-500/15 text-pink-400 px-1.5 py-0.5 rounded font-bold flex items-center gap-0.5" title={`${athleteName} trainiert bevorzugt an diesem Tag`}>
+                        <Heart size={8} /> Präferenz
+                      </span>
+                    )}
                     {isRestDay && <span className="text-[8px] bg-blue-500/15 text-blue-400 px-1.5 py-0.5 rounded font-bold">REST</span>}
                   </div>
                   <div className="flex items-center gap-1">

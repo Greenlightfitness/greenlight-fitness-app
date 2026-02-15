@@ -1099,9 +1099,11 @@ const AthleteTrainingView: React.FC = () => {
   const [scheduleStartDate, setScheduleStartDate] = useState<string>(todayKey);
   const [generatingSchedule, setGeneratingSchedule] = useState(false);
 
-  // Pending plans: need schedule setup
+  // Pending plans: need schedule setup (excludes 1:1 coaching — coach assigns days directly)
   const pendingPlans = useMemo(() => {
     return assignedPlans.filter((p: any) => {
+      const isOneToOne = p.assignment_type === 'ONE_TO_ONE' || p.coaching_type === 'ONE_TO_ONE';
+      if (isOneToOne) return false;
       const hasSchedule = p.schedule && Object.keys(p.schedule).length > 0;
       return !hasSchedule && p.schedule_status !== 'PAUSED' && p.structure?.weeks?.length > 0;
     });

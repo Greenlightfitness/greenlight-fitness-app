@@ -1035,9 +1035,13 @@ const Profile: React.FC = () => {
               </div>
               <div className="space-y-2">
                 {assignedPlans.map((plan: any) => {
+                  const isOneToOne = plan.assignment_type === 'ONE_TO_ONE' || plan.coaching_type === 'ONE_TO_ONE';
                   const hasSchedule = plan.schedule && Object.keys(plan.schedule).length > 0;
-                  const isPending = !hasSchedule && plan.schedule_status !== 'PAUSED' && plan.structure?.weeks?.length > 0;
-                  const isActive = plan.schedule_status === 'ACTIVE' && hasSchedule;
+                  // 1:1 coaching plans are always "active" — coach controls the days directly via dayOfWeek
+                  const isPending = !isOneToOne && !hasSchedule && plan.schedule_status !== 'PAUSED' && plan.structure?.weeks?.length > 0;
+                  const isActive = isOneToOne 
+                    ? plan.schedule_status === 'ACTIVE' 
+                    : plan.schedule_status === 'ACTIVE' && hasSchedule;
                   const isPaused = plan.schedule_status === 'PAUSED';
                   return (
                     <div key={plan.id} className={`rounded-xl p-3 border ${isPending ? 'bg-amber-500/5 border-amber-500/20' : isPaused ? 'bg-zinc-900/50 border-zinc-800/50 opacity-60' : 'bg-zinc-900 border-zinc-800'}`}>
@@ -1047,7 +1051,7 @@ const Profile: React.FC = () => {
                           <div className="min-w-0">
                             <p className="text-white text-sm font-medium truncate">{plan.plan_name || 'Trainingsplan'}</p>
                             <p className="text-zinc-500 text-[10px]">
-                              {isPending ? 'Noch nicht aktiviert' : isActive ? `Aktiv · ${getSessionsPerWeek(plan)}x/Woche` : isPaused ? `Pausiert${plan.pause_until ? ` bis ${new Date(plan.pause_until).toLocaleDateString('de-DE')}` : ''}` : plan.schedule_status}
+                              {isPending ? 'Noch nicht aktiviert' : isActive ? (isOneToOne ? `1:1 Coaching · ${getSessionsPerWeek(plan)}x/Woche` : `Aktiv · ${getSessionsPerWeek(plan)}x/Woche`) : isPaused ? `Pausiert${plan.pause_until ? ` bis ${new Date(plan.pause_until).toLocaleDateString('de-DE')}` : ''}` : plan.schedule_status}
                             </p>
                           </div>
                         </div>
@@ -1057,7 +1061,7 @@ const Profile: React.FC = () => {
                               Aktivieren
                             </button>
                           )}
-                          {isActive && (
+                          {isActive && !isOneToOne && (
                             <>
                               <button onClick={() => openSchedulePicker(plan)} className="p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors" title="Umplanen">
                                 <Pencil size={12} />
@@ -1070,6 +1074,11 @@ const Profile: React.FC = () => {
                                 <span className="text-[9px] text-zinc-600 px-1" title={`Nächste Pause in ${30 - daysSinceLastPause(plan)} Tagen`}>⏳</span>
                               )}
                             </>
+                          )}
+                          {isActive && isOneToOne && (
+                            <span className="text-[10px] text-purple-400 bg-purple-500/10 px-2 py-1 rounded-lg font-medium">
+                              Coach-Plan
+                            </span>
                           )}
                           {isPaused && (
                             <button onClick={() => handleResumePlan(plan.id)} className="text-[10px] font-bold text-[#00FF00] bg-[#00FF00]/10 px-2.5 py-1.5 rounded-lg hover:bg-[#00FF00]/20 transition-colors flex items-center gap-1">
