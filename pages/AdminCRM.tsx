@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   getAllUsersForCRM, getUsersByRole, assignAthleteToCoach, endCoachingRelationship,
   updateProfile, getProducts, grantCoachingManually, createCoachingRelationship,
@@ -66,6 +67,7 @@ type SortDir = 'asc' | 'desc';
 
 const AdminCRM: React.FC = () => {
   const { user, userProfile } = useAuth();
+  const navigate = useNavigate();
   const { t } = useLanguage();
   const isAdmin = userProfile?.role === 'ADMIN';
   const isCoach = userProfile?.role === 'COACH';
@@ -740,6 +742,17 @@ const AdminCRM: React.FC = () => {
                           >
                             <Eye size={14} />
                           </button>
+
+                          {/* Dossier link for athletes with coaching */}
+                          {u.role === 'ATHLETE' && activeCoaching && (
+                            <button
+                              onClick={() => navigate(`/coaching/${u.id}`)}
+                              className="p-2 rounded-lg text-blue-400 hover:bg-blue-500/10 transition-colors"
+                              title="Coaching Dossier"
+                            >
+                              <ClipboardList size={14} />
+                            </button>
+                          )}
 
                           {/* Admin-only: assign / unassign */}
                           {isAdmin && u.role === 'ATHLETE' && !activeCoaching && (

@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase, getCoachingIntake, getGoals, getCoachNotes } from '../services/supabase';
 import CoachNotesPanel from '../components/CoachNotesPanel';
 import GoalWidget from '../components/GoalWidget';
+import AthletePlanEditor from '../components/AthletePlanEditor';
 import {
   ArrowLeft, User, Target, StickyNote, Dumbbell, Heart, Calendar,
   Loader2, ClipboardList, AlertTriangle, TrendingUp, ChevronRight,
@@ -28,6 +29,7 @@ const CoachingDossier: React.FC = () => {
   const [weeklyStats, setWeeklyStats] = useState<any[]>([]);
   const [attentions, setAttentions] = useState<any[]>([]);
   const [bodyMeasurements, setBodyMeasurements] = useState<any[]>([]);
+  const [editingPlan, setEditingPlan] = useState(false);
 
   useEffect(() => {
     if (user && athleteId) fetchAll();
@@ -142,7 +144,7 @@ const CoachingDossier: React.FC = () => {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => navigate(`/planner`, { state: { athleteId, athleteName } })}
+            onClick={() => { setActiveTab('training'); setEditingPlan(true); }}
             className="px-3 py-2 bg-[#00FF00] text-black rounded-xl text-xs font-bold flex items-center gap-1"
           >
             <Dumbbell size={14} /> Plan erstellen
@@ -213,7 +215,7 @@ const CoachingDossier: React.FC = () => {
                     <p className="text-zinc-500 text-xs">Status: {activePlan.schedule_status} · Start: {formatDate(activePlan.start_date)}</p>
                   </div>
                   <button
-                    onClick={() => navigate('/planner', { state: { athleteId, editPlanId: activePlan.original_plan_id } })}
+                    onClick={() => { setActiveTab('training'); setEditingPlan(true); }}
                     className="px-3 py-1.5 bg-zinc-800 text-zinc-300 rounded-lg text-xs hover:text-white flex items-center gap-1"
                   >
                     <Edit size={12} /> Bearbeiten
@@ -223,7 +225,7 @@ const CoachingDossier: React.FC = () => {
                 <div className="text-center py-4">
                   <p className="text-zinc-500 text-xs mb-2">Noch kein Plan zugewiesen</p>
                   <button
-                    onClick={() => navigate('/planner', { state: { athleteId, athleteName } })}
+                    onClick={() => { setActiveTab('training'); setEditingPlan(true); }}
                     className="px-4 py-2 bg-[#00FF00] text-black rounded-xl text-xs font-bold"
                   >
                     Plan erstellen
@@ -349,7 +351,16 @@ const CoachingDossier: React.FC = () => {
         {/* TRAINING TAB */}
         {activeTab === 'training' && (
           <div className="animate-in fade-in space-y-4">
-            {activePlan ? (
+            {editingPlan ? (
+              <AthletePlanEditor
+                athleteId={athleteId!}
+                athleteName={athleteName}
+                coachingRelationshipId={relationship?.id}
+                existingPlan={activePlan}
+                onSave={() => { setEditingPlan(false); fetchAll(); }}
+                onClose={() => setEditingPlan(false)}
+              />
+            ) : activePlan ? (
               <div className="bg-[#1C1C1E] border border-zinc-800 rounded-xl p-4">
                 <div className="flex items-center justify-between mb-4">
                   <div>
@@ -357,7 +368,7 @@ const CoachingDossier: React.FC = () => {
                     <p className="text-zinc-500 text-xs">Start: {formatDate(activePlan.start_date)} · Status: {activePlan.schedule_status}</p>
                   </div>
                   <button
-                    onClick={() => navigate('/planner', { state: { athleteId, editPlanId: activePlan.original_plan_id } })}
+                    onClick={() => setEditingPlan(true)}
                     className="px-3 py-2 bg-[#00FF00] text-black rounded-xl text-xs font-bold flex items-center gap-1"
                   >
                     <Edit size={14} /> Plan bearbeiten
@@ -367,15 +378,19 @@ const CoachingDossier: React.FC = () => {
                 {/* Weekly Structure Preview */}
                 {activePlan.structure?.weeks && (
                   <div className="space-y-2">
-                    {activePlan.structure.weeks.slice(0, 4).map((week: any, i: number) => (
+                    {activePlan.structure.weeks.map((week: any, i: number) => (
                       <div key={i} className="bg-zinc-900 rounded-lg p-3">
                         <p className="text-white font-bold text-xs mb-1">Woche {week.order || i + 1}{week.focus ? ` — ${week.focus}` : ''}</p>
-                        <div className="flex gap-1">
-                          {week.sessions?.map((s: any, j: number) => (
-                            <span key={j} className="text-[10px] bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded">
-                              Tag {s.dayOfWeek}: {s.title || 'Session'}
-                            </span>
-                          ))}
+                        <div className="flex gap-1 flex-wrap">
+                          {week.sessions?.map((s: any, j: number) => {
+                            const dayNames = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+                            const exCount = (s.workoutData || s.workout_data || []).reduce((acc: number, b: any) => acc + (b.exercises?.length || 0), 0);
+                            return (
+                              <span key={j} className="text-[10px] bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded">
+                                {dayNames[s.dayOfWeek] || `Tag ${s.dayOfWeek}`}: {s.title || 'Session'}{exCount > 0 ? ` (${exCount})` : ''}
+                              </span>
+                            );
+                          })}
                         </div>
                       </div>
                     ))}
@@ -387,7 +402,7 @@ const CoachingDossier: React.FC = () => {
                 <Dumbbell size={48} className="mx-auto text-zinc-700 mb-4" />
                 <p className="text-zinc-500 mb-4">Noch kein Plan zugewiesen.</p>
                 <button
-                  onClick={() => navigate('/planner', { state: { athleteId, athleteName } })}
+                  onClick={() => setEditingPlan(true)}
                   className="px-6 py-3 bg-[#00FF00] text-black rounded-xl font-bold"
                 >
                   Plan erstellen
