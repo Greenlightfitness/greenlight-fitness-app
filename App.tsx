@@ -26,6 +26,8 @@ import ApiDocs from './pages/ApiDocs';
 import PurchaseConfirmation from './pages/PurchaseConfirmation';
 import CoachingIntake from './pages/CoachingIntake';
 import CoachingDossier from './pages/CoachingDossier';
+import IntakeForms from './pages/IntakeForms';
+import IntakeFormFill from './pages/IntakeFormFill';
 import Layout from './components/Layout';
 import PWAInstallPrompt from './components/PWAInstallPrompt';
 import CoachOnboarding from './components/CoachOnboarding';
@@ -115,6 +117,7 @@ const App: React.FC = () => {
                  <Route path="/history" element={<WorkoutHistory />} />
                  <Route path="/purchase-confirmation" element={<PurchaseConfirmation />} />
                  <Route path="/coaching-intake" element={<CoachingIntake />} />
+                 <Route path="/intake-form-fill" element={<IntakeFormFill />} />
               </Route>
               
               {/* Shared Routes (Coach, Admin AND Athlete now for self-planning) */}
@@ -128,6 +131,7 @@ const App: React.FC = () => {
                 <Route path="/calendar" element={<CoachCalendarSetup />} />
                 <Route path="/coach/chat" element={<CoachChatPage />} />
                 <Route path="/admin/products" element={<AdminProducts />} />
+                <Route path="/intake-forms" element={<IntakeForms />} />
                 <Route path="/admin/crm" element={<AdminCRM />} />
                 <Route path="/coaching/:athleteId" element={<CoachingDossier />} />
               </Route>

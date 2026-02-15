@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { supabase, getCoachingIntake, getGoals, getCoachNotes } from '../services/supabase';
+import { supabase, getCoachingIntake, getGoals, getCoachNotes, getIntakeResponses } from '../services/supabase';
 import CoachNotesPanel from '../components/CoachNotesPanel';
 import GoalWidget from '../components/GoalWidget';
 import AthletePlanEditor from '../components/AthletePlanEditor';
+import SessionPreviewCard from '../components/planner/SessionPreviewCard';
 import {
   ArrowLeft, User, Target, StickyNote, Dumbbell, Heart, Calendar,
   Loader2, ClipboardList, AlertTriangle, TrendingUp, ChevronRight,
@@ -29,6 +30,7 @@ const CoachingDossier: React.FC = () => {
   const [weeklyStats, setWeeklyStats] = useState<any[]>([]);
   const [attentions, setAttentions] = useState<any[]>([]);
   const [bodyMeasurements, setBodyMeasurements] = useState<any[]>([]);
+  const [intakeResponses, setIntakeResponses] = useState<any[]>([]);
   const [editingPlan, setEditingPlan] = useState(false);
 
   useEffect(() => {
@@ -73,6 +75,14 @@ const CoachingDossier: React.FC = () => {
         try {
           const intakeData = await getCoachingIntake(relData.id);
           setIntake(intakeData);
+        } catch {}
+      }
+
+      // Fetch dynamic intake form responses
+      if (athleteId) {
+        try {
+          const responses = await getIntakeResponses({ athlete_id: athleteId });
+          setIntakeResponses(responses);
         } catch {}
       }
     } catch (e) {
@@ -380,11 +390,12 @@ const CoachingDossier: React.FC = () => {
                   const previewWeeks = (activePlan.draft_structure || activePlan.structure)?.weeks;
                   const pubWeeks: number[] = activePlan.published_weeks || [];
                   if (!previewWeeks || previewWeeks.length === 0) return <p className="text-zinc-600 text-xs">Noch keine Wochen angelegt.</p>;
+                  const dayNames = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
                   return (
-                    <div className="space-y-2">
+                    <div className="space-y-4">
                       {previewWeeks.map((week: any, i: number) => (
                         <div key={i} className="bg-zinc-900 rounded-lg p-3">
-                          <div className="flex items-center gap-2 mb-1">
+                          <div className="flex items-center gap-2 mb-3">
                             <p className="text-white font-bold text-xs">Woche {week.order || i + 1}{week.focus ? ` — ${week.focus}` : ''}</p>
                             {pubWeeks.includes(i) ? (
                               <span className="text-[9px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded font-bold">Veröffentlicht</span>
@@ -392,14 +403,27 @@ const CoachingDossier: React.FC = () => {
                               <span className="text-[9px] bg-zinc-800 text-zinc-600 px-1.5 py-0.5 rounded font-bold">Entwurf</span>
                             )}
                           </div>
-                          <div className="flex gap-1 flex-wrap">
-                            {week.sessions?.map((s: any, j: number) => {
-                              const dayNames = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
-                              const exCount = (s.workoutData || s.workout_data || []).reduce((acc: number, b: any) => acc + (b.exercises?.length || 0), 0);
+                          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
+                            {dayNames.map((dayName, dayIdx) => {
+                              const daySessions = (week.sessions || []).filter((s: any) => (s.dayOfWeek ?? s.day_of_week) === dayIdx);
                               return (
-                                <span key={j} className="text-[10px] bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded">
-                                  {dayNames[s.dayOfWeek] || `Tag ${s.dayOfWeek}`}: {s.title || 'Session'}{exCount > 0 ? ` (${exCount})` : ''}
-                                </span>
+                                <div key={dayIdx} className="min-h-[40px]">
+                                  <p className="text-[9px] text-zinc-600 font-bold uppercase tracking-wider mb-1">{dayName}</p>
+                                  {daySessions.length > 0 ? (
+                                    <div className="space-y-1">
+                                      {daySessions.map((s: any, j: number) => (
+                                        <SessionPreviewCard
+                                          key={j}
+                                          title={s.title || 'Session'}
+                                          workoutData={s.workoutData || s.workout_data || []}
+                                          compact
+                                        />
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <p className="text-zinc-800 text-[10px]">—</p>
+                                  )}
+                                </div>
                               );
                             })}
                           </div>
@@ -481,13 +505,7 @@ const CoachingDossier: React.FC = () => {
         {/* INTAKE TAB */}
         {activeTab === 'intake' && (
           <div className="animate-in fade-in space-y-4">
-            {!intake ? (
-              <div className="text-center py-12 bg-[#1C1C1E] border border-zinc-800 rounded-xl">
-                <ClipboardList size={48} className="mx-auto text-zinc-700 mb-4" />
-                <p className="text-zinc-500 mb-2">Kein Intake-Fragebogen vorhanden.</p>
-                <p className="text-zinc-600 text-xs">Der Athlet wurde noch nicht aufgefordert, den Fragebogen auszufüllen.</p>
-              </div>
-            ) : (
+            {intake && (
               <div className="bg-[#1C1C1E] border border-zinc-800 rounded-xl p-6 space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-white font-bold flex items-center gap-2">
@@ -583,6 +601,98 @@ const CoachingDossier: React.FC = () => {
                     <CheckCircle2 size={16} /> Als gelesen markieren
                   </button>
                 )}
+              </div>
+            )}
+
+            {/* Dynamic Intake Form Responses */}
+            {intakeResponses.length > 0 && (
+              <div className="space-y-4">
+                {intakeResponses.map((resp: any) => {
+                  const formData = resp.intake_form;
+                  if (!formData) return null;
+                  const questions = formData.questions || [];
+                  return (
+                    <div key={resp.id} className="bg-[#1C1C1E] border border-zinc-800 rounded-xl p-6 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-white font-bold flex items-center gap-2">
+                          <ClipboardList size={18} className="text-blue-400" /> {formData.title}
+                        </h3>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          resp.status === 'SUBMITTED' ? 'bg-blue-500/20 text-blue-400' :
+                          resp.status === 'REVIEWED' ? 'bg-[#00FF00]/20 text-[#00FF00]' :
+                          'bg-yellow-500/20 text-yellow-400'
+                        }`}>
+                          {resp.status === 'SUBMITTED' ? 'Eingereicht' : resp.status === 'REVIEWED' ? 'Gelesen' : resp.status}
+                        </span>
+                      </div>
+                      {resp.submitted_at && (
+                        <p className="text-zinc-600 text-xs">Eingereicht am {formatDate(resp.submitted_at)}</p>
+                      )}
+                      <div className="space-y-3">
+                        {questions.map((q: any) => {
+                          const answer = resp.answers?.[q.id];
+                          if (answer === undefined || answer === null || answer === '') return null;
+                          return (
+                            <div key={q.id} className="border-b border-zinc-800/50 pb-3 last:border-0">
+                              <p className="text-zinc-500 text-xs uppercase tracking-wider mb-1">{q.label}</p>
+                              {q.type === 'text' && <p className="text-white text-sm">{answer}</p>}
+                              {q.type === 'number' && <p className="text-white text-sm font-bold">{answer}</p>}
+                              {q.type === 'rating' && (
+                                <div className="flex gap-1">
+                                  {[1,2,3,4,5].map((n: number) => (
+                                    <span key={n} className={`w-7 h-7 rounded text-xs font-bold flex items-center justify-center ${
+                                      n <= answer ? 'bg-[#00FF00]/20 text-[#00FF00]' : 'bg-zinc-900 text-zinc-700'
+                                    }`}>{n}</span>
+                                  ))}
+                                </div>
+                              )}
+                              {q.type === 'single_choice' && (
+                                <p className="text-white text-sm">
+                                  {q.options?.find((o: any) => o.id === answer)?.label || answer}
+                                </p>
+                              )}
+                              {q.type === 'multiple_choice' && Array.isArray(answer) && (
+                                <div className="flex flex-wrap gap-1">
+                                  {answer.map((optId: string) => (
+                                    <span key={optId} className="text-xs bg-[#00FF00]/10 text-[#00FF00] px-2 py-0.5 rounded">
+                                      {q.options?.find((o: any) => o.id === optId)?.label || optId}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {resp.status === 'SUBMITTED' && (
+                        <button
+                          onClick={async () => {
+                            try {
+                              await supabase.from('intake_responses').update({
+                                status: 'REVIEWED',
+                                reviewed_at: new Date().toISOString(),
+                                reviewed_by: user?.id,
+                              }).eq('id', resp.id);
+                              setIntakeResponses(prev => prev.map((r: any) => r.id === resp.id ? { ...r, status: 'REVIEWED' } : r));
+                            } catch (e) { console.error(e); }
+                          }}
+                          className="w-full mt-2 px-4 py-3 bg-[#00FF00] text-black rounded-xl font-bold flex items-center justify-center gap-2"
+                        >
+                          <CheckCircle2 size={16} /> Als gelesen markieren
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {!intake && intakeResponses.length === 0 && (
+              <div className="text-center py-12 bg-[#1C1C1E] border border-zinc-800 rounded-xl">
+                <ClipboardList size={48} className="mx-auto text-zinc-700 mb-4" />
+                <p className="text-zinc-500 mb-2">Kein Intake-Fragebogen vorhanden.</p>
+                <p className="text-zinc-600 text-xs">Der Athlet hat noch keinen Fragebogen ausgefüllt.</p>
               </div>
             )}
           </div>

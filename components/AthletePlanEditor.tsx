@@ -6,6 +6,7 @@ import {
 } from '../services/supabase';
 import { TrainingSession } from '../types';
 import DraftSessionBuilder from './planner/DraftSessionBuilder';
+import SessionPreviewCard from './planner/SessionPreviewCard';
 import LibrarySelectorV2, { LibraryMode } from './planner/LibrarySelectorV2';
 import ConfirmationModal from './ConfirmationModal';
 import { useLanguage } from '../context/LanguageContext';
@@ -766,39 +767,16 @@ const AthletePlanEditor: React.FC<AthletePlanEditorProps> = ({
                 {/* Sessions */}
                 <div className="p-3 space-y-3 flex-1">
                   {daySessions.map((session) => (
-                    <div key={session.id} onClick={() => setEditingSession(session)} draggable
-                      onDragStart={(e) => handleDragStart(e, session)}
-                      className={`bg-[#1C1C1E] p-4 rounded-2xl border border-zinc-800 hover:border-[#00FF00] group transition-all cursor-pointer shadow-lg relative flex flex-col gap-2 hover:-translate-y-0.5
-                        ${draggedSessionId === session.id ? 'opacity-30 border-dashed border-zinc-500 scale-95' : ''}
-                      `}>
-                      <div className="absolute top-2 right-2 flex gap-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={(e) => { e.stopPropagation(); handleDuplicateSession(session); }}
-                          className="p-1.5 bg-zinc-800 rounded-md text-zinc-400 hover:text-white transition-colors" title="Kopieren">
-                          <Copy size={12} />
-                        </button>
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-white text-sm line-clamp-2 pr-2 leading-tight">{session.title}</h4>
-                        {session.description && <p className="text-xs text-zinc-500 mt-1 line-clamp-2">{session.description}</p>}
-                      </div>
-                      {session.workoutData && session.workoutData.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 mt-2">
-                          {session.workoutData.map((block: any) => (
-                            <span key={block.id || Math.random()} className="text-[9px] bg-zinc-900 border border-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
-                              {block.name || 'Block'}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      <div className="flex justify-between items-end mt-1">
-                        <span className="text-[10px] text-zinc-600 font-bold flex items-center gap-1">
-                          <ClipboardList size={10} /> {session.workoutData?.reduce((acc: number, b: any) => acc + (b.exercises?.length || 0), 0) || 0} Ex
-                        </span>
-                        <button onClick={(e) => { e.stopPropagation(); requestDeleteSession(session.id); }}
-                          className="text-zinc-600 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1">
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
+                    <div key={session.id} draggable
+                      onDragStart={(e) => handleDragStart(e, session)}>
+                      <SessionPreviewCard
+                        title={session.title}
+                        workoutData={session.workoutData}
+                        onClick={() => setEditingSession(session)}
+                        onDuplicate={() => handleDuplicateSession(session)}
+                        onDelete={() => requestDeleteSession(session.id)}
+                        isDragging={draggedSessionId === session.id}
+                      />
                     </div>
                   ))}
                   {daySessions.length === 0 && !isRestDay && (

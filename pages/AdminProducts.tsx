@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { getProducts, getPlans, createProduct, updateProduct, deleteProduct, uploadFile, getPublicUrl, getCoachCalendars, getAllCoachCalendars, saveProductCalendars, getProductCalendars, supabase } from '../services/supabase';
+import { useNavigate } from 'react-router-dom';
+import { getProducts, getPlans, createProduct, updateProduct, deleteProduct, uploadFile, getPublicUrl, getCoachCalendars, getAllCoachCalendars, saveProductCalendars, getProductCalendars, supabase, getIntakeForms } from '../services/supabase';
+import type { IntakeForm } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Product, TrainingPlan, ProductCategory, ProductType } from '../types';
@@ -9,7 +11,7 @@ import {
   Package, Plus, Trash2, Edit, X, Image as ImageIcon, Upload, Loader2,
   ChevronLeft, DollarSign, Tag, FileText, Layers, CheckCircle, Calendar,
   AlertCircle, Eye, EyeOff, Link2, Sparkles, Save, Info, AlertTriangle, Scale, Gift,
-  MessageSquare, Users
+  MessageSquare, Users, ClipboardList
 } from 'lucide-react';
 import PriceChangeChecklist from '../components/PriceChangeChecklist';
 import ConfirmActionModal, { ConfirmActionConfig } from '../components/ConfirmActionModal';
@@ -19,6 +21,7 @@ type ViewMode = 'list' | 'create' | 'edit';
 const AdminProducts: React.FC = () => {
   const { user, userProfile } = useAuth();
   const { t } = useLanguage();
+  const navigate = useNavigate();
   const isAdmin = userProfile?.role === 'ADMIN';
   const isReadOnly = !isAdmin;
   const [products, setProducts] = useState<Product[]>([]);
@@ -52,6 +55,7 @@ const AdminProducts: React.FC = () => {
   });
 
   const [allCalendars, setAllCalendars] = useState<any[]>([]);
+  const [intakeForms, setIntakeForms] = useState<IntakeForm[]>([]);
   const [consultationCalendarIds, setConsultationCalendarIds] = useState<string[]>([]);
 
   const [currentFeature, setCurrentFeature] = useState('');
@@ -110,6 +114,7 @@ const AdminProducts: React.FC = () => {
         coachingDurationWeeks: d.coaching_duration_weeks || null,
         sessionsPerWeek: d.sessions_per_week || null,
         intakeFormEnabled: d.intake_form_enabled ?? false,
+        intakeFormId: d.intake_form_id || null,
         defaultCoachId: d.default_coach_id || null,
       } as Product)));
 
@@ -132,6 +137,13 @@ const AdminProducts: React.FC = () => {
       } catch (e) {
         console.warn('Could not load all calendars:', e);
         setAllCalendars(calData); // fallback to own calendars
+      }
+
+      try {
+        const forms = await getIntakeForms();
+        setIntakeForms(forms);
+      } catch (e) {
+        console.warn('Could not load intake forms:', e);
       }
     } catch (err) {
       console.error("Error fetching admin data:", err);
@@ -360,6 +372,7 @@ const AdminProducts: React.FC = () => {
         coaching_duration_weeks: (formData as any).coachingDurationWeeks || null,
         sessions_per_week: (formData as any).sessionsPerWeek || null,
         intake_form_enabled: (formData as any).intakeFormEnabled ?? false,
+        intake_form_id: (formData as any).intakeFormId || null,
         default_coach_id: (formData as any).defaultCoachId || null,
       };
       
@@ -1140,19 +1153,64 @@ const AdminProducts: React.FC = () => {
               </div>
             </div>
 
-            {/* Intake Form Toggle */}
-            <div className="flex items-center justify-between p-3 bg-zinc-900 rounded-xl mb-4">
-              <div>
-                <p className="text-white text-sm font-bold">Intake-Fragebogen</p>
-                <p className="text-zinc-500 text-xs">Athlet füllt nach Kauf einen Fragebogen aus (Verletzungen, Ziele, Zeiten)</p>
+            {/* Intake-Fragebogen Section */}
+            <div className="border border-zinc-800 rounded-xl overflow-hidden mb-4">
+              <div className="flex items-center justify-between p-3 bg-zinc-900">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                    <ClipboardList size={16} className="text-blue-400" />
+                  </div>
+                  <div>
+                    <p className="text-white text-sm font-bold">Intake-Fragebogen</p>
+                    <p className="text-zinc-500 text-xs">Athlet füllt nach Kauf einen Fragebogen aus</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, intakeFormEnabled: !(prev as any).intakeFormEnabled } as any))}
+                  className={`w-14 h-8 rounded-full transition-all relative shrink-0 ${(formData as any).intakeFormEnabled ? 'bg-[#00FF00]' : 'bg-zinc-700'}`}
+                >
+                  <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-transform ${(formData as any).intakeFormEnabled ? 'left-7' : 'left-1'}`} />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setFormData(prev => ({ ...prev, intakeFormEnabled: !(prev as any).intakeFormEnabled } as any))}
-                className={`w-14 h-8 rounded-full transition-all relative ${(formData as any).intakeFormEnabled ? 'bg-[#00FF00]' : 'bg-zinc-700'}`}
-              >
-                <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-transform ${(formData as any).intakeFormEnabled ? 'left-7' : 'left-1'}`} />
-              </button>
+              {(formData as any).intakeFormEnabled && (
+                <div className="p-3 space-y-3 border-t border-zinc-800">
+                  <div>
+                    <label className="text-zinc-400 text-xs block mb-1">Fragebogen auswählen</label>
+                    <select
+                      value={(formData as any).intakeFormId || ''}
+                      onChange={e => setFormData(prev => ({ ...prev, intakeFormId: e.target.value || null } as any))}
+                      className="w-full bg-[#121212] border border-zinc-800 text-white rounded-xl px-4 py-3 focus:border-[#00FF00] outline-none text-sm"
+                    >
+                      <option value="">— Keinen Fragebogen zuweisen —</option>
+                      {intakeForms.map(f => (
+                        <option key={f.id} value={f.id}>{f.title} ({f.questions?.length || 0} Fragen)</option>
+                      ))}
+                    </select>
+                  </div>
+                  {intakeForms.length === 0 && (
+                    <div className="bg-zinc-900 rounded-lg p-3 text-center">
+                      <p className="text-zinc-500 text-xs mb-2">Noch keine Fragebögen erstellt</p>
+                      <button
+                        type="button"
+                        onClick={() => navigate('/intake-forms')}
+                        className="text-xs text-[#00FF00] hover:text-[#00FF00]/80 font-bold inline-flex items-center gap-1"
+                      >
+                        <Plus size={12} /> Fragebogen erstellen
+                      </button>
+                    </div>
+                  )}
+                  {intakeForms.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => navigate('/intake-forms')}
+                      className="text-xs text-zinc-500 hover:text-[#00FF00] flex items-center gap-1"
+                    >
+                      <ClipboardList size={12} /> Alle Fragebögen verwalten
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Default Coach (optional) */}

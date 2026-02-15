@@ -4,6 +4,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { supabase, getAssignedPlans, getExercises, autoTrackStrengthGoals, autoTrackConsistencyGoals } from '../services/supabase';
 import { ChevronLeft, ChevronRight, Plus, Check, Play, Dumbbell, X, ChevronDown, ChevronUp, Search, Trash2, Trophy, Repeat, Link, Layers, Timer, Square, Pause, ClipboardList, Pencil, CheckCircle, Bookmark, Lock, Zap, TrendingUp } from 'lucide-react';
 import Button from './Button';
+import SessionPreviewCard from './planner/SessionPreviewCard';
 import { Exercise, BlockType, WorkoutSet, WorkoutExercise, WorkoutBlock } from '../types';
 
 interface DayWorkout {
@@ -55,6 +56,7 @@ const AthleteTrainingView: React.FC = () => {
   
   const [workouts, setWorkouts] = useState<Record<string, DayWorkout[]>>({});
   const [expandedBlocks, setExpandedBlocks] = useState<Set<string>>(new Set());
+  const [expandedWorkoutId, setExpandedWorkoutId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   
   // Block-based active tracking (instead of session-based)
@@ -1279,7 +1281,7 @@ const AthleteTrainingView: React.FC = () => {
           })}
         </div>
 
-        {/* Day Selector - Tablet/Desktop (shows all days with workouts) */}
+        {/* Day Selector - Tablet/Desktop (7-day grid with session previews) */}
         <div className="hidden md:grid md:grid-cols-7 gap-2">
           {weekDates.map((date, i) => {
             const dateKey = date.toISOString().split('T')[0];
@@ -1288,36 +1290,42 @@ const AthleteTrainingView: React.FC = () => {
             const isTodayDate = new Date().toISOString().split('T')[0] === dateKey;
             
             return (
-              <button
-                key={i}
-                onClick={() => setSelectedDayIndex(i)}
-                className={`p-3 rounded-xl transition-all ${
-                  isSelected 
-                    ? 'bg-[#00FF00] text-black ring-2 ring-[#00FF00] ring-offset-2 ring-offset-[#1C1C1E]' 
-                    : isTodayDate 
-                      ? 'bg-zinc-800 border border-[#00FF00]/50' 
-                      : 'bg-zinc-900 hover:bg-zinc-800'
-                }`}
-              >
-                <p className={`text-xs font-bold ${isSelected ? 'text-black' : 'text-zinc-500'}`}>{DAYS_DE[i]}</p>
-                <p className={`text-xl font-bold ${isSelected ? 'text-black' : 'text-white'}`}>{date.getDate()}</p>
-                
-                {dayWorkouts.length > 0 && !isSelected && (
-                  <div className="flex gap-1 justify-center mt-2">
-                    {dayWorkouts.slice(0, 3).map(w => (
-                      <div 
+              <div key={i} className="flex flex-col gap-1.5">
+                {/* Day Header Button */}
+                <button
+                  onClick={() => setSelectedDayIndex(i)}
+                  className={`p-2 rounded-xl transition-all text-center ${
+                    isSelected 
+                      ? 'bg-[#00FF00] text-black ring-2 ring-[#00FF00] ring-offset-2 ring-offset-[#1C1C1E]' 
+                      : isTodayDate 
+                        ? 'bg-zinc-800 border border-[#00FF00]/50' 
+                        : 'bg-zinc-900 hover:bg-zinc-800'
+                  }`}
+                >
+                  <p className={`text-xs font-bold ${isSelected ? 'text-black' : 'text-zinc-500'}`}>{DAYS_DE[i]}</p>
+                  <p className={`text-xl font-bold ${isSelected ? 'text-black' : 'text-white'}`}>{date.getDate()}</p>
+                </button>
+
+                {/* Compact Session Preview Cards */}
+                {dayWorkouts.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {dayWorkouts.map(w => (
+                      <SessionPreviewCard
                         key={w.id}
-                        className={`w-1.5 h-1.5 rounded-full ${
-                          w.completed ? 'bg-[#00FF00]' : 'bg-zinc-500'
-                        }`}
+                        title={w.sessionTitle}
+                        workoutData={w.workoutData}
+                        onClick={() => { setSelectedDayIndex(i); setExpandedWorkoutId(w.id); }}
+                        compact
+                        className={w.completed ? 'ring-1 ring-[#00FF00]/30' : ''}
                       />
                     ))}
-                    {dayWorkouts.length > 3 && (
-                      <div className="w-1.5 h-1.5 rounded-full bg-zinc-700" />
-                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-2">
+                    <p className="text-zinc-700 text-[10px]">—</p>
                   </div>
                 )}
-              </button>
+              </div>
             );
           })}
         </div>
@@ -1360,13 +1368,63 @@ const AthleteTrainingView: React.FC = () => {
         </div>
       ) : (
         <div className="space-y-4">
-          {selectedDayWorkouts.map(workout => (
+          {selectedDayWorkouts.map(workout => {
+            const isWorkoutExpanded = expandedWorkoutId === workout.id || hasActiveBlock(workout);
+            
+            // Compact preview card (collapsed state)
+            if (!isWorkoutExpanded) {
+              return (
+                <div key={workout.id} className="relative">
+                  <SessionPreviewCard
+                    title={workout.sessionTitle}
+                    workoutData={workout.workoutData}
+                    onClick={() => setExpandedWorkoutId(workout.id)}
+                    className={workout.completed ? 'ring-1 ring-[#00FF00]/30' : ''}
+                  />
+                  {/* Status overlay badges */}
+                  <div className="absolute top-2 right-2 flex items-center gap-1">
+                    {workout.completed && (
+                      <span className="text-[9px] bg-[#00FF00]/20 text-[#00FF00] px-1.5 py-0.5 rounded font-bold flex items-center gap-0.5">
+                        <Check size={10} /> Erledigt
+                      </span>
+                    )}
+                    {!workout.completed && !workout.isCustom && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setExpandedWorkoutId(workout.id); const firstBlock = workout.workoutData?.[0]; if (firstBlock) handleStartBlock(workout.id, firstBlock.id); }}
+                        className="text-[10px] bg-[#00FF00] text-black px-2 py-1 rounded-lg font-bold flex items-center gap-1 hover:bg-[#00FF00]/90 transition-colors"
+                      >
+                        <Play size={10} /> Start
+                      </button>
+                    )}
+                  </div>
+                  {/* Plan name subtitle */}
+                  {!workout.isCustom && (
+                    <div className="absolute bottom-2 right-3">
+                      <span className="text-[9px] text-zinc-600">{workout.planName}</span>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+            
+            // Expanded full tracking view
+            return (
             <div 
               key={workout.id}
               className={`bg-[#1C1C1E] border rounded-2xl overflow-hidden transition-all ${
                 workout.completed ? 'border-[#00FF00]/30' : 'border-zinc-800'
               }`}
             >
+              {/* Collapse bar */}
+              {!hasActiveBlock(workout) && (
+                <button
+                  onClick={() => setExpandedWorkoutId(null)}
+                  className="w-full px-4 py-1.5 bg-zinc-900/80 text-zinc-500 hover:text-white text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-1 transition-colors"
+                >
+                  <ChevronUp size={12} /> Kompakt
+                </button>
+              )}
+
               {/* Workout Header */}
               <div className="p-4 border-b border-zinc-800">
                 <div className="flex items-center justify-between">
@@ -1918,7 +1976,8 @@ const AthleteTrainingView: React.FC = () => {
                 )}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

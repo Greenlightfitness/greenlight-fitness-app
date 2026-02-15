@@ -2928,3 +2928,116 @@ export const getPendingCoachingIntakes = async () => {
   if (error) throw error;
   return data || [];
 };
+
+// ============================================================================
+// INTAKE FORMS (Form Builder System)
+// ============================================================================
+
+export interface IntakeQuestion {
+  id: string;
+  type: 'single_choice' | 'multiple_choice' | 'text' | 'number' | 'rating';
+  label: string;
+  required: boolean;
+  options?: { id: string; label: string }[];
+  placeholder?: string;
+}
+
+export interface IntakeForm {
+  id: string;
+  created_by: string;
+  title: string;
+  description: string;
+  questions: IntakeQuestion[];
+  is_archived: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export const getIntakeForms = async (includeArchived = false) => {
+  let query = supabase.from('intake_forms').select('*').order('created_at', { ascending: false });
+  if (!includeArchived) query = query.eq('is_archived', false);
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data || []) as IntakeForm[];
+};
+
+export const getIntakeFormById = async (id: string) => {
+  const { data, error } = await supabase.from('intake_forms').select('*').eq('id', id).single();
+  if (error) throw error;
+  return data as IntakeForm;
+};
+
+export const createIntakeForm = async (form: { title: string; description?: string; questions: IntakeQuestion[]; created_by: string }) => {
+  const { data, error } = await supabase.from('intake_forms').insert({
+    title: form.title,
+    description: form.description || '',
+    questions: form.questions,
+    created_by: form.created_by,
+  }).select().single();
+  if (error) throw error;
+  return data as IntakeForm;
+};
+
+export const updateIntakeForm = async (id: string, updates: Partial<{ title: string; description: string; questions: IntakeQuestion[]; is_archived: boolean }>) => {
+  const { data, error } = await supabase.from('intake_forms').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', id).select().single();
+  if (error) throw error;
+  return data as IntakeForm;
+};
+
+export const deleteIntakeForm = async (id: string) => {
+  const { error } = await supabase.from('intake_forms').update({ is_archived: true, updated_at: new Date().toISOString() }).eq('id', id);
+  if (error) throw error;
+};
+
+// ============================================================================
+// INTAKE RESPONSES (Athlete submissions)
+// ============================================================================
+
+export interface IntakeResponse {
+  id: string;
+  intake_form_id: string;
+  athlete_id: string;
+  coaching_relationship_id: string | null;
+  product_id: string | null;
+  answers: Record<string, any>;
+  status: 'DRAFT' | 'SUBMITTED' | 'REVIEWED';
+  submitted_at: string | null;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  created_at: string;
+}
+
+export const getIntakeResponses = async (filters: { athlete_id?: string; intake_form_id?: string; coaching_relationship_id?: string }) => {
+  let query = supabase.from('intake_responses').select('*, intake_form:intake_forms(id, title, questions)').order('created_at', { ascending: false });
+  if (filters.athlete_id) query = query.eq('athlete_id', filters.athlete_id);
+  if (filters.intake_form_id) query = query.eq('intake_form_id', filters.intake_form_id);
+  if (filters.coaching_relationship_id) query = query.eq('coaching_relationship_id', filters.coaching_relationship_id);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+};
+
+export const createIntakeResponse = async (response: {
+  intake_form_id: string;
+  athlete_id: string;
+  coaching_relationship_id?: string;
+  product_id?: string;
+  answers: Record<string, any>;
+  status?: 'DRAFT' | 'SUBMITTED';
+}) => {
+  const { data, error } = await supabase.from('intake_responses').insert({
+    ...response,
+    submitted_at: response.status === 'SUBMITTED' ? new Date().toISOString() : null,
+  }).select().single();
+  if (error) throw error;
+  return data as IntakeResponse;
+};
+
+export const updateIntakeResponse = async (id: string, updates: Partial<{ answers: Record<string, any>; status: string; reviewed_by: string }>) => {
+  const payload: any = { ...updates };
+  if (updates.status === 'SUBMITTED') payload.submitted_at = new Date().toISOString();
+  if (updates.status === 'REVIEWED') payload.reviewed_at = new Date().toISOString();
+  const { data, error } = await supabase.from('intake_responses').update(payload).eq('id', id).select().single();
+  if (error) throw error;
+  return data as IntakeResponse;
+};

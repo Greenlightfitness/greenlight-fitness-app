@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { createCoachingIntake, getCoachingIntake, updateCoachingIntake } from '../services/supabase';
+import { createCoachingIntake, getCoachingIntake, updateCoachingIntake, supabase } from '../services/supabase';
 import { ClipboardList, ChevronRight, ChevronLeft, Check, Loader2, AlertTriangle, Dumbbell, Target, Clock, Calendar, Heart, MessageCircle } from 'lucide-react';
 
 const DAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
@@ -47,11 +47,29 @@ const CoachingIntake: React.FC = () => {
 
   useEffect(() => {
     if (relationshipId) {
+      checkCustomFormRedirect();
       checkExisting();
     } else {
       setLoading(false);
     }
   }, [relationshipId]);
+
+  // If the product has a custom intake form, redirect to the dynamic form page
+  const checkCustomFormRedirect = async () => {
+    if (!productId) return;
+    try {
+      const { data: product } = await supabase
+        .from('products')
+        .select('intake_form_id, intake_form_enabled')
+        .eq('id', productId)
+        .single();
+      if (product?.intake_form_enabled && product?.intake_form_id) {
+        navigate(`/intake-form-fill?form=${product.intake_form_id}&relationship=${relationshipId || ''}&product=${productId}`, { replace: true });
+      }
+    } catch (e) {
+      // Fall through to legacy form
+    }
+  };
 
   const checkExisting = async () => {
     if (!relationshipId) return;

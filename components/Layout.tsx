@@ -3,7 +3,7 @@ import { Outlet, NavLink, useNavigate, useLocation, Link } from 'react-router-do
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { UserRole } from '../types';
-import { LayoutDashboard, Dumbbell, Calendar, CalendarClock, LogOut, Globe, ShoppingBag, Package, Home, Users, User, MessageCircle, MoreHorizontal, ChevronRight, ArrowLeft } from 'lucide-react';
+import { LayoutDashboard, Dumbbell, Calendar, CalendarClock, LogOut, Globe, ShoppingBag, Package, Home, Users, User, MessageCircle, MoreHorizontal, ChevronRight, ArrowLeft, ClipboardList } from 'lucide-react';
 import { signOut } from '../services/supabase';
 import NotificationBell from './NotificationBell';
 
@@ -46,6 +46,7 @@ const Layout: React.FC = () => {
     { label: t('nav.exercises'), path: '/exercises', icon: <Dumbbell size={20} /> },
     { label: t('nav.planner'), path: '/planner', icon: <Calendar size={20} /> },
     { label: t('nav.products'), path: '/admin/products', icon: <Package size={20} /> },
+    { label: 'Fragebögen', path: '/intake-forms', icon: <ClipboardList size={20} /> },
     { label: 'Kalender', path: '/calendar', icon: <CalendarClock size={20} /> },
     { label: 'Chat', path: '/coach/chat', icon: <MessageCircle size={20} /> },
     { label: 'CRM', path: '/admin/crm', icon: <Users size={20} /> },
