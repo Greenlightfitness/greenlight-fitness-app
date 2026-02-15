@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
-import { adminNewPurchase } from '../emails/templates';
+import { adminNewPurchase, purchaseConfirmed, paymentFailed } from '../emails/templates';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
   apiVersion: '2023-10-16' as any,
@@ -191,6 +191,44 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             } catch (notifErr) {
               console.error('⚠️ Admin notification failed (non-blocking):', notifErr);
             }
+
+            // === CUSTOMER EMAIL: Purchase Confirmation (§312i BGB — mandatory) ===
+            try {
+              const { data: customerProfile } = await supabase
+                .from('profiles')
+                .select('first_name')
+                .eq('id', profile.id)
+                .single();
+
+              const productTitle = product?.title || 'Produkt';
+              const amountStr = session.amount_total
+                ? `${(session.amount_total / 100).toFixed(2)} ${(session.currency || 'EUR').toUpperCase()}`
+                : 'Kostenlos';
+              const isSubscription = session.mode === 'subscription';
+
+              const emailData = purchaseConfirmed({
+                firstName: customerProfile?.first_name || customerEmail!.split('@')[0],
+                productName: productTitle,
+                price: amountStr,
+                isSubscription,
+                interval: isSubscription ? 'Monat' : undefined,
+                receiptLink: (session as any).invoice
+                  ? `https://dashboard.stripe.com/invoices/${(session as any).invoice}`
+                  : `https://greenlight-fitness-app.vercel.app/purchase-confirmation`,
+                dashboardLink: 'https://greenlight-fitness-app.vercel.app/',
+              });
+
+              await resend.emails.send({
+                from: FROM_EMAIL,
+                to: [customerEmail!],
+                subject: emailData.subject,
+                html: emailData.html,
+              });
+
+              console.log(`📧 Purchase confirmation email sent to customer: ${customerEmail}`);
+            } catch (custEmailErr) {
+              console.error('⚠️ Customer purchase email failed (non-blocking):', custEmailErr);
+            }
           }
         }
         break;
@@ -296,6 +334,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           currency: invoice.currency || 'eur',
           metadata: { attempt_count: invoice.attempt_count },
         });
+
+        // === CUSTOMER EMAIL: Payment Failed ===
+        try {
+          const failedCustomerEmail = invoice.customer_email;
+          if (failedCustomerEmail) {
+            // Find user profile for name
+            const { data: failedProfile } = await supabase
+              .from('profiles')
+              .select('first_name')
+              .eq('email', failedCustomerEmail)
+              .maybeSingle();
+
+            // Get product name from invoice line items
+            const lineItem = invoice.lines?.data?.[0];
+            const productName = lineItem?.description || 'Abonnement';
+
+            const failedEmailData = paymentFailed({
+              firstName: failedProfile?.first_name || failedCustomerEmail.split('@')[0],
+              productName,
+              amount: `${(invoice.amount_due / 100).toFixed(2)} ${(invoice.currency || 'EUR').toUpperCase()}`,
+              dueDate: new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+              portalLink: 'https://greenlight-fitness-app.vercel.app/profile',
+            });
+
+            await resend.emails.send({
+              from: FROM_EMAIL,
+              to: [failedCustomerEmail],
+              subject: failedEmailData.subject,
+              html: failedEmailData.html,
+            });
+
+            console.log(`📧 Payment failed email sent to: ${failedCustomerEmail}`);
+          }
+        } catch (failEmailErr) {
+          console.error('⚠️ Payment failed email error (non-blocking):', failEmailErr);
+        }
         break;
       }
 

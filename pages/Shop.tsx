@@ -365,6 +365,30 @@ const Shop: React.FC = () => {
               } catch (e) { console.error('Intake creation failed:', e); }
             }
 
+            // === CUSTOMER EMAIL: Purchase Confirmation (§312i BGB — mandatory) ===
+            if (user.email) {
+              try {
+                const { data: myProfile } = await supabase.from('profiles').select('first_name').eq('id', user.id).single();
+                fetch('/api/send-email', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    type: 'purchase_confirmed',
+                    to: user.email,
+                    data: {
+                      firstName: myProfile?.first_name || user.email.split('@')[0],
+                      productName: product.title,
+                      price: product.price ? `${product.price.toFixed(2)} EUR` : 'Kostenlos',
+                      isSubscription: product.interval === 'month' || product.interval === 'year',
+                      interval: product.interval === 'month' ? 'Monat' : product.interval === 'year' ? 'Jahr' : undefined,
+                      receiptLink: `${window.location.origin}/purchase-confirmation?id=${confirmation.id}`,
+                      dashboardLink: `${window.location.origin}/`,
+                    },
+                  }),
+                }).catch(err => console.error('Purchase email failed:', err));
+              } catch (e) { console.error('Profile lookup for email failed:', e); }
+            }
+
             setSelectedProduct(null);
             fetchCoachingApprovals();
             fetchPurchases();

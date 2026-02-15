@@ -17,7 +17,7 @@ interface VercelResponse {
   json(data: any): void;
 }
 
-const resend = new Resend(process.env.RESEND_API_KEY || 're_EgDdSN3B_6FByK2mukgRGTmCczBKbd8ot');
+const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM_EMAIL = 'Greenlight Fitness <noreply@mail.greenlight-fitness.de>';
 
 // =============================================================================
@@ -109,21 +109,21 @@ const coachingApprovedTemplate = (data: CoachingApprovedData) => ({
     <table cellpadding="0" cellspacing="0" border="0" width="100%">
       <tr>
         <td align="center">
-          <h1 style="color: ${accentColor}; font-size: 24px; font-weight: bold; margin: 0 0 8px 0;">Coaching genehmigt!</h1>
+          <h1 style="color: ${accentColor}; font-size: 24px; font-weight: bold; margin: 0 0 8px 0;">Du bist freigeschaltet!</h1>
         </td>
       </tr>
     </table>
     
     <p style="color: #FFFFFF; font-size: 16px; margin: 24px 0 8px 0;">Hallo ${data.athleteName},</p>
     <p style="color: #A1A1AA; font-size: 14px; margin: 0 0 24px 0;">
-      großartige Neuigkeiten! <strong style="color: #FFFFFF;">${data.coachName}</strong> hat deine Coaching-Anfrage für 
-      <strong style="color: #FFFFFF;">${data.productName}</strong> angenommen.
+      großartige Neuigkeiten! <strong style="color: #FFFFFF;">${data.coachName}</strong> hat dich für 
+      <strong style="color: #FFFFFF;">${data.productName}</strong> freigeschaltet. Du kannst das Produkt jetzt im Shop buchen.
     </p>
     
     <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background: linear-gradient(180deg, #1C1C1E 0%, #141414 100%); border: 1px solid ${accentColor}; border-radius: 16px; margin: 16px 0;">
       <tr>
         <td style="padding: 24px;">
-          <p style="color: ${accentColor}; font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 16px 0;">COACHING GESTARTET</p>
+          <p style="color: ${accentColor}; font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 16px 0;">FREISCHALTUNG</p>
           <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background: #27272A; border-radius: 12px;">
             <tr>
               <td style="padding: 16px;">
@@ -171,7 +171,7 @@ const coachingApprovedTemplate = (data: CoachingApprovedData) => ({
                   </tr>
                 </table>
               </td>
-              <td valign="middle" style="color: #A1A1AA; font-size: 13px; padding-left: 8px;">Öffne dein Dashboard</td>
+              <td valign="middle" style="color: #A1A1AA; font-size: 13px; padding-left: 8px;">Öffne den Shop in der App</td>
             </tr>
           </table>
           <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom: 12px;">
@@ -185,7 +185,7 @@ const coachingApprovedTemplate = (data: CoachingApprovedData) => ({
                   </tr>
                 </table>
               </td>
-              <td valign="middle" style="color: #A1A1AA; font-size: 13px; padding-left: 8px;">Vervollständige dein Athleten-Profil</td>
+              <td valign="middle" style="color: #A1A1AA; font-size: 13px; padding-left: 8px;">Schließe den Kauf von "${data.productName}" ab</td>
             </tr>
           </table>
           <table cellpadding="0" cellspacing="0" border="0" width="100%">
@@ -199,7 +199,7 @@ const coachingApprovedTemplate = (data: CoachingApprovedData) => ({
                   </tr>
                 </table>
               </td>
-              <td valign="middle" style="color: #A1A1AA; font-size: 13px; padding-left: 8px;">Warte auf deinen ersten Trainingsplan</td>
+              <td valign="middle" style="color: #A1A1AA; font-size: 13px; padding-left: 8px;">Dein Coach erstellt dir einen individuellen Plan</td>
             </tr>
           </table>
         </td>
@@ -212,7 +212,7 @@ const coachingApprovedTemplate = (data: CoachingApprovedData) => ({
           <table cellpadding="0" cellspacing="0" border="0">
             <tr>
               <td align="center" style="background: ${accentColor}; border-radius: 12px;">
-                <a href="https://dev.greenlight-fitness.de" target="_blank" style="display: inline-block; padding: 16px 40px; color: #000000; font-size: 16px; font-weight: bold; text-decoration: none;">Zum Dashboard →</a>
+                <a href="https://greenlight-fitness-app.vercel.app/shop" target="_blank" style="display: inline-block; padding: 16px 40px; color: #000000; font-size: 16px; font-weight: bold; text-decoration: none;">Zum Shop →</a>
               </td>
             </tr>
           </table>
@@ -392,7 +392,7 @@ const coachingRequestTemplate = (data: CoachingRequestData) => ({
           <table cellpadding="0" cellspacing="0" border="0">
             <tr>
               <td align="center" style="background: ${accentColor}; border-radius: 12px;">
-                <a href="https://dev.greenlight-fitness.de" target="_blank" style="display: inline-block; padding: 16px 40px; color: #000000; font-size: 16px; font-weight: bold; text-decoration: none;">Zum Dashboard →</a>
+                <a href="https://greenlight-fitness-app.vercel.app/" target="_blank" style="display: inline-block; padding: 16px 40px; color: #000000; font-size: 16px; font-weight: bold; text-decoration: none;">Zum Dashboard →</a>
               </td>
             </tr>
           </table>
