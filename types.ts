@@ -213,6 +213,9 @@ export interface Product {
   trialDays?: number; // Free trial period in days (Stripe trial_period_days)
   requiresConsultation?: boolean; // Whether a consultation is required before purchase
   consultationCalendarMode?: 'all' | 'selected'; // 'all' = all coach calendars, 'selected' = specific ones
+  intakeFormEnabled?: boolean;
+  intakeFormId?: string | null;
+  defaultCoachId?: string | null;
 }
 
 // --- WORKOUT BUILDER TYPES ---

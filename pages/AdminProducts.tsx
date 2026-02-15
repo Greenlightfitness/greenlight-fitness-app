@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getProducts, getPlans, createProduct, updateProduct, deleteProduct, uploadFile, getPublicUrl, getCoachCalendars, getAllCoachCalendars, saveProductCalendars, getProductCalendars, supabase, getIntakeForms } from '../services/supabase';
+import { getProducts, getPlans, createProduct, updateProduct, deleteProduct, uploadFile, getPublicUrl, getCoachCalendars, getAllCoachCalendars, saveProductCalendars, getProductCalendars, supabase, getIntakeForms, createNotification } from '../services/supabase';
 import type { IntakeForm } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -419,6 +419,50 @@ const AdminProducts: React.FC = () => {
         : selectedCalendarIds;
       if (calIds.length > 0) {
         await saveProductCalendars(productId, calIds);
+      }
+
+      // 5. Notify existing athletes if intake form was newly added/changed
+      if (editingProduct && payload.intake_form_enabled && payload.intake_form_id) {
+        const previousFormId = editingProduct.intakeFormId;
+        const formChanged = !previousFormId || previousFormId !== payload.intake_form_id;
+        if (formChanged) {
+          try {
+            // Find all active coaching relationships for this product
+            const { data: activeRels } = await supabase
+              .from('coaching_relationships')
+              .select('id, athlete_id, product_id')
+              .eq('product_id', productId)
+              .eq('status', 'ACTIVE');
+
+            if (activeRels && activeRels.length > 0) {
+              // Check which athletes already submitted a response for this form
+              const { data: existingResponses } = await supabase
+                .from('intake_responses')
+                .select('athlete_id')
+                .eq('intake_form_id', payload.intake_form_id)
+                .in('athlete_id', activeRels.map(r => r.athlete_id))
+                .eq('status', 'SUBMITTED');
+
+              const submittedAthleteIds = new Set((existingResponses || []).map((r: any) => r.athlete_id));
+
+              // Notify athletes who haven't filled it out yet
+              const toNotify = activeRels.filter(r => !submittedAthleteIds.has(r.athlete_id));
+              for (const rel of toNotify) {
+                await createNotification({
+                  user_id: rel.athlete_id,
+                  type: 'intake_form',
+                  title: 'Neuer Fragebogen verfügbar',
+                  message: `Dein Coach hat einen Fragebogen zu "${payload.title}" hinzugefügt. Bitte fülle ihn aus.`,
+                });
+              }
+              if (toNotify.length > 0) {
+                console.log(`Intake form notifications sent to ${toNotify.length} athletes`);
+              }
+            }
+          } catch (notifyErr) {
+            console.warn('Could not send intake form notifications:', notifyErr);
+          }
+        }
       }
       
       await fetchData();

@@ -548,11 +548,13 @@ const PlanEditor: React.FC<PlanEditorProps> = ({ plan: initialPlan, onBack }) =>
               <p className="text-sm text-zinc-500 line-clamp-1 mt-1">{currentPlan.description || "No description provided."}</p>
             </div>
         </div>
-        <div className="hidden md:block px-4 py-2 bg-[#1C1C1E] rounded-full border border-zinc-800">
-             <span className={`text-[10px] font-bold uppercase tracking-widest ${isReadOnly ? 'text-amber-400' : 'text-[#00FF00]'}`}>
-               {isReadOnly ? 'Nur Lesen' : t('planner.planningMode')}
+        {isReadOnly && (
+          <div className="hidden md:block px-4 py-2 bg-amber-500/10 rounded-full border border-amber-500/30">
+             <span className="text-[10px] font-bold uppercase tracking-widest text-amber-400">
+               Nur Lesen
              </span>
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Week Navigation */}
